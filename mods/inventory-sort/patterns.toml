@@ -53,7 +53,8 @@ pattern = "8B 05 ?? ?? ?? ?? 83 F8 05 74 09 83 F8 0B 0F 85 ?? ?? ?? ?? E8 ?? ?? 
 rip = { disp = 2, len = 6 }
 
 # A HUD modal screen id (dword; 0 = none), also part of the HUD's input
-# check. Site: `cmp [modal], 6; jne …; lea rcx, …`.
+# check. 5 is the shop (the shop panel draws only while it is 5); other
+# commands set 4 and 6. Site: `cmp [modal], 6; jne …; lea rcx, …`.
 [hud_modal]
 pattern = "83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ??"
 rip = { disp = 2, len = 7 }

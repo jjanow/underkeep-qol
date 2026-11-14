@@ -83,7 +83,8 @@ impl Game {
     /// Why sorting isn't allowed right now, or Ok. Mirrors the game's own
     /// "HUD takes input" check (the one in front of every inventory click):
     /// the game window focused and no console, not in the game-over state,
-    /// no menu or dialog over the HUD, plus: a HUD mode with the party
+    /// no menu or dialog over the HUD (this excludes the shop, whose screen
+    /// is HUD modal 5), plus: a HUD mode with the party
     /// inventory, and the mouse not pressing or dragging anything.
     ///
     /// # Safety
