@@ -14,7 +14,8 @@ Underkeep has no official mod support. This project adds it in a way that:
 - **keeps your saves loadable without the mods**: the save file format is never
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
-> Status: design stage. Nothing below is released yet. This README is the plan.
+> Status: early development. The loader (`winmm.dll`) builds and forwards
+> calls under Wine; no mods yet and nothing is released. This README is the plan.
 > It's built for a public release, so installing, updating and recovering
 > from a game patch must work without any technical knowledge.
 
@@ -271,7 +272,9 @@ adds 3 more (configurable 1–5).
 - **CI.** Every push builds Windows and Linux binaries. Every release is built
   by CI with checksums.
 
-## Repository layout (planned)
+## Repository layout
+
+`crates/` exists; `mods/` and `tools/` are planned.
 
 ```
 crates/
