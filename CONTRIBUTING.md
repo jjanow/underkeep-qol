@@ -156,7 +156,8 @@ rip = { disp = 3, len = 7 }
 A mod must:
 
 - never write the game's save files or files in the game folder other than
-  `uk_qol/`. State it has to keep goes in the `<save>.qol.toml` sidecar;
+  `uk_qol/`. State it has to keep goes in the save's sidecar
+  (`ModSaveState`);
 - leave the game playable when it's turned off or when its patterns aren't
   found;
 - undo all its hooks and patches in `on_unload` (the host removes the hooks
@@ -176,8 +177,12 @@ only implements two callbacks, both called on the game's thread:
 Key per-hero state by `savehook::hero_key` (`"<hero_id>:<name>"`): the game's
 `hero_id` is only the slot a hero was created in and repeats when a hero is
 replaced. `savehook::party_heroes()` lists the party's heroes (struct
-address, key, class id; `savehook::class_name`). Sidecars are local
-(`uk_qol/saves/<Steam account id>/<save>.qol.toml`), not in Steam Cloud.
+address, key, class id; `savehook::class_name`). Sidecars are in Steam
+Cloud next to the saves (`qol_<save>.toml`, through `ISteamRemoteStorage`;
+`runtime::steam`, `save::Store`), or local
+(`uk_qol/saves/<Steam account id>/<save>.qol.toml`) without Steam. Every
+call into `steam_api64.dll` goes through `runtime::steam`, which falls back
+to local files when an export or the interface is missing.
 
 ### Controls in the overlay menu
 

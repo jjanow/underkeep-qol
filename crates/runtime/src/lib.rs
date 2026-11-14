@@ -30,6 +30,7 @@ pub mod pe;
 pub mod safe;
 pub mod save;
 pub mod savehook;
+pub mod steam;
 pub mod toast;
 
 use std::fs::{self, File, OpenOptions};

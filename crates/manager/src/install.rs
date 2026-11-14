@@ -27,8 +27,9 @@ pub const DLL: &str = "winmm.dll";
 pub const MANIFEST: &str = "uk_qol/install.toml";
 /// Where a `winmm.dll` that wasn't ours is kept while we're installed.
 pub const BACKUP_DLL: &str = "uk_qol/backup/winmm.dll";
-/// Save sidecars (`saves/<account|default>/<save>.qol.toml`): never removed
-/// by the manager.
+/// Local save sidecars (`saves/<account|default>/<save>.qol.toml`, written
+/// without Steam; `migrated/` backups once moved into Steam Cloud): never
+/// removed by the manager.
 pub const SAVES_DIR: &str = "uk_qol/saves";
 /// Files the runtime writes that are safe to remove on uninstall.
 pub const RUNTIME_FILES: &[&str] = &[

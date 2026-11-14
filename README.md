@@ -128,23 +128,27 @@ mod. The overlay edits the same file.
 
 - The game's save files are never rewritten by a mod.
 - State a mod must keep (the weapon in a ranged slot, extra skill slot
-  assignments, per-hero toggles) is written to a `<save name>.qol.toml`
-  sidecar, keyed by hero, whenever the game saves (menu, quick save,
+  assignments, per-hero toggles) is written to a sidecar file next to the
+  save, keyed by hero, whenever the game saves (menu, quick save,
   autosave), and read when it loads. Deleting a save in game deletes its
   sidecar; a new game starts every mod empty.
 - Saves always load without the mods, with one exception the player must
   know about: **an item in a ranged slot exists only in the sidecar file.**
-  If the mods are removed, or the sidecar is lost (another computer, cloud
-  sync, a deleted file), that weapon is gone. See [`weapon-swap`](#weapon-swap).
+  If the mods are removed, or the sidecar is lost (a deleted file, a
+  computer that plays the save without the mods and Steam Cloud), that
+  weapon is gone. See [`weapon-swap`](#weapon-swap).
 - The game keeps its saves in Steam Cloud storage (its log says "Save
   location: Steam cloud"); on disk they are `save_1`, `save_auto`, … in
   Steam's `userdata/<account>/2411200/remote/` folder, not in the game folder
   or the Wine prefix. The game writes them only through Steam's cloud API.
-- Sidecars are kept **locally**, in `uk_qol/saves/<Steam account id>/` in
-  the game folder, so they are **not** synced by Steam Cloud: mod state is
-  local to one computer, while the saves themselves still sync. Planned:
-  sidecars written through Steam's cloud API too, so mod state follows the
-  save to other computers and the Steam Deck.
+- Sidecars go there too, as `qol_save_1.toml`, `qol_save_auto.toml`, …,
+  written through the same API, so mod state follows a save to other
+  computers and the Steam Deck. The game's load list doesn't show them.
+- Without Steam the sidecars are kept locally, in
+  `uk_qol/saves/<Steam account id or default>/<save>.qol.toml` in the game
+  folder. Local sidecars from older versions are moved into the cloud the
+  first time the game saves or loads with Steam (the newer copy wins); the
+  local files are kept in `uk_qol/saves/<account>/migrated/` as a backup.
 
 ### 5. Manager
 
@@ -229,7 +233,7 @@ hero; all rebindable.
 - **In combat, a swap costs the hero's turn** by default. Setting:
   `swap_costs_turn = true | false`. Outside combat it's always free.
 - The game's save format has no room for this slot, so the weapon in it is
-  stored in the save's sidecar file (`<save>.qol.toml`), not in the save.
+  stored in the save's sidecar file (see *Save safety*), not in the save.
 
 How it works now (0.1.0; tested in game 1.0.5 with a gamepad):
 

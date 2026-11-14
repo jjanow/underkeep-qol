@@ -1,6 +1,6 @@
 //! Save hooks (PLAN §2): mod state follows the game's saves through
-//! `<save name>.qol.toml` sidecars ([`crate::save`]). The game's own save
-//! files are never read or written.
+//! sidecars ([`crate::save`]), one per save. The game's own save files are
+//! never read or written.
 //!
 //! Detours (patterns in `patterns/core.toml`), each calling the original
 //! first, unguarded, and then doing its own work inside
@@ -15,7 +15,8 @@
 //!   entry gets an empty state, so it resets. A sidecar that exists but
 //!   can't be read (newer format, broken) is never overwritten by a save to
 //!   the same name.
-//! - **Save_DeleteFile**: deletes that save's sidecar, if there is one.
+//! - **Save_DeleteFile**: deletes that save's sidecar (cloud and local), if
+//!   there is one.
 //! - **Party_InitFromPartySetup** (a new game): mods get an empty state.
 //!
 //! "The state of the game in play" is the sidecar last loaded (or empty
@@ -25,18 +26,18 @@
 //! old state.
 //!
 //! # Where sidecars go
-//! Locally: `<game folder>/uk_qol/saves/<account>/<save name>.qol.toml`
-//! ([`crate::save::sidecar_path`]). The game writes its saves only through
-//! `ISteamRemoteStorage` (Steam Cloud); writing sidecars the same way would
-//! sync them too, but count against the game's cloud quota and put our files
-//! in the player's cloud, so that's left as an open question (PLAN). Mod
-//! state is therefore per computer.
+//! In Steam Cloud next to the game's saves, `qol_<save name>.toml`, through
+//! `ISteamRemoteStorage` like the saves ([`crate::steam::cloud`]), so mod
+//! state follows a save to other computers and the Steam Deck. Without Steam
+//! (or when a cloud write fails): locally, `<game folder>/uk_qol/saves/
+//! <account>/<save name>.qol.toml`. See [`crate::save::Store`]. At the first
+//! hook of a session with Steam, local sidecars are moved into the cloud
+//! ([`crate::save::Store::migrate`]: the newer copy wins, the local file is
+//! kept in `migrated/`).
 //!
 //! `<account>` is the Steam account id (the number in Steam's
-//! `userdata/<account>`), read through the Steam API the game already loaded
-//! (`SteamAPI_SteamUser_v023` and `SteamAPI_ISteamUser_GetSteamID` from
-//! `steam_api64.dll`, low 32 bits of the SteamID) at the first save or load,
-//! and `default` if that isn't available.
+//! `userdata/<account>`, [`crate::steam::account_id`]) at the first save or
+//! load, and `default` if that isn't available.
 //!
 //! # Heroes
 //! A hero's `hero_id` in the save is only the party slot it was created in
@@ -46,13 +47,14 @@
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use crate::game;
 use crate::guard;
 use crate::hook::{HookError, HookSet};
 use crate::host::{self, Host, ModSaveState};
-use crate::save::{Sidecar, sidecar_path};
+use crate::save::{CloudFiles, Sidecar, Store, account_dir};
+use crate::steam;
 
 /// [`guard`] id of the save hooks' own code.
 pub const GUARD_ID: &str = "core-save";
@@ -245,23 +247,33 @@ fn current() -> std::sync::MutexGuard<'static, Option<Sidecar>> {
     CURRENT.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// The sidecar of the game in play, if it existed but couldn't be read (a
-/// newer format, a broken file). Saving to that name doesn't overwrite it, so
-/// the player's file survives until they fix or remove it. Cleared by the
-/// next load or new game.
-static UNREADABLE: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+/// The save name of the game in play, if its sidecar existed but couldn't be
+/// read (a newer format, a broken file). Saving to that name doesn't write a
+/// sidecar at all, so the player's file (cloud or local) survives until they
+/// fix or remove it. Cleared by the next load or new game.
+static UNREADABLE: Mutex<Option<String>> = Mutex::new(None);
 
-fn set_unreadable(p: Option<std::path::PathBuf>) {
-    *UNREADABLE.lock().unwrap_or_else(|e| e.into_inner()) = p;
+fn set_unreadable(name: Option<String>) {
+    *UNREADABLE.lock().unwrap_or_else(|e| e.into_inner()) = name;
 }
 
-/// Where the sidecar of `save_name` goes; `None` without a data folder.
-fn path_for(save_name: &str) -> Option<std::path::PathBuf> {
-    Some(sidecar_path(
-        &crate::data_dir()?,
-        account().as_deref(),
-        save_name,
-    ))
+/// Runs `f` with the sidecar store of this account (Steam Cloud if
+/// available, else the local folder); `None` without a data folder. The
+/// first call of a session with Steam Cloud migrates local sidecars first.
+fn with_store<R>(f: impl FnOnce(&Store) -> R) -> Option<R> {
+    static MIGRATED: AtomicBool = AtomicBool::new(false);
+    let dir = account_dir(&crate::data_dir()?, account().as_deref());
+    let cloud = steam::cloud();
+    let store = Store {
+        dir,
+        cloud: cloud.as_ref().map(|c| c as &dyn CloudFiles),
+    };
+    if store.cloud.is_some() && !MIGRATED.swap(true, Ordering::Relaxed) {
+        for line in store.migrate() {
+            crate::log(&format!("sidecars: {line}"));
+        }
+    }
+    Some(f(&store))
 }
 
 extern "system" fn save_write(state: usize, file: usize, custom: usize) -> u8 {
@@ -280,37 +292,41 @@ extern "system" fn save_write(state: usize, file: usize, custom: usize) -> u8 {
 }
 
 fn after_save(name: &str) {
-    let Some(path) = path_for(name) else { return };
-    if UNREADABLE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .as_ref()
-        == Some(&path)
-    {
-        crate::log(&format!(
-            "save hook: {name} saved; {} couldn't be read when loading, so it is left as it is",
-            path.display()
-        ));
-        return;
-    }
-    let mut cur = current();
-    let sc = cur.get_or_insert_with(Sidecar::default);
-    if host::with(|h: &mut Host| h.save(&mut sc.mods)).is_none() {
-        crate::log("save hook: mod host busy or missing; saving the carried state only");
-    }
-    // A mod with nothing to keep has no table (it reads back as empty).
-    sc.mods.retain(|_, s| *s != ModSaveState::default());
-    match sc.save(&path) {
-        Ok(()) => crate::log(&format!(
-            "save hook: {name} saved; wrote {} ({} mod states)",
-            path.display(),
-            sc.mods.len()
-        )),
-        Err(e) => crate::log(&format!(
-            "save hook: {name} saved, but writing {} failed: {e}",
-            path.display()
-        )),
-    }
+    with_store(|store| {
+        if UNREADABLE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_deref()
+            == Some(name)
+        {
+            crate::log(&format!(
+                "save hook: {name} saved; its sidecar couldn't be read when loading, so it \
+                 is left as it is"
+            ));
+            return;
+        }
+        let mut cur = current();
+        let sc = cur.get_or_insert_with(Sidecar::default);
+        if host::with(|h: &mut Host| h.save(&mut sc.mods)).is_none() {
+            crate::log("save hook: mod host busy or missing; saving the carried state only");
+        }
+        // A mod with nothing to keep has no table (it reads back as empty).
+        sc.mods.retain(|_, s| *s != ModSaveState::default());
+        match store.write(name, sc.to_toml().as_bytes()) {
+            Ok((to, notes)) => {
+                for n in notes {
+                    crate::log(&format!("save hook: {n}"));
+                }
+                crate::log(&format!(
+                    "save hook: {name} saved; wrote {to} ({} mod states)",
+                    sc.mods.len()
+                ));
+            }
+            Err(e) => crate::log(&format!(
+                "save hook: {name} saved, but writing its sidecar failed: {e}"
+            )),
+        }
+    });
 }
 
 extern "system" fn load_from_slot(info: usize, silent: u8) -> u8 {
@@ -329,34 +345,41 @@ extern "system" fn load_from_slot(info: usize, silent: u8) -> u8 {
 
 fn after_load(name: Option<&str>) {
     set_unreadable(None);
-    let sc = match name.and_then(|n| path_for(n).map(|p| (n, p))) {
+    let read = name.and_then(|n| {
+        with_store(|store| {
+            let r = store.read(n).and_then(|found| match found {
+                None => Ok((
+                    Sidecar::default(),
+                    format!("no sidecar at {}", store.describe(n)),
+                )),
+                Some((bytes, from)) => String::from_utf8(bytes)
+                    .map_err(|_| format!("{from}: not UTF-8"))
+                    .and_then(|text| Sidecar::parse(&text).map_err(|e| format!("{from}: {e}")))
+                    .map(|sc| (sc, format!("read {from}"))),
+            });
+            (n, r)
+        })
+    });
+    let sc = match read {
         None => {
             crate::log("load hook: can't read the save's file name; mods start empty");
             Sidecar::default()
         }
-        Some((name, path)) => match Sidecar::load(&path) {
-            Ok(sc) => {
-                let how = if path.exists() {
-                    "read"
-                } else {
-                    "no sidecar at"
-                };
-                crate::log(&format!(
-                    "load hook: {name} loaded; {how} {} ({} mod states)",
-                    path.display(),
-                    sc.mods.len()
-                ));
-                sc
-            }
-            Err(e) => {
-                crate::log(&format!(
-                    "load hook: {name} loaded, but {e}; mods start empty, and saving \
-                     to {name} won't overwrite that file"
-                ));
-                set_unreadable(Some(path));
-                Sidecar::default()
-            }
-        },
+        Some((name, Ok((sc, how)))) => {
+            crate::log(&format!(
+                "load hook: {name} loaded; {how} ({} mod states)",
+                sc.mods.len()
+            ));
+            sc
+        }
+        Some((name, Err(e))) => {
+            crate::log(&format!(
+                "load hook: {name} loaded, but {e}; mods start empty, and saving to {name} \
+                 won't overwrite that file"
+            ));
+            set_unreadable(Some(name.to_owned()));
+            Sidecar::default()
+        }
     };
     let party: Vec<String> = party_heroes()
         .iter()
@@ -382,20 +405,12 @@ extern "system" fn delete_file(file: usize) -> u64 {
     r
 }
 
-/// Deletes the sidecar of `name`: only `uk_qol/saves/<account>/<sanitized
-/// name>.qol.toml`, a path built here, so nothing outside our folder.
+/// Deletes the sidecar of `name`: only the cloud file `qol_<sanitized
+/// name>.toml` and `uk_qol/saves/<account>/<sanitized name>.qol.toml`, names
+/// built here, so nothing else.
 fn after_delete(name: &str) {
-    let Some(path) = path_for(name) else { return };
-    match std::fs::remove_file(&path) {
-        Ok(()) => crate::log(&format!(
-            "delete hook: {name} deleted; removed {}",
-            path.display()
-        )),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => crate::log(&format!(
-            "delete hook: {name} deleted, but removing {} failed: {e}",
-            path.display()
-        )),
+    for line in with_store(|store| store.delete(name)).unwrap_or_default() {
+        crate::log(&format!("delete hook: {name} deleted; {line}"));
     }
 }
 
@@ -423,53 +438,13 @@ static ACCOUNT: Mutex<Option<String>> = Mutex::new(None);
 pub fn account() -> Option<String> {
     let mut a = ACCOUNT.lock().unwrap_or_else(|e| e.into_inner());
     if a.is_none() {
-        *a = steam_account_id().map(|id| id.to_string());
+        *a = steam::account_id().map(|id| id.to_string());
         let shown = a
             .as_deref()
             .unwrap_or("default (Steam account not available)");
         crate::log(&format!("sidecar account folder: {shown}"));
     }
     a.clone()
-}
-
-#[cfg(windows)]
-fn steam_account_id() -> Option<u32> {
-    use core::ffi::c_void;
-    #[link(name = "kernel32")]
-    unsafe extern "system" {
-        fn GetModuleHandleW(name: *const u16) -> *mut c_void;
-        fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
-    }
-    let dll: Vec<u16> = "steam_api64.dll\0".encode_utf16().collect();
-    // SAFETY: NUL-terminated name; doesn't load anything.
-    let module = unsafe { GetModuleHandleW(dll.as_ptr()) };
-    if module.is_null() {
-        return None;
-    }
-    // SAFETY: NUL-terminated export names of a loaded module.
-    let (user_fn, id_fn) = unsafe {
-        (
-            GetProcAddress(module, c"SteamAPI_SteamUser_v023".as_ptr().cast()),
-            GetProcAddress(module, c"SteamAPI_ISteamUser_GetSteamID".as_ptr().cast()),
-        )
-    };
-    if user_fn.is_null() || id_fn.is_null() {
-        return None;
-    }
-    // SAFETY: the Steam flat API's signatures for these two exports.
-    let user_fn: extern "C" fn() -> *mut c_void = unsafe { std::mem::transmute(user_fn) };
-    let id_fn: extern "C" fn(*mut c_void) -> u64 = unsafe { std::mem::transmute(id_fn) };
-    let user = user_fn();
-    if user.is_null() {
-        return None;
-    }
-    let account = id_fn(user) as u32;
-    (account != 0).then_some(account)
-}
-
-#[cfg(not(windows))]
-fn steam_account_id() -> Option<u32> {
-    None
 }
 
 #[cfg(test)]
