@@ -89,13 +89,17 @@ from Linux too).
   "DfT" format) are patched in memory as the game reads them: change a value,
   add a record, move a HUD element. The files on disk are never touched.
 - **Overlay.** The game renders with OpenGL through SDL3. The runtime hooks
-  `SDL_GL_SwapWindow` and `SDL_PollEvent` (stable named exports, not patterns)
-  to draw an [Dear ImGui](https://github.com/ocornut/imgui) overlay and read
-  input. **F10** opens the mod menu: enable and disable mods, change their
-  settings, see which ones failed to load and why.
+  `SDL_GL_SwapWindow` and `SDL_PollEvent` (named SDL3 imports of the exe,
+  redirected in its import table, not patterns) to draw an
+  [egui](https://github.com/emilk/egui) overlay on the game's GL context and
+  read input. **F10** (or **L3+R3** on a gamepad) opens the mod menu: enable
+  and disable mods, change their settings, rebind their keys, see which ones
+  failed to load and why. While it's open the game gets no input.
 - **Hotkeys** are read from SDL input events, so they work the same with
   keyboard and gamepad and don't fight the game's own key bindings. Each mod's
-  keys are configurable.
+  keys are configurable (`S`, `Shift+1`, `Pad:Y`, `Pad:LB+Pad:X`, …), and a
+  key a mod handles never reaches the game. Hotkeys are off while you type in
+  a game text field.
 - **Logging** to `uk_qol/uk_qol.log` in the game folder.
 
 ### 3. Mods
@@ -291,8 +295,9 @@ main menu. This mod skips them, so the game starts on the main menu.
   bundle to attach to an issue here.
 - **Languages.** Overlay and manager text is translatable, starting with the
   game's own languages: English, Czech, German, Spanish, French, Polish, Russian.
-- **Steam Deck.** The overlay works with a gamepad, and the Linux launch
-  option is all that's needed.
+- **Steam Deck.** The overlay works with a gamepad (L3+R3 opens it, the d-pad
+  or left stick moves, A selects, B closes), and the Linux launch option is all
+  that's needed.
 - **CI.** Every release is built by CI, with checksums; CI runs only for
   release tags and manual runs.
 

@@ -132,14 +132,84 @@ Check items off as they land; add findings under the item they belong to.
 
 ## 4. Overlay and input
 
-- [ ] Hook `SDL_GL_SwapWindow` and `SDL_PollEvent` (named SDL3 exports).
-- [ ] Dear ImGui on the game's GL context; F10 opens the mod menu.
-- [ ] Mod list, settings forms generated from manifests, per-mod status
+- [x] Hook `SDL_GL_SwapWindow` and `SDL_PollEvent` (named SDL3 exports).
+  - Done by IAT patching of `underkeep.exe` (`runtime::iat`), not detours:
+    the exe imports both by name from `SDL3.dll`, and each name occurs once
+    in the exe (only in the import table), so it doesn't fetch them through
+    `GetProcAddress`/`SDL_GL_GetProcAddress`. SDL's internal calls aren't
+    redirected (not needed). `overlay::install()` runs from the runtime
+    thread right after the first log line; the exe's imports are bound by
+    then. A slot that doesn't hold SDL's own address is chained and logged.
+  - Also hooked: `SDL_GetGamepadButton` and `SDL_GetGamepadAxis`, which the
+    game imports to poll pad state; they read "released" while the menu is
+    open and for buttons whose press was swallowed. Optional: missing imports
+    are logged, not fatal.
+  - The game ships SDL 3.4.18 (`SDL-release-3.4.18` in `SDL3.dll`). Event
+    layouts and constants (`overlay::sdl`) are from the 3.4.18 headers, with
+    size/offset tests.
+  - Panic containment: each hook calls the original SDL function exactly
+    once, outside `guard::call_or("overlay", …)`; a panic in the overlay
+    delivers the event / presents the frame, and after one the hooks are
+    pass-throughs.
+  - Wine test (2026-11-14, Proton 11 wine, fresh prefix): a MinGW SDL3 GL
+    program linked against the game's `SDL3.dll` (copied to scratch, not the
+    repo) with the proxy: hooks installed, a synthetic F10 opens the menu
+    and never reaches the program, and GL state compared before and after
+    every `SDL_GL_SwapWindow` (program, VAO, buffers, texture unit and
+    binding, viewport, scissor, blend, depth, cull, stencil, sRGB, color
+    mask, unpack state, framebuffers) is identical over ~2400 frames on a
+    3.3 core and a 4.6 compatibility context. Not yet tried in the game.
+- [x] egui on the game's GL context; F10 opens the mod menu.
+  - Renderer: **egui + egui_glow** (0.37), not Dear ImGui: no MinGW C++
+    compiler is installed, a C++ build would add a C toolchain to CI and risk
+    libstdc++/libgcc imports, and egui is pure Rust and matches the manager.
+    GL functions are loaded through `SDL_GL_GetProcAddress` (opengl32 is not
+    imported). Default fonts cover Latin, Czech/Polish and Cyrillic.
+  - The DLL grows to ~4.7 MB and imports `bcryptprimitives.dll` (std's
+    random seed for egui's hash maps; a system DLL on Windows 10+ and Wine).
+  - Every GL state egui touches is saved and restored around the frame
+    (`overlay::gl`, a drop guard, so a panic also restores); the painter is
+    created inside that scope. The context version and profile are logged:
+    `overlay: GL 3.3 core profile; GL_VERSION …`. A new GL context (e.g. after
+    a mode change) gets a new renderer.
+  - UI scale: 1 at 1080 lines and below (Steam Deck), proportional above.
+    While open the cursor is shown if the game hid it, and restored on close.
+- [x] Mod list, settings forms generated from manifests, per-mod status
       and failure reasons.
-- [ ] Hotkey system on SDL events: keyboard and gamepad, rebindable,
+  - The host registers `overlay::set_host(Arc<dyn OverlayHost>)` (mod rows:
+    name, version, on/off, `ModState` Active/Off/Failed(reason)/
+    Unsupported(reason), settings with `SettingKind` bool/int/float/string/
+    enum/key) and `overlay::set_input_sink(fn(&InputEvent) -> bool)`.
+    `SettingKind::from_manifest` reads `type`, `min`, `max`, `choices` from
+    a `[settings.<key>]` table. Not wired to the host yet.
+  - The sink gets presses and releases (a release's return value is
+    ignored). Host and sink run inside the overlay's guard, so the host must
+    wrap each mod call in `guard::call(mod_id, …)`. If the overlay itself
+    fails, the menu is force-closed so pad polling and the cursor recover.
+  - The log notes each change of the game's text-input state
+    (`overlay: game text input on/off`), since hotkeys pause while it's on.
+- [x] Hotkey system on SDL events: keyboard and gamepad, rebindable,
       swallows the event when a mod handles it.
-- [ ] Gamepad navigation of the overlay (Steam Deck).
-- [ ] Translatable strings (en first; cs, de, es, fr, pl, ru later).
+  - `runtime::hotkey`: specs `S`, `Shift+1`, `Ctrl+Alt+F5`, `Num5`, `Pad:Y`,
+    `Pad:LB+Pad:X`, `Pad:LT` (triggers count as pressed past half way);
+    modifiers match exactly. A `key` setting is a hotkey: the host calls
+    `hotkey::set_binding`, mods test `hotkey::pressed` in `on_input`.
+  - A swallowed press's release and repeats are swallowed too; releases of
+    keys the game saw pressed always reach it (no stuck keys when the menu
+    opens). No mod input while the game has SDL text input active or the
+    menu is open.
+  - Rebinding in the menu: "Change", then a key (with modifiers) or pad
+    buttons; a pad chord is captured when its first button is released.
+- [x] Gamepad navigation of the overlay (Steam Deck).
+  - L3+R3 (`Pad:LS+Pad:RS`) opens and closes the menu: stick clicks are
+    the least likely game binding. The first stick's press reaches the game.
+    D-pad or left stick moves focus (with repeat), A activates, B closes
+    (or leaves a text field), LB/RB page. Not yet checked with a real pad or
+    whether the game uses L3/R3.
+- [x] Translatable strings (en first; cs, de, es, fr, pl, ru later).
+  - `runtime::i18n`: ids with English text; empty tables for cs, de, es, fr,
+    pl, ru fall back to English. The language comes from SDL's preferred
+    locales unless `i18n::set_lang` was called.
 
 ## 5. Reverse engineering per mod
 

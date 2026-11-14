@@ -10,6 +10,9 @@ pub mod config;
 pub mod guard;
 pub mod hook;
 pub mod host;
+pub mod hotkey;
+pub mod i18n;
+pub mod iat;
 pub mod input;
 pub mod overlay;
 pub mod pattern;
@@ -54,6 +57,7 @@ fn run(builtin: &'static [host::ModCtor]) {
         std::process::id()
     ));
     guard::install_crash_handler();
+    overlay::install();
     let build = match exe
         .map_err(build::DetectError::Io)
         .and_then(|p| build::detect_from_file(&p))
