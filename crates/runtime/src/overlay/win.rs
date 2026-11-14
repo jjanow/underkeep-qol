@@ -488,8 +488,9 @@ fn frame(window: Window) {
             });
         }
         let g = slot.as_mut().expect("just set");
-        if OPEN.load(Ordering::Relaxed) {
-            draw(api, window, g);
+        let open = OPEN.load(Ordering::Relaxed);
+        if open || crate::toast::any() {
+            draw(api, window, g, open);
         }
         let (mut pw, mut ph) = (0, 0);
         // SAFETY: the game's window.
@@ -498,7 +499,9 @@ fn frame(window: Window) {
     });
 }
 
-fn draw(api: &Api, window: Window, g: &mut Gfx) {
+/// Draws the menu (if `open`) and any toasts. With the menu closed it only
+/// paints: no input, text-input or cursor changes.
+fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
     let (mut w, mut h, mut pw, mut ph) = (0, 0, 0, 0);
     // SAFETY: the game's window.
     unsafe {
@@ -531,8 +534,13 @@ fn draw(api: &Api, window: Window, g: &mut Gfx) {
 
     let mut sg = state();
     let st = sg.as_mut().expect("initialized by state()");
-    st.router.to_points = to_points;
-    st.router.tick(now);
+    let events = if open {
+        st.router.to_points = to_points;
+        st.router.tick(now);
+        std::mem::take(&mut st.router.ui_events)
+    } else {
+        Vec::new()
+    };
     let mut raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
@@ -540,8 +548,8 @@ fn draw(api: &Api, window: Window, g: &mut Gfx) {
         )),
         max_texture_side: Some(painter.max_texture_side()),
         time: Some(now),
-        events: std::mem::take(&mut st.router.ui_events),
-        focused: true,
+        events,
+        focused: open,
         ..Default::default()
     };
     raw.viewports
@@ -551,21 +559,28 @@ fn draw(api: &Api, window: Window, g: &mut Gfx) {
     let host = host();
     let mut close = false;
     let out = g.egui.run_ui(raw, |ui| {
-        close = ui::menu(ui.ctx(), host.as_deref(), &mut st.router, &mut g.ui);
+        if open {
+            close = ui::menu(ui.ctx(), host.as_deref(), &mut st.router, &mut g.ui);
+        }
+        crate::toast::draw(ui.ctx());
     });
-    let wants_keyboard = g.egui.egui_wants_keyboard_input();
-    st.router.ui_wants_keyboard = wants_keyboard;
-    if close {
-        let t = st.router.set_open(false);
-        apply_toggle(api, st, t);
-    } else {
-        // SAFETY: SDL keyboard calls on the render thread.
-        unsafe {
-            if wants_keyboard && !st.text_started && !(api.text_input_active)(window) {
-                st.text_started = (api.start_text_input)(window);
-            } else if !wants_keyboard && st.text_started {
-                (api.stop_text_input)(window);
-                st.text_started = false;
+    // With the menu closed (only toasts drawn), input and text-input state
+    // are left alone.
+    if open {
+        let wants_keyboard = g.egui.egui_wants_keyboard_input();
+        st.router.ui_wants_keyboard = wants_keyboard;
+        if close {
+            let t = st.router.set_open(false);
+            apply_toggle(api, st, t);
+        } else {
+            // SAFETY: SDL keyboard calls on the render thread.
+            unsafe {
+                if wants_keyboard && !st.text_started && !(api.text_input_active)(window) {
+                    st.text_started = (api.start_text_input)(window);
+                } else if !wants_keyboard && st.text_started {
+                    (api.stop_text_input)(window);
+                    st.text_started = false;
+                }
             }
         }
     }
