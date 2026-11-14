@@ -136,10 +136,10 @@ Check items off as they land; add findings under the item they belong to.
     called for a new game) → empty state. Saving starts from the state of
     the game in play, not from the target file's old sidecar.
   - The game writes saves only through `ISteamRemoteStorage` (1.0.5).
-    Sidecars stay **local**: `uk_qol/saves/<account>/<save>.qol.toml`,
-    `<account>` from `SteamAPI_SteamUser_v023` /
-    `SteamAPI_ISteamUser_GetSteamID` (low 32 bits), `default` without Steam.
-    Writing them through FileWrite would sync them; that's an open question.
+    Sidecars go there too (next item); the local fallback is
+    `uk_qol/saves/<account>/<save>.qol.toml`, `<account>` from
+    `SteamAPI_SteamUser_v023` / `SteamAPI_ISteamUser_GetSteamID` (low 32
+    bits), `default` without Steam.
   - Hero keys: `hero_id` is only the creation slot, so mods key heroes by
     `savehook::hero_key` = `"<hero_id>:<name>"`; `savehook::party_heroes()`
     reads the 4 heroes at `g_party+0x10` (stride 0x2b8; valid +0, hero_id
@@ -155,12 +155,37 @@ Check items off as they land; add findings under the item they belong to.
   - A sidecar that can't be read (tested with `format = 99`) is logged on
     load and left as it is when the game saves over that slot (merged build
     with the overlay, same day).
-- [ ] Sync sidecars through Steam Cloud (decided 2026-11-14): write and read
+- [x] Sync sidecars through Steam Cloud (decided 2026-11-14): write and read
       them through `ISteamRemoteStorage` like the saves (e.g.
       `qol_save_1.toml`; the game's save list ignores names with a `.`), so
       mod state, and stored weapons above all, follows a save to other PCs
       and the Deck. Without Steam, stay local. Move existing local sidecars
       into the cloud once, without losing one that's newer locally.
+  - 2026-11-14: `runtime::steam` (flat exports `SteamAPI_SteamRemoteStorage_v016`,
+    FileWrite/Read/Exists/Delete, GetFileSize/Timestamp; any missing → local,
+    logged once), `save::Store`, name `qol_<save>.toml`. Read = the newer of
+    cloud and a local leftover (tie: cloud); write = cloud, local if
+    FileWrite fails; delete = both. Migration runs at the first hook of each
+    session with Steam: a local sidecar whose save is in the cloud is
+    uploaded byte for byte if newer than the cloud copy, then moved to
+    `saves/<account>/migrated/` (never replacing an older backup); others
+    stay. `saves/default/` is never migrated. Unreadable guard keyed by save
+    name, so it covers whichever copy was read.
+  - Save list (1.0.5, `0x1401c27b0`): the only caller of the cloud listing
+    (`GetFileCount`/`GetFileNameAndSize`, `0x1400633a0`) keeps names matching
+    the anchored, case-sensitive glob `save_*` (`0x1400291a0`), then drops
+    any with an extension. `qol_*.toml` fails both.
+  - In game (Proton, 2026-11-14): the first load migrated `save_1` and
+    `save_auto` sidecars (copied, local moved to `migrated/`) and read
+    `qol_save_1.toml`; a new save wrote `qol_save_2.toml` in `remote/`, loading
+    it read it, deleting it in game removed it; the load and save lists
+    showed only the saves. After exit `remotecache.vdf` had the `qol_*`
+    files synced (`syncstate` 1, `remotetime` set) and dropped
+    `qol_save_2.toml`. A newer local `format = 99` sidecar was read, flagged,
+    and left (local and cloud) when the game saved over that slot.
+  - Not tested: a second PC / Deck pulling the files, the no-Steam path in
+    game (unit tests only), a full cloud quota, an unreadable file in the
+    cloud itself (same code path as local).
 - [x] Note in the log which mods were active, for crash triage (the game's
       BugSplat reporter will also see our crashes).
   - `active mods: …` in `uk_qol.log` and in `session.toml`; the next start
