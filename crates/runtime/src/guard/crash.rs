@@ -148,7 +148,7 @@ mod win {
     /// The vectored handler. Runs on the faulting thread, possibly with a
     /// corrupt heap or a lock held, so it doesn't allocate: it formats into
     /// a stack buffer and calls `crate::try_log`, which only writes to its
-    /// already-open file (it would allocate only if nothing was logged yet).
+    /// already-open file and skips the line if the lock is held.
     pub(in crate::guard) unsafe extern "system" fn handler(ep: *mut ExceptionPointers) -> i32 {
         // SAFETY: the OS passes valid pointers; null-checked anyway.
         let Some(rec) = (unsafe { ep.as_ref().and_then(|ep| ep.record.as_ref()) }) else {
