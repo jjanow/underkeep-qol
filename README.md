@@ -62,6 +62,10 @@ On **Linux** (Proton) Wine prefers its built-in winmm, so the game needs a DLL
 override. In Steam, *Properties → Launch Options*:
 `WINEDLLOVERRIDES="winmm=n,b" %command%`
 
+This works under Steam (Flatpak) with Proton: the runtime loads in game
+version 1.0.5 and audio, gamepad, save/load and quit work normally. Windows
+is still to be tested.
+
 The manager sets this up or prints the exact line to paste.
 
 ### 2. Mod runtime
@@ -123,6 +127,10 @@ mod. The overlay edits the same file.
   know about: **an item in a ranged slot exists only in the sidecar file.**
   If the mods are removed, or the sidecar is lost (another computer, cloud
   sync, a deleted file), that weapon is gone. See [`weapon-swap`](#weapon-swap).
+- The game keeps its saves in Steam Cloud storage (its log says "Save
+  location: Steam cloud"); on disk they are `save_1`, `save_auto`, … in
+  Steam's `userdata/<account>/2411200/remote/` folder, not in the game folder
+  or the Wine prefix. Where the sidecars go is decided in the runtime work.
 - The sidecar files may **not** be synced by Steam Cloud, which only
   syncs the game's own files. Mod state is then local to one
   computer; the saves themselves still sync.
@@ -269,8 +277,8 @@ adds 3 more (configurable 1–5).
   game's own languages: English, Czech, German, Spanish, French, Polish, Russian.
 - **Steam Deck.** The overlay works with a gamepad, and the Linux launch
   option is all that's needed.
-- **CI.** Every push builds Windows and Linux binaries. Every release is built
-  by CI with checksums.
+- **CI.** Every release is built by CI, with checksums; CI runs only for
+  release tags and manual runs.
 
 ## Repository layout
 

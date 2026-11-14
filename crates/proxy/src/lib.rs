@@ -115,8 +115,10 @@ extern "C" fn resolve() {
             slot.store(addr, Ordering::Relaxed);
         }
         if missing > 0 {
+            // Expected: the list covers Windows and Wine, which differ.
             uk_qol_runtime::log(&format!(
-                "proxy: {missing} winmm exports not found in the system DLL"
+                "proxy: {missing} of {COUNT} winmm exports not in the system DLL \
+                 (normal: Windows and Wine export different sets)"
             ));
         }
         READY.store(true, Ordering::Release);

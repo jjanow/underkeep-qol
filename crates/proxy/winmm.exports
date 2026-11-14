@@ -1,6 +1,10 @@
 # Every named export of winmm.dll; the proxy forwards each one to the system DLL.
-# List taken from Wine's winmm (186 names). SDL3.dll imports timeBeginPeriod and
-# timeEndPeriod, fmod.dll imports timeGetTime; nothing else in the game uses winmm.
+# The union of Wine's winmm (186 names) and mingw-w64's winmm.def, which follows
+# Windows (209 names): 217 in all. A name the system DLL lacks (the Windows-only
+# ones under Wine, the Wine-only ones under Windows) resolves to a stub returning 0.
+# Windows' nameless ordinal 2 isn't forwarded.
+# SDL3.dll imports timeBeginPeriod and timeEndPeriod, fmod.dll imports timeGetTime;
+# nothing else in the game uses winmm.
 auxGetDevCapsA
 auxGetDevCapsW
 auxGetNumDevs
@@ -187,3 +191,36 @@ waveOutSetPlaybackRate
 waveOutSetVolume
 waveOutUnprepareHeader
 waveOutWrite
+
+# Windows only (from mingw-w64 winmm.def; not in Wine)
+MigrateAllDrivers
+MigrateSoundEvents
+NotifyCallbackData
+WOW32DriverCallback
+WOW32ResolveMultiMediaHandle
+WOWAppExit
+WinmmLogoff
+WinmmLogon
+aux32Message
+gfxAddGfx
+gfxBatchChange
+gfxCreateGfxFactoriesList
+gfxCreateZoneFactoriesList
+gfxDestroyDeviceInterfaceList
+gfxEnumerateGfxs
+gfxLogoff
+gfxLogon
+gfxModifyGfx
+gfxOpenGfx
+gfxRemoveGfx
+joy32Message
+mci32Message
+mid32Message
+mmDrvInstall
+mod32Message
+mxd32Message
+tid32Message
+wid32Message
+winmmDbgOut
+winmmSetDebugLevel
+wod32Message
