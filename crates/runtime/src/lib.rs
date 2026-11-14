@@ -20,6 +20,7 @@ pub mod pattern;
 pub mod pe;
 pub mod safe;
 pub mod save;
+pub mod toast;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;

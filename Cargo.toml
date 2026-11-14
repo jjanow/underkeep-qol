@@ -5,6 +5,7 @@ members = [
     "crates/runtime",
     "crates/dft",
     "crates/manager",
+    "mods/bloodmage-cost",
     "mods/skip-logos",
 ]
 
@@ -17,6 +18,7 @@ repository = "https://github.com/jjanow/underkeep-qol"
 [workspace.dependencies]
 uk-qol-runtime = { path = "crates/runtime" }
 uk-qol-dft = { path = "crates/dft" }
+uk-qol-mod-bloodmage-cost = { path = "mods/bloodmage-cost" }
 uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every

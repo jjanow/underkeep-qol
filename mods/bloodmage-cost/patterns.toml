@@ -1,0 +1,53 @@
+# Patterns for bloodmage-cost. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.5 (Steam) VAs.
+
+# Hero::PaySkillCost(Hero*, SkillInstance*, int cost), 0x140184850. Only
+# caller: Hero::CastSkill. For class 6 (Blood Mage) it sums the "red_mask"
+# cost reductions of the equipped items, then, unless the skill is
+# skill_crimson_renewal, takes one bone from the first party-inventory item
+# of item type 16 (bone) with a stack count > 0; with none it calls
+# Hero::LoseHP. Found from the class switch (Zeal, stamina, mana, bones) and
+# the "skill_crimson_renewal" string.
+[pay_skill_cost]
+pattern = "45 85 C0 0F 8E ?? ?? ?? ?? 48 89 6C 24 18 48 89 7C 24 20 41 56 48 83 EC 40 48 8B F9 41 8B E8 48 8B 0A 4C 8B F2 80 B9 ?? ?? ?? ?? 00"
+
+# Hero::CanCastSkill(Hero*, u64 skill ref) -> int, 0x140180ed0 (0 = can
+# cast). Called by the HUD (button state), the round action and
+# Hero::UseSelectedSkill. For a Blood Mage: any bone in the party inventory
+# -> 0, else hp <= cost -> 8 ("not enough health").
+[can_cast_skill]
+pattern = "48 89 5C 24 10 56 48 83 EC 20 33 DB 48 8B F1 85 D2 78 ?? 3B 91 68 02 00 00 7D"
+
+# Hero::LoseHP(Hero*, int), 0x14017c660: the call after PaySkillCost's bone
+# loop (its only caller in the exe). The match is that loop:
+# `mov rdx, [count]; test edx, edx; jle <pay with health>; ...;
+# cmp dword [rsi+0x100], 16`.
+[lose_hp]
+pattern = "48 8B 15 ?? ?? ?? ?? 85 D2 7E ?? 48 8B 0D ?? ?? ?? ?? 48 8B C3 66 90 48 85 C0 78 ?? 3B DA 7D ?? 48 8B 31 48 85 F6 74 ?? 83 BE 00 01 00 00 10"
+offset = 76
+call = true
+
+# The party inventory's item count (dword), 0x1404402f0 (= Inventory+8 of
+# the party inventory at 0x1404402e8; entries pointer at +0x10). Taken from
+# CanCastSkill's Blood Mage branch: `mov eax, [rsi+0x94]; cmp eax, 6; jne;
+# mov r8, [count]`.
+[party_inventory_count]
+pattern = "8B 86 94 00 00 00 83 F8 06 75 ?? 4C 8B 05 ?? ?? ?? ?? 45 85 C0 7E ?? 48 8B 15"
+offset = 11
+rip = { disp = 3, len = 7 }
+
+# The selected hero (dword index into the party's 4 heroes, may be < 0 for
+# none), 0x14044011c, saved as the party's "selected_hero". Taken from the
+# round-action code that picks the acting hero: `mov edx, [selected_hero];
+# test ecx, ecx; cmovs r15d, edx; movsxd rax, r15d; imul r14, rax, 0x2b8;
+# lea rbx, [heroes]`.
+[selected_hero]
+pattern = "8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
+rip = { disp = 2, len = 6 }
+
+# The party's hero array (4 x Hero, 0x2b8 bytes each), 0x14043f630
+# (= Party+0x10). The `lea rbx, [heroes]` of the same code.
+[heroes]
+pattern = "8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
+offset = 22
+rip = { disp = 3, len = 7 }
