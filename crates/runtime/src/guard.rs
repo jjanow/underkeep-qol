@@ -177,8 +177,8 @@ fn with_current_mod<R>(f: impl FnOnce(Option<&str>) -> R) -> R {
 /// before the game's own handlers, including ones the game or a driver
 /// catches and survives. A logged exception is therefore not proof of a
 /// crash; the first 8 per session are logged. Every one also calls
-/// [`crate::note_crash`], so a handled one still makes safe mode count the
-/// session as abnormal. It always returns `EXCEPTION_CONTINUE_SEARCH`:
+/// [`crate::note_crash`]: an exit soon after one counts as abnormal for safe
+/// mode, one survived long before a normal quit doesn't. It always returns `EXCEPTION_CONTINUE_SEARCH`:
 /// nothing is ever swallowed.
 pub fn install_crash_handler() {
     #[cfg(windows)]

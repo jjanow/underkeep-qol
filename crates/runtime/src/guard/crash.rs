@@ -147,7 +147,7 @@ mod win {
 
     /// The vectored handler. Runs on the faulting thread, possibly with a
     /// corrupt heap or a lock held, so it doesn't allocate: it formats into
-    /// a stack buffer and calls `crate::log`, which only writes to its
+    /// a stack buffer and calls `crate::try_log`, which only writes to its
     /// already-open file (it would allocate only if nothing was logged yet).
     pub(in crate::guard) unsafe extern "system" fn handler(ep: *mut ExceptionPointers) -> i32 {
         // SAFETY: the OS passes valid pointers; null-checked anyway.
@@ -197,7 +197,7 @@ mod win {
                 ", thread {tid}, mod {}; first chance, the game may still handle it",
                 active.unwrap_or("none")
             );
-            crate::log(line.as_str());
+            crate::try_log(line.as_str());
         });
     }
 }

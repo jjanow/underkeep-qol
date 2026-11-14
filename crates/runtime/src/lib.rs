@@ -62,6 +62,18 @@ pub fn data_dir() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.join("uk_qol"))
 }
 
+/// Like [`log`], but gives up instead of waiting if another thread holds the
+/// log lock, and never opens the file. For the crash handler, which may run
+/// while the crashing thread holds the lock.
+pub fn try_log(msg: &str) {
+    if let Ok(mut guard) = LOG.try_lock()
+        && let Some(f) = guard.as_mut()
+    {
+        let _ = writeln!(f, "[{}] {msg}", unix_secs());
+        let _ = f.flush();
+    }
+}
+
 /// Appends a line to `uk_qol/uk_qol.log`, truncating the log at the first
 /// write of each session. Never panics; logging failures are ignored.
 pub fn log(msg: &str) {
@@ -93,7 +105,7 @@ pub fn log(msg: &str) {
 // `begin_session` before loading mods and `log_active_mods` before enabling
 // their hooks; the proxy calls `stop` on process exit.
 
-static CRASHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static CRASHED_AT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 /// Starts the safe-mode session in `uk_qol/` (crash counter, running marker,
 /// Shift check; [`safe::begin_session`]) and logs how the previous session
@@ -140,11 +152,25 @@ pub fn log_active_mods(ids: &[&str]) {
     }
 }
 
-/// Marks this session as crashed: [`stop`] then leaves the running marker, so
-/// the next start counts an abnormal exit even if the process goes on to exit
-/// through `ExitProcess` (e.g. a crash handler that exits "normally").
+/// Records that a fatal-class exception was just seen (first-chance, so the
+/// game may still survive it). If the process exits within
+/// [`CRASH_EXIT_WINDOW_SECS`] of the last one, [`stop`] leaves the running
+/// marker, so a crash that a crash reporter ends through `ExitProcess` still
+/// counts as abnormal, while an exception the game survived long before a
+/// normal quit doesn't.
 pub fn note_crash() {
-    CRASHED.store(true, std::sync::atomic::Ordering::SeqCst);
+    CRASHED_AT.store(unix_secs().max(1), std::sync::atomic::Ordering::SeqCst);
+}
+
+/// See [`note_crash`]. Generous, since a crash reporter may show a dialog
+/// before it exits.
+pub const CRASH_EXIT_WINDOW_SECS: u64 = 600;
+
+fn unix_secs() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
 }
 
 /// Clean process exit, called by the proxy's `DllMain` on
@@ -154,7 +180,8 @@ pub fn note_crash() {
 /// unless [`begin_session`] never ran or [`note_crash`] was called.
 pub fn stop() {
     let Some(dir) = safe::armed_dir() else { return };
-    if CRASHED.load(std::sync::atomic::Ordering::SeqCst) {
+    let crashed_at = CRASHED_AT.load(std::sync::atomic::Ordering::SeqCst);
+    if crashed_at != 0 && unix_secs().saturating_sub(crashed_at) <= CRASH_EXIT_WINDOW_SECS {
         return;
     }
     safe::end_session(dir);
