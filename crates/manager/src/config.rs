@@ -278,6 +278,65 @@ x = 1
         assert_eq!(ConfigFile::load(&p).unwrap().enabled("a"), Some(false));
     }
 
+    /// What the manager writes is what the runtime reads.
+    #[test]
+    fn runtime_reads_what_the_manager_writes() {
+        let m = parse_manifest(
+            r#"
+id = "m"
+name = "M"
+version = "0.1.0"
+game_builds = "any"
+[[settings]]
+key = "slots"
+type = "int"
+default = 3
+min = 1
+max = 5
+label = "Slots"
+[[settings]]
+key = "cost"
+type = "enum"
+choices = ["bones", "health"]
+default = "bones"
+label = "Cost"
+"#,
+            "m",
+        )
+        .unwrap();
+        let text = "[mods.m]\nslots = 2 # mine\n[mods.other]\nx = 1\n";
+        let mut c = ConfigFile::parse(Path::new("c"), text).unwrap();
+        c.set_enabled("m", false).unwrap();
+        c.set(
+            "m",
+            "slots",
+            coerce(m.setting("slots").unwrap(), "4").unwrap(),
+        )
+        .unwrap();
+        c.set(
+            "m",
+            "cost",
+            coerce(m.setting("cost").unwrap(), "health").unwrap(),
+        )
+        .unwrap();
+        let rt = uk_qol_runtime::config::Config::parse(&c.text()).unwrap();
+        assert!(!rt.is_enabled("m", true));
+        let manifest = uk_qol_runtime::host::Manifest::parse(
+            "id = \"m\"\nname = \"M\"\nversion = \"0\"\ngame_builds = \"any\"\n\
+             [[settings]]\nkey = \"slots\"\ntype = \"int\"\ndefault = 3\nlabel = \"S\"\n\
+             [[settings]]\nkey = \"cost\"\ntype = \"enum\"\nchoices = [\"bones\", \"health\"]\n\
+             default = \"bones\"\nlabel = \"C\"\n",
+        )
+        .unwrap();
+        let eff = rt.settings_for("m", &manifest.defaults());
+        assert_eq!(eff.get("slots").and_then(toml::Value::as_integer), Some(4));
+        assert_eq!(
+            eff.get("cost").and_then(toml::Value::as_str),
+            Some("health")
+        );
+        assert!(rt.is_enabled("other", true));
+    }
+
     #[test]
     fn coerces_with_runtime_rules() {
         let m = parse_manifest(

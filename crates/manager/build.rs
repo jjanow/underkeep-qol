@@ -26,7 +26,9 @@ fn main() {
         let manifest = d.join("mod.toml");
         let patterns = d.join("patterns.toml");
         println!("cargo:rerun-if-changed={}", manifest.display());
-        println!("cargo:rerun-if-changed={}", patterns.display());
+        if patterns.is_file() {
+            println!("cargo:rerun-if-changed={}", patterns.display());
+        }
         let folder = d.file_name().unwrap().to_string_lossy();
         let pat = if patterns.is_file() {
             format!("include_str!({})", lit(&patterns))
@@ -43,7 +45,10 @@ fn main() {
     out.push_str("];\n");
 
     let dest = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("builtin_mods.rs");
-    std::fs::write(dest, out).unwrap();
+    // Only rewrite on change, so the manager isn't rebuilt needlessly.
+    if std::fs::read_to_string(&dest).ok().as_deref() != Some(out.as_str()) {
+        std::fs::write(dest, out).unwrap();
+    }
 }
 
 /// A path as a Rust string literal (absolute, so `include_str!` finds it).
