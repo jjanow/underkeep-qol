@@ -5,6 +5,9 @@
 //! game it loaded into, and starts the mod host (`host`). Hooks, the overlay
 //! and the save hooks are in progress (PLAN.md).
 
+/// The egui the overlay draws with, for `Mod::menu`.
+pub use egui;
+
 pub mod bridge;
 pub mod build;
 pub mod config;

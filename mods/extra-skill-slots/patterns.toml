@@ -1,0 +1,50 @@
+# Patterns for extra-skill-slots. Format: CONTRIBUTING.md, "Adding a mod".
+
+# TurnManager::_DoRoundAction(TurnManager*, RoundAction*, float dt): runs the
+# front round action. Type 4 (hero acts) with +0xc = 1 (use skill) checks
+# CanCastSkill on the hero's selected skill (Hero+0x278) and calls
+# Hero::UseSelectedSkill, its only caller. Found from that caller; the
+# action-check message strings ("action_check_*") are shown on failure.
+[do_round_action]
+pattern = "48 8B C4 48 89 58 18 48 89 50 10 48 89 48 08 55 56 57 41 54 41 55 41 56 41 57 48 8D A8 D8 FC FF FF 48 81 EC F0 03 00 00"
+
+# TurnManager::PushAction(TurnManager*, int type) -> RoundAction*: appends a
+# zeroed 0xe8-byte action with a new sequence number (+0xdc). Found as the call
+# the HUD skill button and the control_use_skill handler make before writing
+# hero index (+8) and use-skill flag (+0xc).
+[push_round_action]
+pattern = "40 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 FF 81 04 01 00 00 48 8B F9"
+
+# The TurnManager global: `lea edx, [r13+4]; lea rcx, g_turn_manager; call
+# PushAction; mov [rax+8], esi; mov [rax+0xc], r12d` in the HUD skill-slot
+# code (it queues "hero N uses skill" when the slot is clicked).
+[g_turn_manager]
+pattern = "41 8D 55 04 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 89 70 08 44 89 60 0C"
+offset = 4
+rip = { disp = 3, len = 7 }
+
+# The input gate the game's own hero-action controls check before queueing
+# (called with 2): false while a text field, menu, dialog, target selection
+# or loading is active. Found in the control_use_skill handler.
+[can_queue_hero_action]
+pattern = "48 89 5C 24 08 55 48 8B EC 48 83 EC 50 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 F0 8B D9 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 03"
+
+# The selected hero (int 0..3) and the party's hero array (4 x 0x2b8 bytes),
+# from _DoRoundAction's type-4 case: `mov edx, [selected_hero]; ...;
+# imul r14, rax, 0x2b8; lea rbx, [heroes]`.
+[g_selected_hero]
+pattern = "8B 4E 08 44 8B F9 8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
+offset = 6
+rip = { disp = 2, len = 6 }
+
+[g_heroes]
+pattern = "8B 4E 08 44 8B F9 8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
+offset = 28
+rip = { disp = 3, len = 7 }
+
+# Text_Get(String* out, const String* key) -> String*: the localized text for
+# a key in the current language (falls back to English). Used for skill names
+# in the menu. Found from the "text_en" ... "text_ru" table names it selects.
+[text_get]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC D0 00 00 00 83 7A 10 00 48 8B FA 48 8B F1 75"
+optional = true

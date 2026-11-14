@@ -72,6 +72,11 @@ pub trait Mod: Send {
     fn on_settings(&mut self, _settings: &toml::Table) {}
     fn on_save(&mut self, _state: &mut ModSaveState) {}
     fn on_load_save(&mut self, _state: &ModSaveState) {}
+    /// Draws the mod's own section in the overlay menu, below its settings
+    /// (only while the mod is active and its section is open). Runs on the
+    /// game's render thread with the host locked: don't call back into the
+    /// host. Use the runtime's re-export `uk_qol_runtime::egui`.
+    fn menu(&mut self, _ui: &mut egui::Ui) {}
 }
 
 /// Constructor of a built-in mod, as passed by the proxy.
@@ -1283,6 +1288,20 @@ impl Host {
             m.on_load_save(states.get(id).unwrap_or(&empty));
             false
         });
+    }
+
+    /// Draws mod `id`'s own menu section ([`Mod::menu`]) if it is active.
+    pub fn menu(&mut self, id: &str, ui: &mut egui::Ui) {
+        self.sweep();
+        let Some(i) = self.find(id) else { return };
+        let slot = &mut self.slots[i];
+        if slot.status != Status::Active {
+            return;
+        }
+        let m = &mut slot.m;
+        if guard::call(&slot.id, || m.menu(ui)).is_none() {
+            self.fail(i);
+        }
     }
 
     /// Turns a mod on or off for this session (and in [`Host::config`]).

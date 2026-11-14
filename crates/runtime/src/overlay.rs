@@ -163,6 +163,9 @@ pub trait OverlayHost: Send + Sync {
     /// saves the config, calls `Mod::on_settings`, and for `Key` settings
     /// calls [`crate::hotkey::set_binding`]. Err is shown under the setting.
     fn set_setting(&self, mod_id: &str, key: &str, value: toml::Value) -> Result<(), String>;
+    /// Draws a mod's own section (its `Mod::menu`) inside its open entry,
+    /// below the settings.
+    fn mod_menu(&self, _mod_id: &str, _ui: &mut egui::Ui) {}
 }
 
 /// Receives each key / gamepad press and release while the menu is closed
