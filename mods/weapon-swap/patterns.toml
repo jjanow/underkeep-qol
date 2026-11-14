@@ -48,6 +48,23 @@ pattern = "4C 8B 1D ?? ?? ?? ?? 33 D2 45 8B 8B 40 01 00 00 45 85 C9 0F 8E ?? ?? 
 [round_action_push]
 pattern = "40 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 FF 81 04 01 00 00 48 8B F9"
 
+# The item on the mouse cursor (-> Item*, null if none): the game's drop
+# targets call it. Reads the UI context through the `cursor` global (the
+# mod points that at `ui_context` for the call): drag phase above 1
+# (exactly 2 for click-to-carry drags), then by what is carried (+0x60): 0 a hero's
+# equipment slot (+0x80 hero, +0x7c slot), 1 and 2 a UI object by id (+0x7c)
+# holding the item (party inventory, floor). Items are picked up with a
+# click and dropped with the next one; the item stays where it was until a
+# drop target equips or moves it.
+[drag_item]
+pattern = "40 57 48 83 EC 20 48 8B 05 ?? ?? ?? ?? 33 FF 8B 48 58 83 F9 01 0F 8E"
+
+# Ends the drag (clears the context's +0x58..+0xbf; through `cursor` like
+# drag_item): what every drop target calls after handling a drop, and what
+# cancels one. Nothing is moved.
+[drag_end]
+pattern = "48 89 5C 24 08 55 48 8D 6C 24 A9 48 81 EC 90 00 00 00 48 8B 1D ?? ?? ?? ?? 83 7B 58 00 0F 84"
+
 # --- Data ------------------------------------------------------------------
 
 # The TurnManager (+0 = phase, 1 while monsters act; +8 = queued actions).
@@ -84,9 +101,10 @@ pattern = "48 83 EC 78 0F 57 C0 C7 05 ?? ?? ?? ?? 05 00 00 00 B1 01"
 offset = 7
 rip = { disp = 2, len = 10 }
 
-# The UI mode (6 = character sheet open) and the pointer to the cursor
-# state (+0x58: drag phase, above 1 while an item is dragged; the pointer
-# is null with a gamepad). Hero::EquipItem: `cmp [ui_mode], 6; jne;
+# The UI mode (6 = character sheet open) and the current-UI-context
+# pointer (`cursor`: the game's immediate-mode UI state, set by the UI
+# pass's begin and nulled by its end, so null whenever the mod runs; the
+# functions above read it). Hero::EquipItem: `cmp [ui_mode], 6; jne;
 # mov rax, [cursor]`.
 [ui_mode]
 pattern = "0F 87 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? F3 0F 10 18 F3 0F 10 60 04"
@@ -98,9 +116,27 @@ pattern = "0F 87 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8B 05 ?? 
 offset = 19
 rip = { disp = 3, len = 7 }
 
+# The UI context itself (+0/+4 mouse in GUI space, +0x58 drag phase), as
+# passed to the UI pass's begin: `mov rcx, [context]; mulss ..;
+# mov [rbp+0x518], rax`.
+[ui_context]
+pattern = "48 8B 0D ?? ?? ?? ?? F3 0F 59 05 ?? ?? ?? ?? 48 89 85 18 05 00 00"
+rip = { disp = 3, len = 7 }
+
 # Target selection (nonzero while the game waits for a target, e.g. after
 # choosing a spell). Hero::UseSelectedSkill: `mov [target_mode], 1`.
 [target_mode]
 pattern = "0F 94 45 E7 48 89 45 DF E8 ?? ?? ?? ?? 48 8D 55 B7 C7 05 ?? ?? ?? ?? 01 00 00 00"
 offset = 17
 rip = { disp = 2, len = 10 }
+
+# The character sheet (drawn while the UI mode is 6, for the selected hero):
+# equipment slot k's rect {x, y, w, h} (f32, GUI space) at +0x14 + k * 0x28,
+# rewritten every frame from the sheet's position (`barbie_position`); slot
+# k's hover and press flags at +0x24..+0x26 and the "fits" highlight at
+# +0x27. The HUD's `lea rcx, [sheet]; call CharSheet_Draw`
+# after the inventory panel.
+[char_sheet]
+pattern = "E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 32 DB E8"
+offset = 5
+rip = { disp = 3, len = 7 }

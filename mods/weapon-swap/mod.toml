@@ -52,3 +52,10 @@ type = "bool"
 default = true
 label = "Swap button on the HUD"
 description = "Shows a small button with the stored weapon's initials on the weapon hand slot of each hero with a filled ranged slot; click it to swap."
+
+[[settings]]
+key = "sheet_slot"
+type = "bool"
+default = true
+label = "Ranged slot on the character sheet"
+description = "Shows the ranged slot on the character sheet, left of the helmet slot: click it with a bow on the cursor to put the bow in; click it to pick its weapon up, then click the inventory or the weapon slot. Right-click moves it to the inventory."

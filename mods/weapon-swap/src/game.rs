@@ -61,10 +61,30 @@ const TM_COUNT: usize = 0x08;
 const ACTION_HERO_DONE: i32 = 3;
 const ACTION_HERO: usize = 0x08;
 
-/// Cursor state: +0x58 drag phase; the game's drop code treats values
-/// above 1 as an item being dragged. The cursor object is null while
-/// playing with a gamepad.
+/// The game's immediate-mode UI context (mouse, drag state). The `cursor`
+/// global points at it only during the game's UI pass and is null
+/// outside it (where the mod runs: between frames, and in the overlay);
+/// the context itself is in the `ui_context` global. +0x58 drag phase: 0
+/// none, 1 pressed on a draggable, 2 carried; +0x5c drag style: 1 for
+/// items (click picks up, the next click drops); +0x60 what is carried: 0
+/// a hero's equipment slot (+0x7c slot, +0x80 hero), 1 a party inventory
+/// item, 2 others (floor, containers).
 const CURSOR_DRAG: usize = 0x58;
+const CURSOR_DRAG_STYLE: usize = 0x5c;
+const CURSOR_DRAG_KIND: usize = 0x60;
+const CURSOR_DRAG_SLOT: usize = 0x7c;
+const CURSOR_DRAG_HERO: usize = 0x80;
+/// Drag kinds (+0x60).
+pub const KIND_EQUIPPED: i32 = 0;
+pub const KIND_INVENTORY: i32 = 1;
+
+/// The character sheet: equipment slot `k`'s rect `{x, y, w, h}` (f32, GUI
+/// space, rewritten every frame while the sheet is open) at
+/// `sheet + 0x14 + k * 0x28`.
+const SHEET_RECTS: usize = 0x14;
+const SHEET_SLOT_SIZE: usize = 0x28;
+/// UI mode of the character sheet.
+pub const UI_SHEET: i32 = 6;
 
 /// `g_state` values in a game: 4 after loading a save (seen in game),
 /// 3 for a game started from the menu (static analysis).
@@ -77,6 +97,8 @@ type TakeFn = unsafe extern "C" fn(*mut u8, u8, i32) -> u64;
 type AddFn = unsafe extern "C" fn(*mut u8, *mut u8, u8) -> *mut u8;
 type BattleFn = unsafe extern "C" fn() -> u64;
 type PushFn = unsafe extern "C" fn(*mut u8, i32) -> *mut u8;
+type DragItemFn = unsafe extern "C" fn() -> *mut u8;
+type DragEndFn = unsafe extern "C" fn();
 
 /// An engine `String` as passed by value-pointer. A null buffer marks a
 /// literal (the game passes its own string constants like this), so the
@@ -111,6 +133,9 @@ pub struct Game {
     inventory_add: AddFn,
     in_battle: BattleFn,
     push_action: PushFn,
+    drag_item: DragItemFn,
+    drag_end: DragEndFn,
+    char_sheet: usize,
     turn_manager: usize,
     party: usize,
     inventory: usize,
@@ -118,6 +143,7 @@ pub struct Game {
     game_state: usize,
     ui_mode: usize,
     cursor: usize,
+    ui_context: usize,
     target_mode: usize,
 }
 
@@ -224,6 +250,9 @@ impl Game {
                 inventory_add: std::mem::transmute::<usize, AddFn>(addr("inventory_add")?),
                 in_battle: std::mem::transmute::<usize, BattleFn>(addr("in_battle")?),
                 push_action: std::mem::transmute::<usize, PushFn>(addr("round_action_push")?),
+                drag_item: std::mem::transmute::<usize, DragItemFn>(addr("drag_item")?),
+                drag_end: std::mem::transmute::<usize, DragEndFn>(addr("drag_end")?),
+                char_sheet: addr("char_sheet")?,
                 turn_manager: addr("turn_manager")?,
                 party: addr("party")?,
                 inventory: addr("party_inventory")?,
@@ -231,6 +260,7 @@ impl Game {
                 game_state: addr("game_state")?,
                 ui_mode: addr("ui_mode")?,
                 cursor: addr("cursor")?,
+                ui_context: addr("ui_context")?,
                 target_mode: addr("target_mode")?,
             })
         }
@@ -239,7 +269,7 @@ impl Game {
     pub fn readiness(&self) -> Readiness {
         // SAFETY: globals of the running game.
         unsafe {
-            let cursor: usize = rd(self.cursor);
+            let cursor: usize = rd(self.ui_context);
             Readiness {
                 game_state: rd(self.game_state),
                 ui_mode: rd(self.ui_mode),
@@ -475,8 +505,9 @@ impl Game {
         }
         // Equip it as from the inventory panel: into the inventory first,
         // then the panel's own call (checks, scripts, stats, animation).
-        // Mode 1, not the HUD hand slot's mode 3: that one reads the mouse
-        // cursor object, which is null while playing with a gamepad.
+        // Mode 1, not the HUD hand slot's mode 3: that one reads the UI
+        // context through the `cursor` global, which is null outside the
+        // game's UI pass.
         // SAFETY: a fresh, non-stackable item (so it isn't merged away).
         unsafe { (self.inventory_add)(self.inventory as *mut u8, r, 0) };
         // SAFETY: a live hero and our item in the inventory, game thread.
@@ -596,6 +627,96 @@ impl Game {
                 wr::<i32>(a as usize + ACTION_HERO, i as i32);
             }
         }
+    }
+}
+
+/// An item the game has on the mouse cursor (picked up with a click, to be
+/// dropped with the next one).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Carried {
+    pub item: Item,
+    /// [`KIND_EQUIPPED`], [`KIND_INVENTORY`] or another source.
+    pub kind: i32,
+    /// For [`KIND_EQUIPPED`]: the hero and slot it was picked up from.
+    pub hero: i32,
+    pub slot: i32,
+}
+
+impl Game {
+    fn context_object(&self) -> usize {
+        // SAFETY: a pointer global of the running game.
+        unsafe { rd(self.ui_context) }
+    }
+
+    /// Calls the game's UI function `f` (one that reads the context through
+    /// the `cursor` global) as if inside the game's UI pass: the global is
+    /// pointed at the UI context for the call, then put back.
+    ///
+    /// # Safety
+    /// `f` must be one of the game's drag functions; game thread only.
+    unsafe fn in_ui<R>(&self, f: impl FnOnce() -> R) -> Option<R> {
+        let ctx = self.context_object();
+        if ctx == 0 {
+            return None;
+        }
+        // SAFETY: the game's own pointer global, set to its own context.
+        unsafe {
+            let prev: usize = rd(self.cursor);
+            wr(self.cursor, ctx);
+            let r = f();
+            wr(self.cursor, prev);
+            Some(r)
+        }
+    }
+
+    /// The item the game has on the mouse cursor, if any.
+    pub fn carried(&self) -> Option<Carried> {
+        let c = self.context_object();
+        if c == 0 {
+            return None;
+        }
+        // SAFETY: the UI context lives as long as the game; the getter is
+        // the game's own (it reads the same fields).
+        unsafe {
+            let phase: i32 = rd(c + CURSOR_DRAG);
+            let style: i32 = rd(c + CURSOR_DRAG_STYLE);
+            if phase < 2 || (style == 1 && phase != 2) {
+                return None;
+            }
+            let item = self.in_ui(|| (self.drag_item)())?;
+            if item.is_null() {
+                return None;
+            }
+            Some(Carried {
+                item,
+                kind: rd(c + CURSOR_DRAG_KIND),
+                hero: rd(c + CURSOR_DRAG_HERO),
+                slot: rd(c + CURSOR_DRAG_SLOT),
+            })
+        }
+    }
+
+    /// Ends the game's drag without dropping anything: the item stays
+    /// where it was picked up (what the game itself does after a drop).
+    pub fn end_drag(&self) {
+        // SAFETY: the game's own drag reset, game thread.
+        unsafe { self.in_ui(|| (self.drag_end)()) };
+    }
+
+    pub fn ui_mode(&self) -> i32 {
+        // SAFETY: a global of the running game.
+        unsafe { rd(self.ui_mode) }
+    }
+
+    /// Equipment slot `k`'s rect on the character sheet `[x, y, w, h]` in
+    /// GUI space (current only while the sheet is open).
+    pub fn sheet_slot_rect(&self, k: i32) -> Option<[f32; 4]> {
+        if !(0..SLOTS as i32).contains(&k) {
+            return None;
+        }
+        let at = self.char_sheet + SHEET_RECTS + k as usize * SHEET_SLOT_SIZE;
+        // SAFETY: inside a static of the exe; the read is checked.
+        unsafe { uk_qol_runtime::game::read(at) }
     }
 }
 

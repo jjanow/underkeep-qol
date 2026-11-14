@@ -344,8 +344,8 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
       an item into the sidecar and rebuild it on load.
   - 2026-11-14, game 1.0.5 (`mods/weapon-swap/patterns.toml`):
     `Hero::EquipItem(hero, item, slot, mode, notify)`; mode 1 = from the
-    inventory panel (mode 3, the HUD hand slot, reads the mouse cursor
-    object, which is null with a gamepad: crash). A two-handed weapon
+    inventory panel (mode 3, the HUD hand slot, reads the UI context
+    through a pointer that is null outside the game's UI pass: crash). A two-handed weapon
     unequips the shield into the inventory. Ranged = item type 1, weapon
     type 5 (bows, crossbows and slings). An item is def name + count +
     cooldown (`Item::SaveState`); `Item_Create(def)` rebuilds it;
@@ -354,11 +354,16 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
     a hero's turn ends with round action 3 (`TurnManager` queue), which
     sets `+0x208`/`+0x209` and moves on. `g_state` is 4 after loading a
     save.
-  - Still open: the character sheet's slot drawing and the drag state.
-    Leads: the cursor object `*0x140442bc8` (+0x58 drag phase, +0x60 drag
-    source kind, +0x7c/+0x80 slot/hero; null with a gamepad), the HUD
-    hand-slot drop in `0x14021d310`, equipment slot rects at
-    `0x140440dc4 + slot*0x28` while UI mode `0x140440430` is 6.
+  - 2026-11-14 (game 1.0.5, Ghidra project `uk3`; `uk2` is an older exe):
+    the GUI is an immediate-mode UI whose context the `cursor` global
+    points at only during the UI pass (null between frames, pad or not);
+    the context itself is in its own global (`ui_context`). Item drags are
+    click to pick up, click to drop (drag style 1); the item stays where
+    it was until a drop target equips or moves it, then the target ends
+    the drag (`drag_end`). `drag_item` returns the carried item (kind 0: a
+    hero's slot, 1: party inventory, 2: floor). The sheet (`char_sheet`,
+    selected hero) rewrites its 11 slot rects every frame. All in
+    `mods/weapon-swap/patterns.toml`.
 - [x] **Skill slots:** how `selected_skill_slot` and the skill slot are
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
@@ -394,7 +399,7 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-14: **Sort** button in `inventory_rect`'s top-right corner,
     shown while a sort is allowed (window focus not required for showing),
     `hud_button` (default on); a pushed click sorted ("already sorted").
-- [ ] `weapon-swap`: ranged slot on the character sheet (ranged weapons
+- [x] `weapon-swap`: ranged slot on the character sheet (ranged weapons
       only), drag in/out like other slots, swap via the game's equip function;
       Shift+1..4 and a selected-hero key; `swap_costs_turn` (default true);
       the slot's item saved to and restored from the sidecar.
@@ -410,11 +415,24 @@ In order of difficulty; each ships when done, with settings and tests.
     refused; `swap_costs_turn = false` swaps for free.
   - Not tested in game: a hero who already acted being refused, a level
     change (static: the level change runs `Game_SaveGameState` right
-    before re-restoring the party, so its snapshot is current), a
-    two-handed bow pushing a shield out and back, keyboard keys and mouse
-    play (only pad bindings were used; the drag check never ran, the
-    cursor object is null with a pad). New-game `g_state` 3 is static only.
-  - Open: the slot on the character sheet with drag and drop (see §5).
+    before re-restoring the party, so its snapshot is current): no fight
+    or stairs were reached in this session (the test save starts in the
+    opening forest). New-game `g_state` 3 is static only.
+  - 2026-11-14: the slot on the character sheet, an overlay widget left of
+    the helmet slot (placed from the sheet's live slot rects), drawn like
+    the game's empty slots with a bow silhouette drawn by the mod
+    (`sheet_slot`, default on). Tested in game with pushed SDL mouse and
+    key events (3440x1440 and a 1706x960 window): a sling from the hand
+    and from the inventory clicked into it, a shortbow onto the filled
+    slot (the sling went to the inventory), the hand's bow onto the filled
+    slot (a swap), a potion refused (red, stays on the cursor), the stored
+    weapon clicked onto the sheet's weapon slot and the HUD hand slot
+    (swaps) and onto the inventory, right-click to the inventory, Shift+3
+    swaps; a two-handed sling pushed a buckler out and the swap back put
+    it on. Item counts conserved in every action. A pushed click on the
+    HUD hand slot didn't pick its weapon up while the sheet was open, so
+    a bow from another hero's hand (same `Hero::Unequip` path) wasn't
+    tried.
   - 2026-11-14: HUD button on the weapon hand slot of heroes with a filled
     slot, showing the stored weapon's initials; click swaps (`hud_button`,
     default on). Seen in game (a sling stored for Kabam: "Sl"); its click
