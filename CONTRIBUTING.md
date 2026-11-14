@@ -37,7 +37,8 @@ Built-in mods live in `mods/<id>/`, each a crate named `uk-qol-mod-<id>`
 4. The code: a type implementing the runtime's `Mod` trait (`on_load`,
    `on_unload`, `on_frame`, `on_input`, `on_settings`, `on_save`,
    `on_load_save`), whose `manifest()` and `patterns()` return the two files
-   with `include_str!`, and a `pub fn new() -> Box<dyn Mod>`.
+   with `include_str!` (and `patches()` its data patches, if any), and a
+   `pub fn new() -> Box<dyn Mod>`.
 5. Add the crate to the workspace members and `[workspace.dependencies]` in
    the root `Cargo.toml`, to `crates/proxy/Cargo.toml`, and its `new` to
    `BUILTIN` in `crates/proxy/src/lib.rs`; add `-p uk-qol-mod-<id>` to the
@@ -161,15 +162,37 @@ A mod must:
 - undo all its hooks and patches in `on_unload` (the host removes the hooks
   registered on `LoadCtx::hooks` itself).
 
+### Save state
+
+The runtime hooks the game's save, load, delete and new-game functions; a mod
+only implements two callbacks, both called on the game's thread:
+
+- `on_save(&mut ModSaveState)`: the game just saved. Fill in `global` and
+  `heroes` (a TOML table per hero key). The state starts as it was loaded, so
+  clear what no longer applies.
+- `on_load_save(&ModSaveState)`: a save was loaded (the heroes are restored),
+  or a new game started (empty state). Replace all per-game state with it.
+
+Key per-hero state by `savehook::hero_key` (`"<hero_id>:<name>"`): the game's
+`hero_id` is only the slot a hero was created in and repeats when a hero is
+replaced. `savehook::party_heroes()` lists the party's heroes (struct
+address, key, class id; `savehook::class_name`). Sidecars are local
+(`uk_qol/saves/<Steam account id>/<save>.qol.toml`), not in Steam Cloud.
+
 ## Data patches
 
 A patch changes one of the game's definition documents (the DfT files in
-`base/*.txt.rfile`) in memory. It is a TOML file in the mod's `patches/`
-folder, read by `dft::patch::Patch`:
+`base/*.txt.rfile`) in memory, as the game parses it; the files on disk are
+never touched. It is a TOML file read by `dft::patch::Patch`, either in a
+mod's `patches/` folder (returned by `Mod::patches` as `(file name,
+include_str!(...))` pairs) or dropped by the player into `uk_qol/patches/`
+in the game folder:
 
 ```toml
-# The document, by the game's name for it: base/def_def_skill.txt.rfile is
-# "def/def_skill.txt" (see the include list in def/def.txt).
+# The document, by the game's name for it: <folder>/<name>.txt, stored as
+# base/<folder>_<name>.txt.rfile. base/def_def_skill.txt.rfile is
+# "def/def_skill.txt", base/text_text_common_en.txt.rfile is
+# "text/text_common_en.txt" (see the include list in def/def.txt).
 file = "def/def_skill.txt"
 
 [[op]]
@@ -205,6 +228,18 @@ remove = "old_record.unused"      # in a list, later items move up
   the error names the op, its path and the cause, for example
   ``op 2 (remove hud.q): path not found: no `hud.q` ``.
 - Setting a value to what it already is changes nothing, byte for byte.
+- **Order:** the active mods' patches in load order, then the player's
+  files sorted by name; for the same value, the last one wins.
+- **When:** the set of patches is fixed at start (the game parses its
+  definitions once, during init), so turning a mod on or off changes its
+  patches from the next launch.
+- **Failures:** a patch file that doesn't parse is logged and skipped; a patch
+  whose ops fail on the document is logged and skipped (the others still
+  apply); a document that doesn't parse reaches the game unchanged.
+- Saves (`save_*`) and the player profile go through the same parser;
+  patches naming them are refused.
+- To see every document name the game parses, set `log_defs = true` under
+  `[runtime]` in `uk_qol/config.toml`; the log lists them.
 
 ## Updating patterns after a game patch
 

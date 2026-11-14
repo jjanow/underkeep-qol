@@ -113,12 +113,36 @@ Check items off as they land; add findings under the item they belong to.
       mod manifest, reload on change.
 - [ ] Mod host: `Mod` trait (`on_load`, `on_unload`, `on_frame`,
       `on_input`, `on_save`, `on_load_save`), manifest + `patterns.toml` loading.
-- [ ] Save hooks: find the game's save and load functions; write and read
+- [x] Save hooks: find the game's save and load functions; write and read
       `<save name>.qol.toml` sidecars keyed by hero.
-  - The game saves through Steam Cloud (see §1), so "next to the save" means
-    Steam's `remote/` folder, outside the game folder. Find out whether the
-    game writes there itself or through `ISteamRemoteStorage`, and pick the
-    sidecar location from that.
+  - `runtime::savehook`, patterns in `crates/runtime/patterns/core.toml`
+    (override: `uk_qol/patterns/core.toml`; mod id `core` is reserved).
+    Detours, each calling the original first: SaveGame_Write (every save
+    path) → `Host::save` and write the sidecar; Game_LoadFromSlot →
+    read it and `Host::load_save` (no sidecar = empty state);
+    Save_DeleteFile → delete the sidecar; Party_InitFromPartySetup (only
+    called for a new game) → empty state. Saving starts from the state of
+    the game in play, not from the target file's old sidecar.
+  - The game writes saves only through `ISteamRemoteStorage` (1.0.5).
+    Sidecars stay **local**: `uk_qol/saves/<account>/<save>.qol.toml`,
+    `<account>` from `SteamAPI_SteamUser_v023` /
+    `SteamAPI_ISteamUser_GetSteamID` (low 32 bits), `default` without Steam.
+    Writing them through FileWrite would sync them; that's an open question.
+  - Hero keys: `hero_id` is only the creation slot, so mods key heroes by
+    `savehook::hero_key` = `"<hero_id>:<name>"`; `savehook::party_heroes()`
+    reads the 4 heroes at `g_party+0x10` (stride 0x2b8; valid +0, hero_id
+    +8, name String +0x10, class +0x94), every read checked with
+    `VirtualQuery` (`runtime::game`).
+  - In game (Proton, 2026-11-14): loading save_1 logged `no sidecar at
+    …\uk_qol\saves\4229148\save_1.qol.toml` and the party
+    `0:Odena (paladin), 1:Kabam (thief), 2:Brazkin (bloodmage), 3:Ingwam
+    (voidcaller)`; a new save wrote `save_2.qol.toml`, loading it read it,
+    deleting it in game removed it; "Autosave and Quit" wrote
+    `save_auto.qol.toml`; Quick Start logged `new-game hook: new party; mod
+    state reset`. The account id matched Steam's `userdata/4229148`.
+  - A sidecar that can't be read (tested with `format = 99`) is logged on
+    load and left as it is when the game saves over that slot (merged build
+    with the overlay, same day).
 - [ ] Note in the log which mods were active, for crash triage (the game's
       BugSplat reporter will also see our crashes).
 
@@ -127,7 +151,22 @@ Check items off as they land; add findings under the item they belong to.
 - [x] `dft` crate: read and write the DfT format (header, string table,
       varint records, value types). Round-trip test on every `base/*.txt.rfile`.
       Reuse Underkeeper's `dft.rs` as the starting point. (Done in §0.)
-- [ ] Hook the rfile loader and apply in-memory patches from `patches/`.
+- [x] Hook the rfile loader and apply in-memory patches from `patches/`.
+  - `runtime::datapatch`: detour of DefTable_Parse (data, size, name), the
+    funnel of every DfT parse (defs, text, levels, saves, profile). Patches
+    from active mods (`Mod::patches`) then `uk_qol/patches/*.toml`, fixed at
+    start; the patched buffer is leaked (kept for the process lifetime) and
+    reused for identical input. Saves and `player_profile` are refused.
+  - Names the loader passes are `<folder>/<name>.txt` (`def/def_skill.txt`,
+    `text/text_common_en.txt`, `menu/def_menu.txt`), as `dft::patch`
+    assumed; `log_defs = true` under `[runtime]` in config.toml lists them.
+    Saves arrive as `save_1` / `save_auto`, the profile as `player_profile`,
+    levels as `level/<Name>.level`.
+  - In game (2026-11-14): a user patch setting
+    `text_common_en.menu_new_game` showed "QOL PATCHED" on the main menu.
+  - Timing: core hooks installed at .519, the startup gate released the game
+    at .519 ("waited 11 ms"), the first DefTable_Parse (`def/def.txt`) came
+    1.27 s later, so every def load is patched.
 - [ ] Patch format: path-based set/add/remove on records, declarative TOML.
 
 ## 4. Overlay and input
@@ -283,8 +322,11 @@ In order of difficulty; each ships when done, with settings and tests.
 
 ## Open questions
 
-- Does Steam Cloud sync files next to the saves that the game
-  didn't write? Test; if not, document it (state is per computer). The saves
-  are in Steam's `userdata/<account>/2411200/remote/` (see §1).
+- Should sidecars sync through Steam Cloud? The game writes its saves only
+  through `ISteamRemoteStorage::FileWrite`; writing sidecars the same way
+  (e.g. `qol_save_1.toml`; the save list ignores names with a `.`) would
+  sync them, but uses the game's cloud quota and puts our files in the
+  player's cloud. Now they are local (`uk_qol/saves/`, §2): mod state is
+  per computer. User decision.
 - Is a macOS build of the runtime needed, or only the manager (game runs in
   CrossOver/Whisky, so the Windows DLL applies)?

@@ -325,9 +325,10 @@ impl ExtraSkillSlots {
         ui.add_space(6.0);
         ui.strong("Extra slots");
         let Some(g) = shared().game else { return };
-        let heroes: Vec<usize> = (0..HEROES)
-            // SAFETY: static party array.
-            .filter(|&i| unsafe { game::hero_valid(g.hero(i)) })
+        let heroes: Vec<usize> = uk_qol_runtime::savehook::party_heroes()
+            .iter()
+            .map(|p| p.index)
+            .filter(|&i| i < HEROES)
             .collect();
         if heroes.is_empty() {
             ui.weak("Load a game to assign skills.");

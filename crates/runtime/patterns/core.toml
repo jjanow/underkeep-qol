@@ -1,0 +1,42 @@
+# The runtime's own patterns (save hooks and data patches), in the same
+# format as a mod's patterns.toml (CONTRIBUTING.md). A file
+# `uk_qol/patterns/core.toml` in the game folder replaces this one whole.
+# Names and argument lists are from reverse engineering game 1.0.5; each
+# pattern matches exactly once there.
+
+# SaveGame_Write(DefTable** state, const String* file_name,
+# const String* custom_name) -> bool. Serializes the save table and writes
+# it through Steam Cloud (ISteamRemoteStorage::FileWrite). Every save path
+# (save menu, quick save, autosave) ends here.
+[savegame_write]
+pattern = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 40 4D 8B D0 48 8B F2 48 8B D9 33 FF 48 89 7C 24 20 41 39 78 10 4C 8D 05"
+
+# Game_LoadFromSlot(const SaveInfo* info, bool silent) -> bool. SaveInfo
+# +0x08 is the save's file name (String). The only path that loads a save;
+# the heroes are restored when it returns.
+[game_load_from_slot]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D 6C 24 D0 48 81 EC 30 01 00 00 0F B6 DA 48 8B F9 E8 ?? ?? ?? ?? C6 05 ?? ?? ?? ?? 00 BA 01 00 00 00 48 8D 0D"
+
+# Save_DeleteFile(const String* name). Logs "Save: Deleting file %1..." and
+# deletes the Steam Cloud file. Called from the save menu.
+[save_delete_file]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D 6C 24 A9 48 81 EC F0 00 00 00 48 8B F9 4C 8D 35 ?? ?? ?? ?? 33 F6"
+
+# Party_InitFromPartySetup(PartySetup*). Builds the party of a new game
+# (reads "party_setups"); called only when a new game starts (party setup,
+# party selection, quick start), never when a save or level loads.
+[party_init_from_setup]
+pattern = "48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 90 FE FF FF 48 81 EC 70 02 00 00 4C 8B F1 8B 35"
+
+# g_party: the Party global; 4 heroes of 0x2b8 bytes at +0x10. The lea
+# that loads it right before the call to Party::SaveState.
+[g_party]
+pattern = "48 8D 55 70 48 8B CF E8 ?? ?? ?? ?? 48 8B D0 48 8D 0D ?? ?? ?? ?? E8"
+offset = 15
+rip = { disp = 3, len = 7 }
+
+# DefTable_Parse(const char* data, int size, const String* name) -> DefTable*.
+# Every DfT document the game reads goes through it (defs, text, levels,
+# saves, the player profile); data starting with FF "DfT" is the binary form.
+[deftable_parse]
+pattern = "48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 49 8B E8 8B F2 48 8B F9 83 FA 04 0F 8E ?? ?? ?? ?? 80 39 FF"

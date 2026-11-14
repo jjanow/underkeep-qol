@@ -17,3 +17,4 @@ iced-x86 = { version = "1.22.0", default-features = false, features = ["std", "d
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = "0.11.1"
 toml = "1.2.1"
+uk-qol-dft.workspace = true

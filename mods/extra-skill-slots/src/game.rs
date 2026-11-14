@@ -24,7 +24,6 @@ const EQUIP_SLOTS: i32 = 11;
 const MAX_SKILLS: i32 = 256;
 
 pub const H_VALID: usize = 0x00;
-pub const H_ID: usize = 0x08;
 pub const H_NAME: usize = 0x10;
 pub const H_EQUIP: usize = 0x210;
 pub const H_SKILL_COUNT: usize = 0x268;
@@ -266,14 +265,14 @@ pub unsafe fn hero_name(h: usize) -> String {
     unsafe { gstr(h + H_NAME) }
 }
 
-/// Stable key for per-hero state: "<hero_id>:<name>" (hero ids are only the
-/// creation slot, so the name tells a replaced hero apart).
+/// The runtime's key for per-hero state ("<hero_id>:<name>"); empty if
+/// the hero can't be read.
 ///
 /// # Safety
-/// `h` must point at a valid hero.
+/// `h` must point at a hero in the party array.
 pub unsafe fn hero_key(h: usize) -> String {
-    // SAFETY: forwarded.
-    unsafe { format!("{}:{}", rd::<i32>(h + H_ID), gstr(h + H_NAME)) }
+    // SAFETY: forwarded; the runtime checks each read.
+    unsafe { uk_qol_runtime::savehook::hero_key(h) }.unwrap_or_default()
 }
 
 /// The hero's skill state array and its length (empty if implausible).

@@ -18,10 +18,9 @@
 //!   [`ModSaveState`]).
 //!
 //! Where sidecars live: the game keeps its saves in Steam Cloud storage
-//! (`userdata/<account>/2411200/remote/`), which the game or Steam writes;
-//! whether the game writes there itself or through `ISteamRemoteStorage` is
-//! not known yet. Writing our own files into Steam's folder could confuse the
-//! cloud sync, so sidecars are stored locally in the game folder instead:
+//! (`userdata/<account>/2411200/remote/`), written only through
+//! `ISteamRemoteStorage`. Sidecars are not put in the player's cloud (see
+//! `crate::savehook`); they are stored locally in the game folder instead:
 //! `<game folder>/uk_qol/saves/<account>/<save name>.qol.toml` (see
 //! [`sidecar_path`]). Mod state is therefore per computer; the saves still sync.
 

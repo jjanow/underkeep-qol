@@ -57,6 +57,13 @@ pub trait Mod: Send {
     fn manifest(&self) -> &'static str;
     /// The mod's `patterns.toml` text; an empty string if it needs none.
     fn patterns(&self) -> &'static str;
+    /// The mod's data patches (`patches/*.toml`), as (file name, TOML text)
+    /// pairs; built-in mods `include_str!` them. Read once at startup, for
+    /// the mods that are active then (the game parses its definitions once,
+    /// during init), so turning a mod on or off changes them next launch.
+    fn patches(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
 
     /// Registers hooks. Returning Err disables the mod with that reason.
     /// May run again after `on_unload` when the player turns the mod back on.
@@ -278,6 +285,10 @@ struct RawSetting {
     choices: Option<Vec<String>>,
 }
 
+/// Not a valid mod id: the runtime's own patterns use this name
+/// (`uk_qol/patterns/core.toml` overrides them; see `crate::core`).
+pub const RESERVED_ID: &str = "core";
+
 /// `[a-z0-9]` words joined by single `-`.
 pub fn valid_mod_id(id: &str) -> bool {
     !id.is_empty()
@@ -305,6 +316,11 @@ impl Manifest {
             return Err(format!(
                 "id {:?}: use lowercase letters, digits and single dashes",
                 raw.id
+            ));
+        }
+        if raw.id == RESERVED_ID {
+            return Err(format!(
+                "id {RESERVED_ID:?} is reserved for the runtime's own patterns"
             ));
         }
         let game_builds = match &raw.game_builds {
@@ -1304,6 +1320,17 @@ impl Host {
         }
     }
 
+    /// The data patches of every active mod, in load order: (mod id, file
+    /// name, TOML text).
+    pub fn active_patches(&self) -> Vec<(String, &'static str, &'static str)> {
+        self.order
+            .iter()
+            .map(|&i| &self.slots[i])
+            .filter(|s| s.status == Status::Active)
+            .flat_map(|s| s.m.patches().iter().map(|&(f, t)| (s.id.clone(), f, t)))
+            .collect()
+    }
+
     /// Turns a mod on or off for this session (and in [`Host::config`]).
     /// Turning a mod off also unloads the mods that depend on it; any change
     /// retries blocked mods. Returns the mod's new status.
@@ -1659,6 +1686,11 @@ mod tests {
                 .contains("id")
         );
         assert!(Manifest::parse("id = \"a\"\nname = \"A\"\nversion = \"1\"").is_err());
+        assert!(
+            Manifest::parse(&format!("id = \"core\"\n{base}"))
+                .unwrap_err()
+                .contains("reserved")
+        );
         assert!(
             Manifest::parse("id = \"a\"\nname = \"A\"\nversion = \"1\"\ngame_builds = [\"abc\"]")
                 .unwrap_err()
