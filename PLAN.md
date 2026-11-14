@@ -161,10 +161,19 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
 
+- [ ] **Skip logos:** where `anim_startup_logo` (Rake in Grass and FMOD
+      logos, ~3 s on every launch) is started and how it hands over to the
+      main menu.
+  - 2026-11-14, game 1.0.5: launch shows ~1 s of black window, the logos,
+    then the main menu. The intro cinematic plays only on first run
+    (`intro_was_played 1` in `game_config.txt`), so no mod is needed for it.
+
 ## 6. Mods
 
 In order of difficulty; each ships when done, with settings and tests.
 
+- [ ] `skip-logos`: start on the main menu without the startup logos; one
+      on/off setting, nothing saved.
 - [ ] `bloodmage-cost`: per-hero `bones` / `health` toggle, hotkey, icon on
       the skill button, sidecar persistence.
 - [ ] `inventory-sort`: category → rarity/value → name, merge stacks,

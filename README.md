@@ -28,6 +28,7 @@ Underkeep has no official mod support. This project adds it in a way that:
 | `inventory-sort` | Sort an inventory with one key press or button. |
 | `weapon-swap` | A ranged-weapon slot on each hero's character sheet and a key to swap to it. |
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
+| `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -257,6 +258,19 @@ adds 3 more (configurable 1–5).
   (`selected_skill_slot`) and whether casting from a non-selected slot can reuse
   that path directly.
 
+### `skip-logos`
+
+Each launch shows the Rake in Grass and FMOD logos (about 3 s) before the
+main menu. This mod skips them, so the game starts on the main menu.
+
+- The intro cinematic needs nothing: the game plays it once and then skips
+  it on its own (`intro_was_played` in `game_config.txt`). The main menu's
+  own reveal animation is left as is.
+- To investigate: where the startup logo animation (`anim_startup_logo`)
+  is started and how it hands over to the menu; whether ending it early
+  (or a data patch of its length) is enough, or the hand-over has to be
+  called directly.
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -293,7 +307,7 @@ crates/
   dft/          reader/writer for the game's DfT definition files
   manager/      Manager app and uk-qol CLI
 mods/
-  bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/
+  bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
 tools/          pattern extraction and build-diffing helpers
 ```
 
