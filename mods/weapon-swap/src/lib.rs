@@ -13,8 +13,9 @@
 //!   inventory, like a manual equip; swapping back to a one-handed weapon
 //!   puts that shield back on if it is still in the inventory.
 //! - In combat (the game's own "battle" check) a swap ends the hero's turn
-//!   by default (`swap_costs_turn`), through the round action the game uses
-//!   for a hero who is done. It needs the hero to be able to act and the
+//!   by default (`swap_costs_turn`), by queueing the TurnManager's round
+//!   action 3, whose handler marks that hero as done and moves on (no game
+//!   code was found that queues it itself; untested in game). It needs the hero to be able to act and the
 //!   monsters not to be moving. Outside combat it's free.
 //! - Putting a weapon into the slot and taking it out are menu buttons (the
 //!   mod's section of the overlay menu). The character sheet has no slot
@@ -82,6 +83,8 @@ struct Inner {
     mismatch: bool,
     /// For the menu: focus this hero's first button (after a click).
     refocus: Option<usize>,
+    /// The party's [`state::identity`] when the mod was turned off.
+    off_identity: Option<String>,
 }
 
 #[derive(Default)]
@@ -134,7 +137,12 @@ impl Inner {
             self.say(format!("{}: not now, {why} ({})", describe(&a), raw(&r)));
             return;
         }
-        log(&format!("{} ({})", describe(&a), raw(&r)));
+        log(&format!(
+            "{} ({}, battle {})",
+            describe(&a),
+            raw(&r),
+            self.game.in_battle()
+        ));
         let before = self.total();
         let result = self.apply(&a, &r);
         let after = self.total();
@@ -328,8 +336,21 @@ impl Mod for WeaponSwap {
             })
         }?;
         let acknowledged = ack_path().is_some_and(|p| p.exists());
-        // Turning the mod off and on again keeps the slots of this session.
-        let state = self.inner.take().map(|i| i.state).unwrap_or_default();
+        // Turning the mod off and on again keeps the slots of this session,
+        // unless the party changed meanwhile (e.g. another save was loaded
+        // while the mod was off, which it isn't told about): then they
+        // could belong to another save, so they're parked.
+        let (mut state, off_identity) = match self.inner.take() {
+            Some(i) => (i.state, i.off_identity),
+            None => (State::default(), None),
+        };
+        let keys: [Option<String>; HEROES] = std::array::from_fn(|i| game.hero_key(i));
+        let now = state::identity(&keys, &state::fingerprint(&game.tally()));
+        let parked_on_load = !state.is_empty() && off_identity.as_deref() != Some(now.as_str());
+        if parked_on_load {
+            log("turned back on, but the party changed while off; ranged-slot weapons are parked");
+            state = state.into_parked(&keys);
+        }
         self.inner = Some(Inner {
             game,
             state,
@@ -337,13 +358,18 @@ impl Mod for WeaponSwap {
             costs_turn: costs_turn(cx.settings),
             acknowledged,
             messages: Vec::new(),
-            mismatch: false,
+            mismatch: parked_on_load,
             refocus: None,
+            off_identity: None,
         });
         Ok(())
     }
 
     fn on_unload(&mut self) {
+        if let Some(i) = &mut self.inner {
+            let keys = i.keys();
+            i.off_identity = Some(state::identity(&keys, &i.fingerprint()));
+        }
         if let Some(i) = &self.inner
             && !i.state.is_empty()
         {

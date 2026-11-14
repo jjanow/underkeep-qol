@@ -234,20 +234,39 @@ impl State {
         if recorded == Some(party_items) {
             Loaded::Ok(s)
         } else {
-            // Park everything; shields are only a convenience, drop them.
-            let mut p = State {
-                parked: s.parked,
-                ..State::default()
-            };
-            for (i, h) in s.heroes.into_iter().enumerate() {
-                if let Some(item) = h.stored {
-                    let key = keys[i].clone().unwrap_or_else(|| format!("slot {}", i + 1));
-                    p.parked.push(Parked { key, item });
-                }
-            }
-            Loaded::Mismatch(p)
+            Loaded::Mismatch(s.into_parked(keys))
         }
     }
+
+    /// Moves every stored weapon to the parked list (keyed by the hero it
+    /// belonged to, `keys` as for [`State::to_save`]). Shields are only a
+    /// convenience and are dropped.
+    pub fn into_parked(self, keys: &[Option<String>; HEROES]) -> State {
+        let mut p = State {
+            parked: self.parked,
+            ..State::default()
+        };
+        for (i, h) in self.heroes.into_iter().enumerate() {
+            if let Some(item) = h.stored {
+                let key = keys[i].clone().unwrap_or_else(|| format!("slot {}", i + 1));
+                p.parked.push(Parked { key, item });
+            }
+        }
+        p
+    }
+}
+
+/// What the party looks like to the mod: hero keys and the item
+/// fingerprint. If it changed while the mod was off, the slots in memory
+/// may no longer belong to this party (another save was loaded).
+pub fn identity(keys: &[Option<String>; HEROES], party_items: &str) -> String {
+    let mut out = String::new();
+    for k in keys {
+        out.push_str(k.as_deref().unwrap_or("-"));
+        out.push('|');
+    }
+    out.push_str(party_items);
+    out
 }
 
 /// A fingerprint of the party's items (inventory and equipment; ranged
@@ -408,6 +427,29 @@ mod tests {
         assert_eq!(fingerprint(&a), fingerprint(&b));
         b.insert("item_bow".to_string(), 2);
         assert_ne!(fingerprint(&a), fingerprint(&b));
+    }
+
+    #[test]
+    fn into_parked_keeps_every_weapon() {
+        let mut s = State::default();
+        s.heroes[0].stored = Some(item("item_bow"));
+        s.heroes[0].shield = Some("item_shield".into());
+        s.heroes[2].stored = Some(item("item_sling"));
+        let p = s.into_parked(&keys());
+        assert!(p.heroes.iter().all(HeroSlot::is_empty));
+        let parked: Vec<(&str, &str)> = p
+            .parked
+            .iter()
+            .map(|p| (p.key.as_str(), p.item.def.as_str()))
+            .collect();
+        assert_eq!(
+            parked,
+            vec![("0:Ann", "item_bow"), ("slot 3", "item_sling")]
+        );
+        assert_ne!(identity(&keys(), "a"), identity(&keys(), "b"));
+        let mut other = keys();
+        other[1] = None;
+        assert_ne!(identity(&keys(), "a"), identity(&other, "a"));
     }
 
     #[test]

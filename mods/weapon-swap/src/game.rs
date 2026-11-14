@@ -61,7 +61,9 @@ const TM_COUNT: usize = 0x08;
 const ACTION_HERO_DONE: i32 = 3;
 const ACTION_HERO: usize = 0x08;
 
-/// Cursor state: +0x58 drag phase (0 = nothing held).
+/// Cursor state: +0x58 drag phase; the game's drop code treats values
+/// above 1 as an item being dragged. The cursor object is null while
+/// playing with a gamepad.
 const CURSOR_DRAG: usize = 0x58;
 
 /// `g_state` values in a game: 4 after loading a save (seen in game),
@@ -129,7 +131,7 @@ pub fn busy_reason(r: &Readiness) -> Option<&'static str> {
         Some("not in a game")
     } else if r.target_mode != 0 {
         Some("the game is waiting for a target")
-    } else if r.drag != 0 {
+    } else if r.drag > 1 {
         Some("an item is held on the cursor")
     } else {
         None
@@ -582,9 +584,10 @@ impl Game {
         Ok(())
     }
 
-    /// Ends hero `i`'s turn the way the game does for a hero who is done:
-    /// round action 3, which marks them as having acted and moves on to
-    /// the next hero (or the monsters).
+    /// Ends hero `i`'s turn: queues round action 3, whose handler in
+    /// `TurnManager::_DoRoundAction` marks the hero as having acted and
+    /// moves on to the next hero (or the monsters). No game code was found
+    /// that queues this action itself.
     pub fn end_turn(&self, i: usize) {
         // SAFETY: the TurnManager's own queue; the entry is fresh.
         unsafe {
