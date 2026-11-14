@@ -27,6 +27,8 @@ const HERO_EQUIP: usize = 0x210;
 pub const SLOTS: usize = 11;
 pub const SLOT_WEAPON: i32 = 4;
 pub const SLOT_SHIELD: i32 = 5;
+/// `Hero::EquipItem` / `Unequip` mode: as from the inventory panel.
+const MODE_PANEL: i32 = 1;
 /// Statuses that keep a hero from acting (TurnManager checks the same two).
 const STATUS_NO_ACTION: [u32; 2] = [0x0100_0005, 0x0100_0003];
 
@@ -62,8 +64,10 @@ const ACTION_HERO: usize = 0x08;
 /// Cursor state: +0x58 drag phase (0 = nothing held).
 const CURSOR_DRAG: usize = 0x58;
 
-/// `g_state` while playing.
-const STATE_PLAYING: i32 = 3;
+
+/// `g_state` values in a game: 4 after loading a save (seen in game),
+/// 3 for a game started from the menu (static analysis).
+const STATES_PLAYING: [i32; 2] = [3, 4];
 
 type EquipFn = unsafe extern "C" fn(*mut u8, *mut u8, i32, i32, u8);
 type UnequipFn = unsafe extern "C" fn(*mut u8, i32, i32, u8);
@@ -122,7 +126,7 @@ pub type Item = *mut u8;
 
 /// What's in the way of changing equipment right now.
 pub fn busy_reason(r: &Readiness) -> Option<&'static str> {
-    if r.game_state != STATE_PLAYING {
+    if !STATES_PLAYING.contains(&r.game_state) {
         Some("not in a game")
     } else if r.target_mode != 0 {
         Some("the game is waiting for a target")
@@ -252,7 +256,7 @@ impl Game {
 
     pub fn playing(&self) -> bool {
         // SAFETY: a global of the running game.
-        unsafe { rd::<i32>(self.game_state) == STATE_PLAYING }
+        STATES_PLAYING.contains(&unsafe { rd::<i32>(self.game_state) })
     }
 
     pub fn in_battle(&self) -> bool {
@@ -468,13 +472,17 @@ impl Game {
                 format!("the stored {} can't be equipped", stored.def)
             });
         }
-        // The HUD hand slot's own call: checks, scripts, stats, animation.
-        // SAFETY: a live hero and our fresh item, on the game thread.
-        unsafe { (self.equip_item)(self.hero(i) as *mut u8, r, SLOT_WEAPON, 3, 1) };
+        // Equip it as from the inventory panel: into the inventory first,
+        // then the panel's own call (checks, scripts, stats, animation).
+        // Mode 1, not the HUD hand slot's mode 3: that one reads the mouse
+        // cursor object, which is null while playing with a gamepad.
+        // SAFETY: a fresh, non-stackable item (so it isn't merged away).
+        unsafe { (self.inventory_add)(self.inventory as *mut u8, r, 0) };
+        // SAFETY: a live hero and our item in the inventory, game thread.
+        unsafe { (self.equip_item)(self.hero(i) as *mut u8, r, SLOT_WEAPON, MODE_PANEL, 1) };
         if self.equipped(i, SLOT_WEAPON) != r {
-            // Refused (class, requirements). It may have been left in the
-            // inventory or nowhere; `take` handles both.
-            // SAFETY: still ours or in the inventory.
+            // Refused (class, requirements): it's still in the inventory.
+            // SAFETY: ours, in the inventory.
             unsafe { self.take(r) };
             return Err(format!("{} can't be equipped by this hero", stored.def));
         }
@@ -517,7 +525,7 @@ impl Game {
         });
         let Some(s) = found else { return false };
         // SAFETY: a live hero and an inventory item.
-        unsafe { (self.equip_item)(self.hero(i) as *mut u8, s, SLOT_SHIELD, 3, 1) };
+        unsafe { (self.equip_item)(self.hero(i) as *mut u8, s, SLOT_SHIELD, MODE_PANEL, 1) };
         self.equipped(i, SLOT_SHIELD) == s
     }
 
@@ -560,7 +568,7 @@ impl Game {
             return Err(format!("{} can't go in the ranged slot: {p}", info.def));
         }
         // SAFETY: a live hero; mode 1 = as from the character sheet.
-        unsafe { (self.unequip)(self.hero(i) as *mut u8, SLOT_WEAPON, 1, 1) };
+        unsafe { (self.unequip)(self.hero(i) as *mut u8, SLOT_WEAPON, MODE_PANEL, 1) };
         if self.equipped(i, SLOT_WEAPON) == w {
             return Err("the game didn't unequip it".into());
         }

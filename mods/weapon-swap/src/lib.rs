@@ -6,7 +6,7 @@
 //!   the menu; after a swap it holds the weapon that came out of the hand,
 //!   so sword ⇄ bow goes both ways. One of the two is always a bow.
 //! - A swap creates the stored weapon and equips it through the game's own
-//!   `Hero::EquipItem` (the HUD hand slot's call: class checks, on_equip /
+//!   `Hero::EquipItem` (as from the inventory panel: class checks, on_equip /
 //!   on_unequip scripts, stats, HUD). The weapon that was in hand lands in
 //!   the inventory as with a manual equip; the mod then takes it out of the
 //!   game into the slot. A two-handed bow pushes the shield into the
@@ -80,6 +80,8 @@ struct Inner {
     messages: Vec<String>,
     /// For the menu: whether the last loaded sidecar didn't match its save.
     mismatch: bool,
+    /// For the menu: focus this hero's first button (after a click).
+    refocus: Option<usize>,
 }
 
 #[derive(Default)]
@@ -336,6 +338,7 @@ impl Mod for WeaponSwap {
             acknowledged,
             messages: Vec::new(),
             mismatch: false,
+            refocus: None,
         });
         Ok(())
     }
@@ -481,41 +484,53 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         if !inner.game.hero_valid(h) {
             continue;
         }
-        ui.separator();
         let hand = inner.game.equipped(h, SLOT_WEAPON);
         // SAFETY: the equipped weapon.
         let hand = unsafe { inner.game.item_info(hand) };
-        ui.strong(format!("{}. {}", h + 1, inner.game.hero_name(h)));
-        ui.label(format!(
-            "In hand: {}",
-            hand.as_ref().map_or("nothing".into(), |i| i.def.clone())
-        ));
         let stored = inner.state.heroes[h].stored.clone();
-        ui.label(format!(
-            "Ranged slot: {}",
-            stored.as_ref().map_or("empty".into(), item_label)
-        ));
-        ui.horizontal_wrapped(|ui| match &stored {
+        ui.horizontal_wrapped(|ui| {
+            ui.strong(format!("{}. {}", h + 1, inner.game.hero_name(h)));
+            ui.label(format!(
+                "hand: {}  |  ranged slot: {}",
+                hand.as_ref().map_or("nothing".into(), |i| i.def.clone()),
+                stored.as_ref().map_or("empty".into(), item_label)
+            ));
+        });
+        // Buttons as (label, action), one per row: the d-pad moves between
+        // rows reliably, not between buttons of one row. A click changes
+        // which buttons exist, so the focus moves to this hero's first
+        // button next frame.
+        let mut buttons: Vec<(String, Action)> = Vec::new();
+        match &stored {
             Some(_) => {
-                if ui.button("Swap now").clicked() {
-                    inner.queue.push(Action::Swap(h));
-                }
-                if ui.button("Move to inventory").clicked() {
-                    inner.queue.push(Action::ToInventory(h));
-                }
+                buttons.push(("Swap now".into(), Action::Swap(h)));
+                buttons.push(("Move to inventory".into(), Action::ToInventory(h)));
             }
             None => {
-                if hand.as_ref().is_some_and(|i| i.bow)
-                    && ui.button("Put the bow in hand in the slot").clicked()
-                {
-                    inner.queue.push(Action::StoreEquipped(h));
+                if hand.as_ref().is_some_and(|i| i.bow) {
+                    buttons.push((
+                        "Put the bow in hand in the slot".into(),
+                        Action::StoreEquipped(h),
+                    ));
                 }
                 for b in &inventory {
-                    if ui.button(format!("Put {} in the slot", b.def)).clicked() {
-                        inner
-                            .queue
-                            .push(Action::StoreFromInventory(h, b.ptr, b.def.clone()));
-                    }
+                    buttons.push((
+                        format!("Put {} in the slot", b.def),
+                        Action::StoreFromInventory(h, b.ptr, b.def.clone()),
+                    ));
+                }
+            }
+        }
+        ui.vertical(|ui| {
+            for (k, (label, action)) in buttons.into_iter().enumerate() {
+                let r = ui.button(label);
+                if k == 0 && inner.refocus == Some(h) {
+                    r.request_focus();
+                    inner.refocus = None;
+                }
+                if r.clicked() {
+                    inner.queue.push(action);
+                    inner.refocus = Some(h);
                 }
             }
         });
