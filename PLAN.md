@@ -105,14 +105,26 @@ Check items off as they land; add findings under the item they belong to.
   - The real-exe test stores no game bytes: it finds the `lea` that loads a
     known `.rdata` string, then cuts a pattern from that site and scans it
     back. A full `.text` scan takes ~150 ms in a debug build.
-- [ ] Hook layer (detours + byte patches), applied and removed per mod.
-- [ ] Panic and SEH containment around every hook and callback; failing
+- [x] Hook layer (detours + byte patches), applied and removed per mod.
+  - `runtime::hook` (`HookSet`): detours through a relay within ±2 GB, with
+    a 14-byte absolute jump as fallback; byte patches restore the originals.
+    A hook overwritten by another tool is left in place on disable.
+- [x] Panic and SEH containment around every hook and callback; failing
       mod is disabled for the session.
-- [ ] Safe mode: crash counter across launches, Shift-at-start override.
-- [ ] Config: `uk_qol/config.toml`, per-mod tables, defaults from the
+  - `runtime::guard`: Rust panics are contained (`call`, `call_or` falls
+    back to the original). Hardware exceptions aren't recovered: the crash
+    handler logs the active mod and marks the session for safe mode.
+- [x] Safe mode: crash counter across launches, Shift-at-start override.
+  - `runtime::safe`, state in `uk_qol/session.toml`; two abnormal exits in a
+    row turn all mods off. `uk-qol reset-safe-mode` clears it.
+- [x] Config: `uk_qol/config.toml`, per-mod tables, defaults from the
       mod manifest, reload on change.
-- [ ] Mod host: `Mod` trait (`on_load`, `on_unload`, `on_frame`,
+  - `runtime::config`, shared with the manager; unknown keys are kept, a
+    file that doesn't parse is never overwritten; reload polls mtime/length.
+- [x] Mod host: `Mod` trait (`on_load`, `on_unload`, `on_frame`,
       `on_input`, `on_save`, `on_load_save`), manifest + `patterns.toml` loading.
+  - `runtime::host`; `runtime::bridge` wires it to the overlay, hotkeys,
+    frames and config.
 - [x] Save hooks: find the game's save and load functions; write and read
       `<save name>.qol.toml` sidecars keyed by hero.
   - `runtime::savehook`, patterns in `crates/runtime/patterns/core.toml`
@@ -143,8 +155,16 @@ Check items off as they land; add findings under the item they belong to.
   - A sidecar that can't be read (tested with `format = 99`) is logged on
     load and left as it is when the game saves over that slot (merged build
     with the overlay, same day).
-- [ ] Note in the log which mods were active, for crash triage (the game's
+- [ ] Sync sidecars through Steam Cloud (decided 2026-11-14): write and read
+      them through `ISteamRemoteStorage` like the saves (e.g.
+      `qol_save_1.toml`; the game's save list ignores names with a `.`), so
+      mod state, and stored weapons above all, follows a save to other PCs
+      and the Deck. Without Steam, stay local. Move existing local sidecars
+      into the cloud once, without losing one that's newer locally.
+- [x] Note in the log which mods were active, for crash triage (the game's
       BugSplat reporter will also see our crashes).
+  - `active mods: …` in `uk_qol.log` and in `session.toml`; the next start
+    logs which mods the previous abnormal session had.
 
 ## 3. Data patching
 
@@ -167,7 +187,8 @@ Check items off as they land; add findings under the item they belong to.
   - Timing: core hooks installed at .519, the startup gate released the game
     at .519 ("waited 11 ms"), the first DefTable_Parse (`def/def.txt`) came
     1.27 s later, so every def load is patched.
-- [ ] Patch format: path-based set/add/remove on records, declarative TOML.
+- [x] Patch format: path-based set/add/remove on records, declarative TOML.
+  - `dft::patch`; documented in CONTRIBUTING, "Data patches".
 
 ## 4. Overlay and input
 
@@ -283,12 +304,14 @@ Check items off as they land; add findings under the item they belong to.
 Do in the current Ghidra project of the exe; record function names,
 offsets and patterns in each mod's `patterns.toml` with a comment.
 
-- [ ] **Blood Mage:** the bone check and payment in the spell-cost path
+- [x] **Blood Mage:** the bone check and payment in the spell-cost path
       (start from the skill opcode handlers, e.g. `blood_pact` 0xa5).
       Where bones are counted (party inventory item?).
-- [ ] **Inventory:** inventory container struct, item struct (category,
+  - See `mods/bloodmage-cost/patterns.toml`.
+- [x] **Inventory:** inventory container struct, item struct (category,
       rarity, value, stack size, max stack), "dragging" and trade state,
       the function that marks the inventory changed / refreshes the UI.
+  - See `mods/inventory-sort/patterns.toml`.
 - [x] **Weapon swap:** how the character sheet draws and handles equipment
       slots (to add a ranged slot that behaves like them), the game's equip
       function, how combat turns are spent (to charge a turn on swap), the
@@ -311,18 +334,19 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
     source kind, +0x7c/+0x80 slot/hero; null with a gamepad), the HUD
     hand-slot drop in `0x14021d310`, equipment slot rects at
     `0x140440dc4 + slot*0x28` while UI mode `0x140440430` is 6.
-- [ ] **Skill slots:** how `selected_skill_slot` and the skill slot are
+- [x] **Skill slots:** how `selected_skill_slot` and the skill slot are
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
   - 2026-11-14: `face_hand_slot_(2i+1)` / `(2i+2)` are hero i's weapon and
     skill slots (29x29 in GUI space), `face_rect_1..4` the portraits,
     `inventory_rect` the party inventory panel. The game's code reads a
     fixed set of rects, so new slots are overlay widgets (`runtime::hud`),
-    not layout patches.
+    not layout patches. The rest: `mods/extra-skill-slots/patterns.toml`.
 
-- [ ] **Skip logos:** where `anim_startup_logo` (Rake in Grass and FMOD
+- [x] **Skip logos:** where `anim_startup_logo` (Rake in Grass and FMOD
       logos, ~3 s on every launch) is started and how it hands over to the
       main menu.
+  - The per-frame update's logo wait (`mods/skip-logos/patterns.toml`).
   - 2026-11-14, game 1.0.5: launch shows ~1 s of black window, the logos,
     then the main menu. The intro cinematic plays only on first run
     (`intro_was_played 1` in `game_config.txt`), so no mod is needed for it.
@@ -331,14 +355,15 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
 
 In order of difficulty; each ships when done, with settings and tests.
 
-- [ ] `skip-logos`: start on the main menu without the startup logos; one
+- [x] `skip-logos`: start on the main menu without the startup logos; one
       on/off setting, nothing saved.
-- [ ] `bloodmage-cost`: per-hero `bones` / `health` toggle, hotkey, icon on
+  - Works in game 1.0.5; a startup gate holds the game until the hooks are in.
+- [x] `bloodmage-cost`: per-hero `bones` / `health` toggle, hotkey, icon on
       the skill button, sidecar persistence.
   - 2026-11-14: HUD badge (**B** / **HP**) in each Blood Mage's skill slot
     corner, click toggles (`hud_badge`, default on); seen in game, the click
     path tested with pushed SDL clicks.
-- [ ] `inventory-sort`: category → rarity/value → name, merge stacks,
+- [x] `inventory-sort`: category → rarity/value → name, merge stacks,
       skip equipped and quick slots; hotkey **S** first, then the overlay
       button anchored to the inventory panel.
   - 2026-11-14: **Sort** button in `inventory_rect`'s top-right corner,
@@ -375,8 +400,9 @@ In order of difficulty; each ships when done, with settings and tests.
   - The notice is the mod section's first content until acknowledged
     (`uk_qol/weapon-swap.notice-acknowledged`); putting a weapon into a
     slot or swapping is refused until then.
-- [ ] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
+- [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
+  - Deviation: overlay HUD buttons instead of a layout data patch (§5).
   - 2026-11-14: HUD buttons in a column right of each hero's skill slot
     (9 GUI units, smaller for 4–5 slots), the skill's initials, full name
     on hover; left-click casts for that hero (the same queue path as the
@@ -388,15 +414,21 @@ In order of difficulty; each ships when done, with settings and tests.
 
 ## 7. Manager
 
-- [ ] Install discovery shared with Underkeeper (Steam, Flatpak, Proton,
+- [x] Install discovery shared with Underkeeper (Steam, Flatpak, Proton,
       CrossOver/Whisky bottles).
-- [ ] CLI: `detect`, `install`, `status`, `enable`, `disable`, `config`,
+  - `manager::paths`, adapted from Underkeeper's (also native Steam, Snap).
+- [x] CLI: `detect`, `install`, `status`, `enable`, `disable`, `config`,
       `uninstall`, `report`.
-- [ ] GUI (egui): install/uninstall, mod switches and settings,
+  - Also `update` and `reset-safe-mode`. Uninstall always keeps sidecars.
+- [x] GUI (egui): install/uninstall, mod switches and settings,
       compatibility panel, Linux launch-option copy button and check.
-- [ ] Refuse to change files while the game runs.
-- [ ] Self-update and mod/pattern updates from GitHub releases with
+  - The launch option is also written to `localconfig.vdf` while Steam is closed.
+- [x] Refuse to change files while the game runs.
+  - `manager::process`; Steam's config only while Steam is closed too.
+- [x] Self-update and mod/pattern updates from GitHub releases with
       SHA-256 checks.
+  - `manager::update`: every download is checked against `SHA256SUMS`.
+    Not yet exercised against a real release (none published).
 
 ## 8. Release
 
@@ -407,14 +439,7 @@ In order of difficulty; each ships when done, with settings and tests.
 - [ ] README: replace "planned" with real install steps and screenshots.
 - [ ] Process for game patches: pattern update turnaround, a pinned issue
       for "game updated, mod X off".
-
-## Open questions
-
-- Should sidecars sync through Steam Cloud? The game writes its saves only
-  through `ISteamRemoteStorage::FileWrite`; writing sidecars the same way
-  (e.g. `qol_save_1.toml`; the save list ignores names with a `.`) would
-  sync them, but uses the game's cloud quota and puts our files in the
-  player's cloud. Now they are local (`uk_qol/saves/`, §2): mod state is
-  per computer. User decision.
-- Is a macOS build of the runtime needed, or only the manager (game runs in
-  CrossOver/Whisky, so the Windows DLL applies)?
+- [ ] macOS: no native runtime (decided 2026-11-14). The game runs in a
+      CrossOver/Whisky/Wine bottle, which loads the Windows `winmm.dll`; ship
+      that plus the existing arm64 manager. Document the bottle's
+      `winmm=n,b` override in README and try it once in a bottle.

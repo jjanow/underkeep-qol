@@ -142,7 +142,9 @@ mod. The overlay edits the same file.
   or the Wine prefix. The game writes them only through Steam's cloud API.
 - Sidecars are kept **locally**, in `uk_qol/saves/<Steam account id>/` in
   the game folder, so they are **not** synced by Steam Cloud: mod state is
-  local to one computer, while the saves themselves still sync.
+  local to one computer, while the saves themselves still sync. Planned:
+  sidecars written through Steam's cloud API too, so mod state follows the
+  save to other computers and the Steam Deck.
 
 ### 5. Manager
 
