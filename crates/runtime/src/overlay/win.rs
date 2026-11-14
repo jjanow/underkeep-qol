@@ -488,10 +488,13 @@ fn frame(window: Window) {
             });
         }
         let g = slot.as_mut().expect("just set");
-        if !OPEN.load(Ordering::Relaxed) {
-            return;
+        if OPEN.load(Ordering::Relaxed) {
+            draw(api, window, g);
         }
-        draw(api, window, g);
+        let (mut pw, mut ph) = (0, 0);
+        // SAFETY: the game's window.
+        unsafe { (api.get_window_size_in_pixels)(window, &mut pw, &mut ph) };
+        super::capture::maybe(&g.gl, pw, ph);
     });
 }
 
