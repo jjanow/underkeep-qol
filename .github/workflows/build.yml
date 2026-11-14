@@ -68,6 +68,9 @@ jobs:
           - os: ubuntu-22.04 # older glibc = runs on more distros
             name: linux-x64
             bin: uk-qol
+          - os: macos-14 # Apple silicon; the game runs in CrossOver / Whisky
+            name: macos-arm64
+            bin: uk-qol
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -105,6 +108,16 @@ jobs:
           (cd artifacts/uk-qol-runtime && zip -9 ../../out/uk-qol-runtime-windows-x64.zip winmm.dll)
           cp artifacts/uk-qol-manager-windows-x64/uk-qol.exe out/uk-qol-windows-x64.exe
           tar -C artifacts/uk-qol-manager-linux-x64 -czf out/uk-qol-linux-x64.tar.gz uk-qol
+          tar -C artifacts/uk-qol-manager-macos-arm64 -czf out/uk-qol-macos-arm64.tar.gz uk-qol
+          # Pattern files for updates without a new loader: <mod id>.toml,
+          # and core.toml for the runtime's own hooks.
+          mkdir patterns
+          cp crates/runtime/patterns/core.toml patterns/core.toml
+          for d in mods/*/; do
+            id=$(grep -m1 '^id' "$d/mod.toml" | cut -d'"' -f2)
+            cp "$d/patterns.toml" "patterns/$id.toml"
+          done
+          (cd patterns && zip -9 ../out/uk-qol-patterns.zip *.toml)
           (cd out && sha256sum * > SHA256SUMS)
       - uses: softprops/action-gh-release@v3
         with:

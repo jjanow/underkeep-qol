@@ -348,7 +348,11 @@ In order of difficulty; each ships when done, with settings and tests.
     keys (tested with pad bindings), sidecar save / load / other save
     loaded with an empty slot; item counts logged before and after every
     action, all conserved.
-  - Not tested in game: a swap in combat (turn cost; default on), a level
+  - Combat tested 2026-11-14 (new game, the giant rats): a swap ends the
+    hero's turn (greyed out, next hero selected, monsters act after the
+    last hero, next round normal); swaps during the monsters' turn are
+    refused; `swap_costs_turn = false` swaps for free.
+  - Not tested in game: a hero who already acted being refused, a level
     change (static: the level change runs `Game_SaveGameState` right
     before re-restoring the party, so its snapshot is current), a
     two-handed bow pushing a shield out and back, keyboard keys and mouse
@@ -357,9 +361,7 @@ In order of difficulty; each ships when done, with settings and tests.
   - Open: the slot on the character sheet with drag and drop (see §5).
   - 2026-11-14: HUD **R** button on the weapon hand slot of heroes with a
     filled slot, click swaps (`hud_button`, default on). Not seen in game:
-    the test save's slot was parked (sidecar mismatch). Also seen: after
-    "I understand" in the menu the gamepad focus is lost (the button
-    disappears; nothing gets `request_focus`).
+    the test save's slot was parked (sidecar mismatch).
 - [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
       the manager before uninstall. The player handles emptying slots.

@@ -9,9 +9,11 @@
 //! [`check`] only reads.
 //!
 //! Release assets (see `.github/workflows/build.yml`):
-//! - `uk-qol-windows-x64.exe`, `uk-qol-linux-x64.tar.gz`: the manager.
+//! - `uk-qol-windows-x64.exe`, `uk-qol-linux-x64.tar.gz`,
+//!   `uk-qol-macos-arm64.tar.gz`: the manager.
 //! - `uk-qol-runtime-windows-x64.zip`: `winmm.dll`.
-//! - `uk-qol-patterns.zip` (optional): `<mod id>.toml` pattern files.
+//! - `uk-qol-patterns.zip` (optional): `<mod id>.toml` pattern files, and
+//!   `core.toml` for the runtime's own hooks.
 //! - `SHA256SUMS`: `sha256sum` output for all of the above.
 
 use std::collections::BTreeMap;
@@ -66,6 +68,8 @@ pub fn manager_asset() -> Option<&'static str> {
         Some("uk-qol-windows-x64.exe")
     } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         Some("uk-qol-linux-x64.tar.gz")
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some("uk-qol-macos-arm64.tar.gz")
     } else {
         None
     }

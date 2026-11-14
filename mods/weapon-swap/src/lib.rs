@@ -15,7 +15,8 @@
 //! - In combat (the game's own "battle" check) a swap ends the hero's turn
 //!   by default (`swap_costs_turn`), by queueing the TurnManager's round
 //!   action 3, whose handler marks that hero as done and moves on (no game
-//!   code was found that queues it itself; untested in game). It needs the hero to be able to act and the
+//!   code was found that queues it itself; tested in a fight: the round
+//!   goes on normally). It needs the hero to be able to act and the
 //!   monsters not to be moving. Outside combat it's free.
 //! - Putting a weapon into the slot and taking it out are menu buttons (the
 //!   mod's section of the overlay menu). The character sheet has no slot
@@ -69,6 +70,9 @@ fn hud_setting(settings: &toml::Table) -> bool {
         .unwrap_or(true)
 }
 
+/// `Inner::refocus` value: the first button of the mod's section.
+const FOCUS_FIRST: usize = usize::MAX;
+
 /// Messages kept for the menu.
 const MAX_MESSAGES: usize = 6;
 
@@ -97,10 +101,13 @@ struct Inner {
     messages: Vec<String>,
     /// For the menu: whether the last loaded sidecar didn't match its save.
     mismatch: bool,
-    /// For the menu: focus this hero's first button (after a click).
+    /// For the menu: focus this hero's first button (after a click), or
+    /// with [`FOCUS_FIRST`] the section's first button.
     refocus: Option<usize>,
     /// The party's [`state::identity`] when the mod was turned off.
     off_identity: Option<String>,
+    /// Last (in battle, turn phase) seen, to log changes.
+    seen: Option<(bool, i32)>,
     /// The `hud_button` setting.
     hud_button: bool,
 }
@@ -128,6 +135,8 @@ fn costs_turn(settings: &toml::Table) -> bool {
 impl Inner {
     fn say(&mut self, msg: String) {
         log(&msg);
+        // Over the game too (key presses happen with the menu closed).
+        uk_qol_runtime::toast::show(format!("Weapon swap: {msg}"));
         self.messages.push(msg);
         if self.messages.len() > MAX_MESSAGES {
             self.messages.remove(0);
@@ -379,6 +388,7 @@ impl Mod for WeaponSwap {
             mismatch: parked_on_load,
             refocus: None,
             off_identity: None,
+            seen: None,
             hud_button: hud_setting(cx.settings),
         });
         Ok(())
@@ -424,6 +434,17 @@ impl Mod for WeaponSwap {
         let Some(inner) = &mut self.inner else { return };
         for a in std::mem::take(&mut inner.queue) {
             inner.run(a);
+        }
+        // Log battle and turn-phase changes, for triage of the combat path.
+        if inner.game.playing() {
+            let r = inner.game.readiness();
+            let now = (inner.game.in_battle(), r.tm_phase);
+            if inner.seen != Some(now) {
+                if inner.seen.is_some() {
+                    log(&format!("battle {} ({})", now.0, raw(&r)));
+                }
+                inner.seen = Some(now);
+            }
         }
     }
 
@@ -520,6 +541,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
                 log("couldn't write the acknowledgement file; asking again next time");
             }
             inner.acknowledged = true;
+            inner.refocus = Some(FOCUS_FIRST);
         }
         return;
     }
@@ -547,12 +569,16 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
             },
         );
         for (k, p) in inner.state.parked.iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.label(format!("{} ({})", item_label(&p.item), p.key));
-                if ui.button("Move to inventory").clicked() {
-                    inner.queue.push(Action::ParkedToInventory(k));
-                }
-            });
+            ui.label(format!("{} ({})", item_label(&p.item), p.key));
+            let r = ui.button("Move to inventory");
+            if inner.refocus == Some(FOCUS_FIRST) {
+                r.request_focus();
+                inner.refocus = None;
+            }
+            if r.clicked() {
+                inner.queue.push(Action::ParkedToInventory(k));
+                inner.refocus = Some(FOCUS_FIRST);
+            }
         }
     }
     let inventory: Vec<game::ItemInfo> = inner
@@ -607,7 +633,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             for (k, (label, action)) in buttons.into_iter().enumerate() {
                 let r = ui.button(label);
-                if k == 0 && inner.refocus == Some(h) {
+                if k == 0 && (inner.refocus == Some(h) || inner.refocus == Some(FOCUS_FIRST)) {
                     r.request_focus();
                     inner.refocus = None;
                 }
