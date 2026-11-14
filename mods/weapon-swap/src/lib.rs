@@ -444,6 +444,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
     for m in &inner.messages {
         ui.weak(m);
     }
+    ui.weak(format!("game: {}", raw(&inner.game.readiness())));
     if !inner.game.playing() {
         ui.label("Load a game to use the ranged slots.");
         return;

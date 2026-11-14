@@ -128,8 +128,10 @@ mod. The overlay edits the same file.
 
 - The game's save files are never rewritten by a mod.
 - State a mod must keep (the weapon in a ranged slot, extra skill slot
-  assignments, per-hero toggles) is written to `<save name>.qol.toml` next to
-  the save, keyed by hero, whenever the game saves, and read when it loads.
+  assignments, per-hero toggles) is written to a `<save name>.qol.toml`
+  sidecar, keyed by hero, whenever the game saves (menu, quick save,
+  autosave), and read when it loads. Deleting a save in game deletes its
+  sidecar; a new game starts every mod empty.
 - Saves always load without the mods, with one exception the player must
   know about: **an item in a ranged slot exists only in the sidecar file.**
   If the mods are removed, or the sidecar is lost (another computer, cloud
@@ -137,10 +139,10 @@ mod. The overlay edits the same file.
 - The game keeps its saves in Steam Cloud storage (its log says "Save
   location: Steam cloud"); on disk they are `save_1`, `save_auto`, … in
   Steam's `userdata/<account>/2411200/remote/` folder, not in the game folder
-  or the Wine prefix. Where the sidecars go is decided in the runtime work.
-- The sidecar files may **not** be synced by Steam Cloud, which only
-  syncs the game's own files. Mod state is then local to one
-  computer; the saves themselves still sync.
+  or the Wine prefix. The game writes them only through Steam's cloud API.
+- Sidecars are kept **locally**, in `uk_qol/saves/<Steam account id>/` in
+  the game folder, so they are **not** synced by Steam Cloud: mod state is
+  local to one computer, while the saves themselves still sync.
 
 ### 5. Manager
 

@@ -16,7 +16,6 @@ use crate::state::{StoredItem, valid_def};
 const PARTY_HEROES: usize = 0x10;
 const HERO_SIZE: usize = 0x2b8;
 const HERO_VALID: usize = 0x00;
-const HERO_ID: usize = 0x08;
 const HERO_NAME: usize = 0x10; // String
 const HERO_HP: usize = 0xfc;
 const HERO_ACTED: usize = 0x208;
@@ -277,18 +276,13 @@ impl Game {
         unsafe { rd::<u8>(self.hero(i) + HERO_VALID) != 0 }
     }
 
-    /// `"<hero_id>:<name>"`, stable across saves (the savehook's key).
+    /// The savehook's key for hero `i` (`"<hero_id>:<name>"`).
     pub fn hero_key(&self, i: usize) -> Option<String> {
         if !self.hero_valid(i) {
             return None;
         }
-        let h = self.hero(i);
-        // SAFETY: inside the party global.
-        unsafe {
-            let id: i32 = rd(h + HERO_ID);
-            let name = read_string(h + HERO_NAME)?;
-            Some(format!("{id}:{name}"))
-        }
+        // SAFETY: a hero struct of the party.
+        unsafe { uk_qol_runtime::savehook::hero_key(self.hero(i)) }
     }
 
     pub fn hero_name(&self, i: usize) -> String {
