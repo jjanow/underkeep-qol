@@ -122,7 +122,7 @@ Options:
   --set-launch-option  Linux/Wine: also set the Steam launch option, if Steam
                        isn't running and the game has no other launch options
   --purge              uninstall: also remove settings and logs; save
-                       sidecars (uk_qol/saves) are always kept
+                       sidecars (Steam Cloud, uk_qol/saves) are always kept
   --reset              config: go back to the mod's default for <key>
   -y, --yes            don't ask for confirmation
   --check              update: only show what's available
@@ -498,7 +498,7 @@ Before uninstalling, move every ranged-slot weapon back to your inventory.",
     ("gui_uninstall_title", "Uninstall Underkeep QoL?"),
     (
         "gui_uninstall_keeps",
-        "Your saves are not touched. Mod data for your saves (uk_qol/saves) is kept, so reinstalling brings it back.",
+        "Your saves are not touched. Mod data for your saves (in Steam Cloud, or uk_qol/saves without Steam) is kept, so reinstalling brings it back.",
     ),
     ("gui_purge", "Also remove my settings and logs"),
     ("gui_cancel", "Cancel"),

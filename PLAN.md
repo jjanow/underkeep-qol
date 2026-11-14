@@ -243,7 +243,7 @@ Check items off as they land; add findings under the item they belong to.
     every `SDL_GL_SwapWindow` (program, VAO, buffers, texture unit and
     binding, viewport, scissor, blend, depth, cull, stencil, sRGB, color
     mask, unpack state, framebuffers) is identical over ~2400 frames on a
-    3.3 core and a 4.6 compatibility context. Not yet tried in the game.
+    3.3 core and a 4.6 compatibility context.
 - [x] egui on the game's GL context; F10 opens the mod menu.
   - Renderer: **egui + egui_glow** (0.37), not Dear ImGui: no MinGW C++
     compiler is installed, a C++ build would add a C toolchain to CI and risk
@@ -319,8 +319,9 @@ Check items off as they land; add findings under the item they belong to.
   - Cost: with the widgets of all four mods up, the overlay's draw takes
     about 0.14-0.19 ms of CPU per frame at 3440x1440 (600-frame averages).
     Nothing runs while no active mod has HUD widgets.
-  - Not followed: the GUI camera's screen-shake offset. Not seen in game:
-    the character sheet (HUD mode 6), alchemy (10, excluded), the widgets
+  - Not followed: the GUI camera's screen-shake offset. The character
+    sheet (HUD mode 6) was seen in game with weapon-swap's sheet slot
+    (2026-11-14). Not seen in game: alchemy (10, excluded), the widgets
     in a fight (static: nothing on the battle path sets the menu state or
     interaction mode; target selection hides them).
 
