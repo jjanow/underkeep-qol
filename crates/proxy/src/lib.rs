@@ -33,6 +33,8 @@ static PTRS: [AtomicUsize; COUNT] = [const { AtomicUsize::new(0) }; COUNT];
 /// Set once `PTRS` is filled. Read by the stubs without locking.
 static READY: AtomicBool = AtomicBool::new(false);
 static RESOLVE: Once = Once::new();
+/// Longest the game waits for the runtime at startup.
+const STARTUP_WAIT_SECS: u64 = 10;
 
 // Stubs: `mov eax, <index>; jmp common`.
 std::arch::global_asm!(
@@ -122,6 +124,12 @@ extern "C" fn resolve() {
             ));
         }
         READY.store(true, Ordering::Release);
+        // The game's first winmm call (SDL setting up its timer, early in
+        // the game's startup): hold the game here until the runtime has
+        // installed its hooks, so none of the game's init runs unhooked.
+        let _ = std::panic::catch_unwind(|| {
+            uk_qol_runtime::wait_ready(std::time::Duration::from_secs(STARTUP_WAIT_SECS))
+        });
     });
 }
 

@@ -43,6 +43,8 @@ pub fn start(builtin: &'static [host::ModCtor]) {
 /// Startup: build detection, safe-mode session, config, then the mod host
 /// (mods are loaded only outside safe mode), installed as the global.
 fn run(builtin: &'static [host::ModCtor]) {
+    // Releases the startup gate however run() ends, panics included.
+    let _ready = ReadyOnDrop;
     let exe = std::env::current_exe();
     let shown = exe
         .as_ref()
@@ -103,6 +105,56 @@ fn run(builtin: &'static [host::ModCtor]) {
     host::install(h);
 }
 
+// Startup gate. The game's code must not run ahead of the mod hooks: defs
+// are parsed and the startup logo starts during game init, which races this
+// thread. The proxy calls `wait_ready` on the game's first winmm call (SDL
+// initializing its timer), so the game waits there until `run` is done.
+
+static READY: Mutex<bool> = Mutex::new(false);
+static READY_CV: std::sync::Condvar = std::sync::Condvar::new();
+
+struct ReadyOnDrop;
+
+impl Drop for ReadyOnDrop {
+    fn drop(&mut self) {
+        signal_ready();
+    }
+}
+
+/// Marks startup finished (hooks installed) and wakes [`wait_ready`].
+pub fn signal_ready() {
+    if let Ok(mut r) = READY.lock() {
+        *r = true;
+        READY_CV.notify_all();
+    }
+}
+
+/// Blocks until [`signal_ready`] or `timeout`. Returns whether startup
+/// finished. Called by the proxy on the game's first winmm call; must not be
+/// called from the runtime thread or under the loader lock.
+pub fn wait_ready(timeout: std::time::Duration) -> bool {
+    let started = std::time::Instant::now();
+    let Ok(guard) = READY.lock() else {
+        return false;
+    };
+    let ok = match READY_CV.wait_timeout_while(guard, timeout, |r| !*r) {
+        Ok((r, _)) => *r,
+        Err(_) => false,
+    };
+    let waited = started.elapsed().as_millis();
+    if ok {
+        log(&format!(
+            "game resumed after waiting {waited} ms for startup"
+        ));
+    } else {
+        log(&format!(
+            "startup took longer than {} ms; the game continues without waiting",
+            timeout.as_millis()
+        ));
+    }
+    ok
+}
+
 /// `<game folder>/uk_qol`, next to the exe.
 pub fn data_dir() -> Option<PathBuf> {
     Some(std::env::current_exe().ok()?.parent()?.join("uk_qol"))
@@ -115,7 +167,7 @@ pub fn try_log(msg: &str) {
     if let Ok(mut guard) = LOG.try_lock()
         && let Some(f) = guard.as_mut()
     {
-        let _ = writeln!(f, "[{}] {msg}", unix_secs());
+        let _ = writeln!(f, "[{}] {msg}", stamp());
         let _ = f.flush();
     }
 }
@@ -138,11 +190,7 @@ pub fn log(msg: &str) {
         *guard = Some(f);
     }
     if let Some(f) = guard.as_mut() {
-        let t = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
-        let _ = writeln!(f, "[{t}] {msg}");
+        let _ = writeln!(f, "[{}] {msg}", stamp());
         let _ = f.flush();
     }
 }
@@ -211,6 +259,14 @@ pub fn note_crash() {
 /// See [`note_crash`]. Generous, since a crash reporter may show a dialog
 /// before it exits.
 pub const CRASH_EXIT_WINDOW_SECS: u64 = 600;
+
+/// Log timestamp: Unix seconds with milliseconds (startup timing matters).
+fn stamp() -> String {
+    let d = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
+    format!("{}.{:03}", d.as_secs(), d.subsec_millis())
+}
 
 fn unix_secs() -> u64 {
     SystemTime::now()
