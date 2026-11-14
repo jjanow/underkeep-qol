@@ -48,6 +48,7 @@ fn run() {
         "uk-qol {VERSION} loaded into {shown} (pid {})",
         std::process::id()
     ));
+    overlay::install();
     match exe
         .map_err(build::DetectError::Io)
         .and_then(|p| build::detect_from_file(&p))
