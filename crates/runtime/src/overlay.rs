@@ -20,6 +20,8 @@
 //! menu says no mods are loaded and input goes straight to the game.
 
 #[cfg(windows)]
+mod capture;
+#[cfg(windows)]
 mod gl;
 #[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 pub(crate) mod router;
