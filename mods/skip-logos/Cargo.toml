@@ -1,0 +1,13 @@
+[package]
+name = "uk-qol-mod-skip-logos"
+description = "Underkeep QoL mod: start on the main menu without the startup logos"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_mod_skip_logos"
+
+[dependencies]
+uk-qol-runtime.workspace = true

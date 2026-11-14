@@ -131,13 +131,16 @@ extern "system" fn unavailable() -> usize {
     0
 }
 
+/// The built-in mods (crates under `mods/`), in load order.
+static BUILTIN: &[uk_qol_runtime::host::ModCtor] = &[uk_qol_mod_skip_logos::new];
+
 #[unsafe(no_mangle)]
 extern "system" fn DllMain(module: HMODULE, reason: u32, reserved: *mut core::ffi::c_void) -> BOOL {
     if reason == DLL_PROCESS_ATTACH {
         // SAFETY: `module` is this DLL's handle, passed in by the loader.
         unsafe { DisableThreadLibraryCalls(module) };
         // Only spawns a thread, which runs after the loader lock is released.
-        let _ = std::panic::catch_unwind(|| uk_qol_runtime::start(&[]));
+        let _ = std::panic::catch_unwind(|| uk_qol_runtime::start(BUILTIN));
     } else if reason == DLL_PROCESS_DETACH && !reserved.is_null() {
         // Process exit through ExitProcess (non-null `reserved`; null means
         // FreeLibrary, which nothing does to us). Other threads are already

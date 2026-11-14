@@ -1,0 +1,9 @@
+id = "skip-logos"
+name = "Skip logos"
+version = "0.1.0"
+author = "underkeep-qol"
+description = "Starts the game on the main menu without the startup logos."
+# Builds (exe SHA-256) the mod was tested on; none yet, the code is pending.
+game_builds = []
+enabled = true
+# No [[settings]]: the mod's one on/off switch is `enabled`.

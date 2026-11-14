@@ -241,9 +241,17 @@ name = "uk-qol-manager"
 version = "0.1.0"
 
 [[package]]
+name = "uk-qol-mod-skip-logos"
+version = "0.1.0"
+dependencies = [
+ "uk-qol-runtime",
+]
+
+[[package]]
 name = "uk-qol-proxy"
 version = "0.1.0"
 dependencies = [
+ "uk-qol-mod-skip-logos",
  "uk-qol-runtime",
  "windows-sys",
 ]

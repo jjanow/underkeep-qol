@@ -1,9 +1,9 @@
 //! Underkeep QoL runtime: runs inside the game process, loaded by the
 //! `winmm.dll` proxy.
 //!
-//! So far it writes `uk_qol/uk_qol.log` in the game folder and logs which
-//! build of the game it loaded into. The pattern scanner (`pattern`) is ready
-//! for hooks; hooks and mods come next (PLAN.md).
+//! It writes `uk_qol/uk_qol.log` in the game folder, logs which build of the
+//! game it loaded into, and starts the mod host (`host`). Hooks, the overlay
+//! and the save hooks are in progress (PLAN.md).
 
 pub mod build;
 pub mod config;
@@ -29,17 +29,20 @@ static START: Once = Once::new();
 static LOG: Mutex<Option<File>> = Mutex::new(None);
 
 /// Starts the runtime on its own thread. Safe to call from `DllMain`: it only
-/// spawns the thread, and does so once.
+/// spawns the thread, and does so once. `builtin` are the built-in mods.
 pub fn start(builtin: &'static [host::ModCtor]) {
-    let _ = builtin; // loaded by the mod host (pending)
     START.call_once(|| {
-        let _ = std::thread::Builder::new().name("uk-qol".into()).spawn(|| {
-            let _ = std::panic::catch_unwind(run);
-        });
+        let _ = std::thread::Builder::new()
+            .name("uk-qol".into())
+            .spawn(move || {
+                let _ = std::panic::catch_unwind(|| run(builtin));
+            });
     });
 }
 
-fn run() {
+/// Startup: build detection, safe-mode session, config, then the mod host
+/// (mods are loaded only outside safe mode), installed as the global.
+fn run(builtin: &'static [host::ModCtor]) {
     let exe = std::env::current_exe();
     let shown = exe
         .as_ref()
@@ -48,13 +51,56 @@ fn run() {
         "uk-qol {VERSION} loaded into {shown} (pid {})",
         std::process::id()
     ));
-    match exe
+    guard::install_crash_handler();
+    let build = match exe
         .map_err(build::DetectError::Io)
         .and_then(|p| build::detect_from_file(&p))
     {
-        Ok(b) => log(&b.to_string()),
-        Err(e) => log(&format!("build detection failed: {e}")),
+        Ok(b) => {
+            log(&b.to_string());
+            Some(b.sha256_hex())
+        }
+        Err(e) => {
+            log(&format!("build detection failed: {e}"));
+            None
+        }
+    };
+
+    let safe = begin_session();
+    let dir = data_dir();
+    let config = match dir
+        .as_deref()
+        .map(|d| config::Config::load(&config::config_path(d)))
+    {
+        Some(Ok(c)) => c,
+        Some(Err(e)) => {
+            log(&format!("{e}; using defaults (the file is left as it is)"));
+            config::Config::default()
+        }
+        None => config::Config::default(),
+    };
+    let (image, base) = match host::own_image() {
+        Some((img, base)) => (Some(img), base),
+        None => {
+            if !safe.is_on() {
+                log("can't read the game's image in memory; no mod can load");
+            }
+            (None, 0)
+        }
+    };
+    let env = host::HostEnv {
+        image,
+        base,
+        build,
+        patterns_dir: dir.map(|d| d.join("patterns")),
+        log,
+        note_active: log_active_mods,
+    };
+    let h = host::Host::start(builtin, env, &config, safe);
+    for line in h.summary() {
+        log(&line);
     }
+    host::install(h);
 }
 
 /// `<game folder>/uk_qol`, next to the exe.

@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 uk-qol-runtime.workspace = true
+uk-qol-mod-skip-logos.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
