@@ -1,9 +1,10 @@
 //! The runtime's own hooks: save hooks ([`crate::savehook`]) and data
-//! patches ([`crate::datapatch`]). Their patterns are `patterns/core.toml`
-//! (built in; `uk_qol/patterns/core.toml` replaces it whole, like a mod's
-//! override), resolved before any mod's hooks change the code. The hooks go
-//! in during startup, before the startup gate lets the game's init run, and
-//! stay in for the life of the process. Not installed in safe mode.
+//! patches ([`crate::datapatch`]), plus the HUD's addresses
+//! ([`crate::hud`]). Their patterns are `patterns/core.toml` (built in;
+//! `uk_qol/patterns/core.toml` replaces it whole, like a mod's override),
+//! resolved before any mod's hooks change the code. The hooks go in during
+//! startup, before the startup gate lets the game's init run, and stay in
+//! for the life of the process. Not installed in safe mode.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -81,6 +82,7 @@ pub fn install(
     let mut hooks = HookSet::new("core");
     crate::savehook::install(&mut hooks, patterns, base);
     crate::datapatch::install(&mut hooks, patterns, base, patches, log_defs);
+    crate::hud::install(patterns, base);
     match hooks.enable() {
         Ok(()) => crate::log("core hooks installed"),
         Err(e) => crate::log(&format!(
@@ -105,6 +107,11 @@ mod tests {
             "party_init_from_setup",
             "g_party",
             "deftable_parse",
+            "g_gui_layout",
+            "g_game_state",
+            "g_hud_mode",
+            "g_menu_state",
+            "g_interaction_mode",
         ] {
             assert!(names.contains(&n), "{n} missing");
         }

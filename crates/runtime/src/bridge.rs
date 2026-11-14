@@ -205,4 +205,12 @@ impl OverlayHost for Bridge {
     fn mod_menu(&self, mod_id: &str, ui: &mut egui::Ui) {
         host::with(|h| h.menu(mod_id, ui));
     }
+
+    fn wants_hud(&self) -> bool {
+        host::with(|h| h.wants_hud()).unwrap_or(false)
+    }
+
+    fn hud(&self, ui: &mut egui::Ui) {
+        host::with(|h| h.hud(ui));
+    }
 }

@@ -95,6 +95,17 @@ impl Game {
             if blocked() != 0 {
                 return Err("game input is blocked (console or window not focused)".into());
             }
+            self.can_sort_unfocused()
+        }
+    }
+
+    /// [`Game::can_sort`] without the window focus and console check (for
+    /// showing the Sort button: a click focuses the window anyway).
+    ///
+    /// # Safety
+    /// As for [`Game::can_sort`].
+    pub unsafe fn can_sort_unfocused(&self) -> Result<(), String> {
+        unsafe {
             let gs = r32(self.game_state);
             if gs == 3 {
                 return Err(format!("game state {gs}"));

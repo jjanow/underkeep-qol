@@ -20,6 +20,12 @@
 //! Skills are assigned in this mod's section of the overlay menu. Slots are
 //! stored by skill name (item skills by equipment slot and name), per hero,
 //! in the save's sidecar.
+//!
+//! On the HUD, each hero's extra slots are small buttons in a column right
+//! of the hero's skill slot, labelled with the skill's initials: left-click
+//! casts it for that hero (as its key does for the selected hero),
+//! right-click (or left-click on an empty slot) assigns it with the game's
+//! skill panel.
 
 mod game;
 
@@ -31,7 +37,7 @@ use std::time::{Duration, Instant};
 use uk_qol_runtime::egui;
 use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
 use uk_qol_runtime::input::InputEvent;
-use uk_qol_runtime::{guard, hotkey};
+use uk_qol_runtime::{guard, hotkey, hud};
 
 use game::{Game, HEROES, Skill};
 
@@ -238,8 +244,12 @@ unsafe fn take_swap(act: usize) -> Option<(usize, u64)> {
 
 pub struct ExtraSkillSlots {
     slots: usize,
+    /// The `hud_buttons` setting.
+    hud_buttons: bool,
     /// Slot keys pressed since the last frame.
     presses: Vec<usize>,
+    /// HUD buttons clicked since the last frame: (hero, slot).
+    hud_casts: Vec<(usize, usize)>,
     /// The slot whose skill list is open in the menu: (hero key, slot).
     picker: Option<(String, usize)>,
     /// Move keyboard / gamepad focus into the picker next frame.
@@ -279,19 +289,36 @@ impl ExtraSkillSlots {
             .get("slots")
             .and_then(toml::Value::as_integer)
             .map_or(DEFAULT_SLOTS, |n| n.clamp(1, MAX_SLOTS as i64) as usize);
+        self.hud_buttons = s
+            .get("hud_buttons")
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(true);
     }
 
-    /// Queues extra slot `slot` of the selected hero, as the HUD's skill
-    /// button does for the hero's own slot.
+    /// Queues extra slot `slot` of the selected hero (a key press).
     fn activate(&mut self, slot: usize) {
-        let mut sh = shared();
-        let Some(g) = sh.game else { return };
+        let Some(g) = shared().game else { return };
         // SAFETY: game thread (frame hook), static globals.
         let Some(hero) = (unsafe { g.selected() }) else {
             log("no hero selected");
             return;
         };
+        self.activate_hero(hero, slot);
+    }
+
+    /// Queues extra slot `slot` of hero `hero`, as the HUD's skill button
+    /// does for the hero's own slot.
+    fn activate_hero(&mut self, hero: usize, slot: usize) {
+        let mut sh = shared();
+        let Some(g) = sh.game else { return };
+        if hero >= HEROES {
+            return;
+        }
         let h = g.hero(hero);
+        // SAFETY: inside the static hero array; game thread.
+        if !unsafe { game::hero_valid(h) } {
+            return;
+        }
         // SAFETY: a valid party hero.
         let (key, name) = unsafe { (game::hero_key(h), game::hero_name(h)) };
         if sh
@@ -404,6 +431,80 @@ impl ExtraSkillSlots {
         }
     }
 
+    /// Starts assigning `slot` of hero `hero` with the game's skill panel.
+    fn start_panel_pick(&mut self, key: String, hero: usize, slot: usize) {
+        log(&format!("{key}: assigning slot {} from the HUD", slot + 1));
+        self.panel_pick = Some(PanelPick {
+            key,
+            hero,
+            slot,
+            since: Instant::now(),
+            orig: None,
+            seen: false,
+        });
+    }
+
+    /// The HUD buttons (see the module docs).
+    fn draw_hud(&mut self, ui: &mut egui::Ui) {
+        let Some(g) = shared().game else { return };
+        let Some(t) = hud::transform() else { return };
+        for hero in 0..HEROES {
+            let h = g.hero(hero);
+            // SAFETY: inside the static hero array; render thread = game thread.
+            if !unsafe { game::hero_valid(h) } {
+                continue;
+            }
+            let Some(skill_slot) = hud::gui_rect(&hud::skill_slot_name(hero)) else {
+                continue;
+            };
+            // SAFETY: as above.
+            let key = unsafe { game::hero_key(h) };
+            for (slot, cell) in hud_cells(skill_slot, self.slots).into_iter().enumerate() {
+                let current = shared().assigned.get(&key).and_then(|s| s[slot].clone());
+                let picking = self
+                    .panel_pick
+                    .as_ref()
+                    .is_some_and(|p| p.key == key && p.slot == slot);
+                let (text, fill, tip) = match &current {
+                    None => (
+                        "+".to_owned(),
+                        egui::Color32::from_rgb(45, 45, 50),
+                        format!("Extra slot {}: empty. Click to assign a skill.", slot + 1),
+                    ),
+                    Some(s) => {
+                        let name = self.display(&g, s);
+                        // SAFETY: as above.
+                        let ok = unsafe { game::resolve(h, s) }.is_some();
+                        (
+                            initials(&name),
+                            if ok {
+                                egui::Color32::from_rgb(40, 70, 120)
+                            } else {
+                                egui::Color32::from_rgb(70, 70, 70)
+                            },
+                            format!(
+                                "Extra slot {}: {name}{}\nLeft-click: cast. Right-click: assign another skill.",
+                                slot + 1,
+                                if ok { "" } else { " (not available)" }
+                            ),
+                        )
+                    }
+                };
+                let fill = if picking {
+                    egui::Color32::from_rgb(150, 120, 30)
+                } else {
+                    fill
+                };
+                let r = hud::button(ui, t.rect_to_points(cell), &text, fill).on_hover_text(tip);
+                if r.secondary_clicked() || (r.clicked() && current.is_none()) {
+                    self.start_panel_pick(key.clone(), hero, slot);
+                } else if r.clicked() {
+                    self.hud_casts.push((hero, slot));
+                }
+            }
+        }
+    }
+
     fn display(&mut self, g: &Game, skill: &Skill) -> String {
         if let Some(n) = self.names.get(&skill.name) {
             return n.clone();
@@ -480,14 +581,7 @@ impl ExtraSkillSlots {
                             )
                             .clicked()
                     {
-                        self.panel_pick = Some(PanelPick {
-                            key: key.clone(),
-                            hero: i,
-                            slot,
-                            since: Instant::now(),
-                            orig: None,
-                            seen: false,
-                        });
+                        self.start_panel_pick(key.clone(), i, slot);
                     }
                 });
                 if waiting {
@@ -638,6 +732,9 @@ impl Mod for ExtraSkillSlots {
         for slot in std::mem::take(&mut self.presses) {
             self.activate(slot);
         }
+        for (hero, slot) in std::mem::take(&mut self.hud_casts) {
+            self.activate_hero(hero, slot);
+        }
         self.panel_step();
         settle_targeting(false);
     }
@@ -657,6 +754,62 @@ impl Mod for ExtraSkillSlots {
 
     fn menu(&mut self, ui: &mut egui::Ui) {
         self.draw_menu(ui);
+    }
+
+    fn has_hud(&self) -> bool {
+        self.hud_buttons && shared().game.is_some()
+    }
+
+    fn hud(&mut self, ui: &mut egui::Ui) {
+        self.draw_hud(ui);
+    }
+}
+
+/// Largest side of an extra slot's HUD button, in GUI units (the game's
+/// slot is 29; the gap right of it about 10).
+const HUD_CELL: f32 = 9.0;
+/// Space between the skill slot and the buttons, and between buttons.
+const HUD_GAP: f32 = 1.0;
+
+/// The HUD buttons of `n` extra slots for a skill slot rect (GUI space): a
+/// column right of the slot, as high as the slot.
+fn hud_cells(skill_slot: egui::Rect, n: usize) -> Vec<egui::Rect> {
+    if n == 0 {
+        return Vec::new();
+    }
+    let side = ((skill_slot.height() - HUD_GAP * (n as f32 - 1.0)) / n as f32).min(HUD_CELL);
+    (0..n)
+        .map(|i| {
+            egui::Rect::from_min_size(
+                egui::pos2(
+                    skill_slot.max.x + HUD_GAP,
+                    skill_slot.min.y + i as f32 * (side + HUD_GAP),
+                ),
+                egui::vec2(side, side),
+            )
+        })
+        .collect()
+}
+
+/// A short label for a skill name: the initials of its first two words, or
+/// its first two letters.
+fn initials(name: &str) -> String {
+    let words: Vec<&str> = name.split_whitespace().collect();
+    match words.as_slice() {
+        [] => "?".into(),
+        [one] => {
+            let mut c = one.chars();
+            let first: String = c.next().into_iter().flat_map(char::to_uppercase).collect();
+            first
+                + &c.next()
+                    .map(|x| x.to_lowercase().collect::<String>())
+                    .unwrap_or_default()
+        }
+        [a, b, ..] => [a, b]
+            .iter()
+            .filter_map(|w| w.chars().next())
+            .flat_map(char::to_uppercase)
+            .collect(),
     }
 }
 
@@ -732,7 +885,9 @@ fn load_heroes(heroes: &BTreeMap<String, toml::Table>) -> BTreeMap<String, Slots
 pub fn new() -> Box<dyn Mod> {
     Box::new(ExtraSkillSlots {
         slots: DEFAULT_SLOTS,
+        hud_buttons: true,
         presses: Vec::new(),
+        hud_casts: Vec::new(),
         picker: None,
         focus_picker: false,
         names: HashMap::new(),
@@ -750,12 +905,38 @@ mod tests {
         let m = new();
         let manifest = Manifest::parse(m.manifest()).unwrap();
         assert_eq!(manifest.id, m.id());
-        assert_eq!(manifest.settings.len(), 1 + MAX_SLOTS);
+        assert_eq!(manifest.settings.len(), 2 + MAX_SLOTS);
         for k in KEYS {
             assert!(manifest.setting(k).is_some(), "{k}");
         }
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 11);
+    }
+
+    #[test]
+    fn hud_cells_fit_beside_the_slot() {
+        let slot = egui::Rect::from_min_size(egui::pos2(526.0, 92.0), egui::vec2(29.0, 29.0));
+        for n in 1..=MAX_SLOTS {
+            let cells = hud_cells(slot, n);
+            assert_eq!(cells.len(), n);
+            for c in &cells {
+                assert!(c.min.x > slot.max.x && c.width() <= HUD_CELL + 1e-4);
+                assert!(
+                    c.min.y >= slot.min.y && c.max.y <= slot.max.y + 1e-3,
+                    "{n}: {c:?}"
+                );
+            }
+        }
+        assert_eq!(hud_cells(slot, 3)[0].width(), HUD_CELL);
+        assert!(hud_cells(slot, 0).is_empty());
+    }
+
+    #[test]
+    fn initials_are_short() {
+        assert_eq!(initials("Fireball"), "Fi");
+        assert_eq!(initials("blood pact"), "BP");
+        assert_eq!(initials("Healing Light of Dawn"), "HL");
+        assert_eq!(initials(""), "?");
     }
 
     #[test]

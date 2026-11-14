@@ -40,3 +40,38 @@ rip = { disp = 3, len = 7 }
 # saves, the player profile); data starting with FF "DfT" is the binary form.
 [deftable_parse]
 pattern = "48 89 6C 24 18 48 89 74 24 20 57 48 83 EC 20 49 8B E8 8B F2 48 8B F9 83 FA 04 0F 8E ?? ?? ?? ?? 80 39 FF"
+
+# ---- HUD (runtime::hud) ----
+
+# GuiLayout: the HUD's named rects from def_def's `gui` table, loaded once at
+# init (GuiLayout_Load). Site: the init's `call; call; lea rcx, [layout];
+# call GuiLayout_Load; mov edx, [..]`.
+[g_gui_layout]
+pattern = "E8 ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 15"
+offset = 10
+rip = { disp = 3, len = 7 }
+
+# The game state (dword; 4 while playing). Site: MainMenuEnter's
+# `sub rsp, 0x78; xorps; mov dword [state], 5; mov cl, 1`.
+[g_game_state]
+pattern = "48 83 EC 78 0F 57 C0 C7 05 ?? ?? ?? ?? 05 00 00 00 B1 01"
+offset = 7
+rip = { disp = 2, len = 10 }
+
+# The HUD panel mode (dword; 0 = no HUD: the HUD function returns at once).
+# Site: the command handler's `cmp [mode], 3; jne; movzx ebx, bl; cmp [..], r12d`.
+[g_hud_mode]
+pattern = "83 3D ?? ?? ?? ?? 03 75 0E 0F B6 DB 44 39 25"
+rip = { disp = 2, len = 7 }
+
+# The menu / dialog state over the HUD (dword; 0 = none). Site: the command
+# handler's `mov eax, [state]; cmp eax, 5; je; cmp eax, 0xb; jne`.
+[g_menu_state]
+pattern = "8B 05 ?? ?? ?? ?? 83 F8 05 74 09 83 F8 0B 0F 85 ?? ?? ?? ?? E8 ?? ?? ?? ?? E9"
+rip = { disp = 2, len = 6 }
+
+# The HUD interaction mode (dword; 0 = none, 1 target selection, 5 shop,
+# other panels). Site: `cmp [mode], 6; jne …; lea rcx, …`.
+[g_interaction_mode]
+pattern = "83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ??"
+rip = { disp = 2, len = 7 }

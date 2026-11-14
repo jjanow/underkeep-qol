@@ -45,3 +45,10 @@ type = "bool"
 default = true
 label = "In combat, a swap costs the hero's turn"
 description = "Outside combat a swap is always free."
+
+[[settings]]
+key = "hud_button"
+type = "bool"
+default = true
+label = "Swap button on the HUD"
+description = "Shows a small R button on the weapon hand slot of each hero with a filled ranged slot; click it to swap."

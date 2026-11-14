@@ -12,10 +12,14 @@
 //!   text field focused; a press a mod handles is swallowed, and so is its
 //!   release. Releases go to the mods too, but only to observe: whether the
 //!   game gets a release depends only on whether it got the press.
+//! - While closed, a mouse press inside one of the mods' HUD widgets
+//!   ([`Router::hud_hits`], from the last frame) goes to the HUD and is
+//!   swallowed, with its release; mouse motion goes to the HUD and to the
+//!   game.
 
 use std::collections::BTreeSet;
 
-use egui::{Event as UiEvent, Key, Modifiers, PointerButton, Pos2, Vec2};
+use egui::{Event as UiEvent, Key, Modifiers, PointerButton, Pos2, Rect, Vec2};
 
 use super::sdl::{self, Input, sc};
 use crate::hotkey::{Binding, PAD_LT, PAD_RT, pad_bit};
@@ -91,8 +95,19 @@ pub struct Router {
     pub ui_wants_keyboard: bool,
     /// The menu was opened from a gamepad: focus the first widget.
     pub focus_first: bool,
+    /// Clickable HUD widgets drawn last frame, in points (empty while no
+    /// mod draws on the HUD). Set by the renderer.
+    pub hud_hits: Vec<Rect>,
+    /// HUD input (menu closed), drained each frame the HUD is drawn.
+    pub hud_events: Vec<UiEvent>,
+    /// Mouse buttons whose press went to the HUD.
+    hud_mouse: u32,
     mods: Modifiers,
 }
+
+/// Most HUD events kept between frames (motion is merged, so this only
+/// bounds a flood of clicks while the HUD isn't drawn).
+const MAX_HUD_EVENTS: usize = 64;
 
 impl Default for Router {
     fn default() -> Self {
@@ -224,6 +239,9 @@ impl Router {
             to_points: 1.0,
             ui_wants_keyboard: false,
             focus_first: false,
+            hud_hits: Vec::new(),
+            hud_events: Vec::new(),
+            hud_mouse: 0,
             mods: Modifiers::NONE,
         }
     }
@@ -262,6 +280,26 @@ impl Router {
 
     fn pointer(&self, x: f32, y: f32) -> Pos2 {
         Pos2::new(x * self.to_points, y * self.to_points)
+    }
+
+    /// Stops sending input to the HUD (no mod draws on it now). A button
+    /// held on a widget still gets its release swallowed.
+    pub fn clear_hud(&mut self) {
+        self.hud_hits.clear();
+        self.hud_events.clear();
+    }
+
+    fn hud_event(&mut self, e: UiEvent) {
+        if let UiEvent::PointerMoved(p) = e
+            && let Some(UiEvent::PointerMoved(last)) = self.hud_events.last_mut()
+        {
+            *last = p;
+            return;
+        }
+        if self.hud_events.len() >= MAX_HUD_EVENTS {
+            self.hud_events.remove(0);
+        }
+        self.hud_events.push(e);
     }
 
     fn ui_key_event(&mut self, key: Key, pressed: bool, repeat: bool) {
@@ -393,33 +431,64 @@ impl Router {
                 }
             }
             Input::MouseMotion { x, y } => {
+                let p = self.pointer(x, y);
                 if self.open {
-                    let p = self.pointer(x, y);
                     self.ui_events.push(UiEvent::PointerMoved(p));
                     (Swallow, Toggle::None)
                 } else {
+                    if !self.hud_hits.is_empty() || self.hud_mouse != 0 {
+                        self.hud_event(UiEvent::PointerMoved(p));
+                    }
                     (Deliver, Toggle::None)
                 }
             }
             Input::MouseButton { button, down, x, y } => {
                 let bit = 1u32 << (button & 31);
-                if self.open {
-                    let b = match button {
-                        sdl::BUTTON_LEFT => Some(PointerButton::Primary),
-                        sdl::BUTTON_RIGHT => Some(PointerButton::Secondary),
-                        sdl::BUTTON_MIDDLE => Some(PointerButton::Middle),
-                        _ => None,
-                    };
-                    if let Some(b) = b {
-                        let pos = self.pointer(x, y);
-                        self.ui_events.push(UiEvent::PointerMoved(pos));
-                        self.ui_events.push(UiEvent::PointerButton {
+                let b = match button {
+                    sdl::BUTTON_LEFT => Some(PointerButton::Primary),
+                    sdl::BUTTON_RIGHT => Some(PointerButton::Secondary),
+                    sdl::BUTTON_MIDDLE => Some(PointerButton::Middle),
+                    _ => None,
+                };
+                let pos = self.pointer(x, y);
+                let modifiers = self.mods;
+                let ui_events = |button| {
+                    [
+                        UiEvent::PointerMoved(pos),
+                        UiEvent::PointerButton {
                             pos,
-                            button: b,
+                            button,
                             pressed: down,
-                            modifiers: self.mods,
-                        });
+                            modifiers,
+                        },
+                    ]
+                };
+                if self.open {
+                    if let Some(b) = b {
+                        self.ui_events.extend(ui_events(b));
                     }
+                } else if let Some(b) = b {
+                    // A HUD widget's press, or the release of one.
+                    let hud = if down {
+                        self.hud_hits.iter().any(|r| r.contains(pos))
+                    } else {
+                        self.hud_mouse & bit != 0
+                    };
+                    if hud {
+                        for e in ui_events(b) {
+                            self.hud_event(e);
+                        }
+                        if down {
+                            self.hud_mouse |= bit;
+                        } else {
+                            self.hud_mouse &= !bit;
+                        }
+                        return (Swallow, Toggle::None);
+                    }
+                }
+                if !down {
+                    // A HUD press released after the menu opened.
+                    self.hud_mouse &= !bit;
                 }
                 if down {
                     if self.open {
@@ -927,5 +996,192 @@ mod tests {
             r.ui_events,
             vec![UiEvent::PointerMoved(Pos2::new(50.0, 20.0))]
         );
+    }
+
+    fn mouse(button: u8, down: bool, x: f32, y: f32) -> Input {
+        Input::MouseButton { button, down, x, y }
+    }
+
+    #[test]
+    fn hud_widgets_take_only_their_clicks() {
+        let mut r = Router::new();
+        let env = Env::default();
+        r.to_points = 0.5;
+        // No HUD: motion isn't recorded, clicks go to the game.
+        let moved = Input::MouseMotion { x: 10.0, y: 10.0 };
+        assert_eq!(r.route(&moved, &env, &mut none).0, Deliver);
+        assert!(r.hud_events.is_empty());
+        r.hud_hits = vec![Rect::from_min_size(
+            Pos2::new(100.0, 100.0),
+            Vec2::splat(20.0),
+        )];
+        // Motion reaches both; consecutive moves are merged.
+        assert_eq!(r.route(&moved, &env, &mut none).0, Deliver);
+        let moved2 = Input::MouseMotion { x: 30.0, y: 30.0 };
+        assert_eq!(r.route(&moved2, &env, &mut none).0, Deliver);
+        assert_eq!(
+            r.hud_events,
+            vec![UiEvent::PointerMoved(Pos2::new(15.0, 15.0))]
+        );
+        r.hud_events.clear();
+        // A click outside the widgets (in points: 50, 50) is the game's.
+        let left = sdl::BUTTON_LEFT;
+        assert_eq!(
+            r.route(&mouse(left, true, 100.0, 100.0), &env, &mut none).0,
+            Deliver
+        );
+        assert_eq!(
+            r.route(&mouse(left, false, 100.0, 100.0), &env, &mut none)
+                .0,
+            Deliver
+        );
+        assert!(r.hud_events.is_empty());
+        // Inside (points 110, 110): swallowed, press and release go to the
+        // HUD, even if the release is outside.
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Swallow
+        );
+        assert_eq!(
+            r.route(&mouse(left, false, 400.0, 400.0), &env, &mut none)
+                .0,
+            Swallow
+        );
+        let pressed: Vec<bool> = r
+            .hud_events
+            .iter()
+            .filter_map(|e| match e {
+                UiEvent::PointerButton { pressed, pos, .. } => {
+                    assert!(*pos == Pos2::new(110.0, 110.0) || *pos == Pos2::new(200.0, 200.0));
+                    Some(*pressed)
+                }
+                _ => None,
+            })
+            .collect();
+        assert_eq!(pressed, [true, false]);
+        // The right button too (extra-skill-slots: right-click assigns).
+        let right = sdl::BUTTON_RIGHT;
+        assert_eq!(
+            r.route(&mouse(right, true, 210.0, 210.0), &env, &mut none)
+                .0,
+            Swallow
+        );
+        assert_eq!(
+            r.route(&mouse(right, false, 210.0, 210.0), &env, &mut none)
+                .0,
+            Swallow
+        );
+        // A game press held while the HUD appears under it: the release
+        // still goes to the game.
+        r.clear_hud();
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Deliver
+        );
+        r.hud_hits = vec![Rect::from_min_size(
+            Pos2::new(100.0, 100.0),
+            Vec2::splat(20.0),
+        )];
+        assert_eq!(
+            r.route(&mouse(left, false, 220.0, 220.0), &env, &mut none)
+                .0,
+            Deliver
+        );
+        // A HUD press, then the menu opens: the release is swallowed.
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Swallow
+        );
+        r.set_open(true);
+        r.clear_hud();
+        assert_eq!(
+            r.route(&mouse(left, false, 220.0, 220.0), &env, &mut none)
+                .0,
+            Swallow
+        );
+        r.set_open(false);
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Deliver
+        );
+    }
+
+    #[test]
+    fn hud_events_are_bounded() {
+        let mut r = Router::new();
+        r.hud_hits = vec![Rect::from_min_size(Pos2::ZERO, Vec2::splat(50.0))];
+        for _ in 0..200 {
+            r.route(
+                &mouse(sdl::BUTTON_LEFT, true, 1.0, 1.0),
+                &Env::default(),
+                &mut none,
+            );
+            r.route(
+                &mouse(sdl::BUTTON_LEFT, false, 1.0, 1.0),
+                &Env::default(),
+                &mut none,
+            );
+        }
+        assert!(r.hud_events.len() <= MAX_HUD_EVENTS);
+    }
+
+    /// egui reports a click from a press and release fed in one pass to an
+    /// unfocused context (the HUD runs with the menu closed).
+    #[test]
+    fn egui_click_in_one_pass() {
+        let ctx = egui::Context::default();
+        let rect = Rect::from_min_size(Pos2::new(10.0, 10.0), Vec2::splat(20.0));
+        let pos = Pos2::new(15.0, 15.0);
+        let mut clicks = (0, 0);
+        for events in [
+            vec![UiEvent::PointerMoved(pos)],
+            vec![],
+            vec![
+                UiEvent::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+                UiEvent::PointerButton {
+                    pos,
+                    button: PointerButton::Primary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+            vec![
+                UiEvent::PointerButton {
+                    pos,
+                    button: PointerButton::Secondary,
+                    pressed: true,
+                    modifiers: Modifiers::NONE,
+                },
+                UiEvent::PointerButton {
+                    pos,
+                    button: PointerButton::Secondary,
+                    pressed: false,
+                    modifiers: Modifiers::NONE,
+                },
+            ],
+        ] {
+            let raw = egui::RawInput {
+                events,
+                focused: false,
+                ..Default::default()
+            };
+            let mut out = ctx.run_ui(raw, |ui| {
+                egui::Area::new(egui::Id::unique("hud"))
+                    .fixed_pos(Pos2::ZERO)
+                    .sense(egui::Sense::hover())
+                    .show(ui.ctx(), |ui| {
+                        let r = ui.put(rect, egui::Button::new("x"));
+                        clicks.0 += usize::from(r.clicked());
+                        clicks.1 += usize::from(r.secondary_clicked());
+                    });
+            });
+            out.textures_delta.clear();
+        }
+        assert_eq!(clicks, (1, 1));
     }
 }

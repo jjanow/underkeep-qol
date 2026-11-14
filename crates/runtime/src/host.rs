@@ -85,6 +85,23 @@ pub trait Mod: Send {
     /// section is expanded, only while the mod is active. Must not block;
     /// work that touches the game is best queued and done in `on_frame`.
     fn menu(&mut self, _ui: &mut egui::Ui) {}
+    /// Whether the mod draws on the HUD now ([`Mod::hud`]). Checked every
+    /// frame; the overlay runs its HUD pass only while some active mod says
+    /// yes, so return false when there is nothing to draw (e.g. a setting
+    /// turned the widgets off).
+    fn has_hud(&self) -> bool {
+        false
+    }
+    /// Draws the mod's widgets on the game's HUD (see [`crate::hud`] and
+    /// CONTRIBUTING, "HUD widgets"). Called once per frame on the game's
+    /// render thread while the mod menu is closed, the plain HUD is up
+    /// ([`crate::hud::shown`]) and [`Mod::has_hud`] is true. `ui` covers the
+    /// whole window, in overlay points; place widgets with `ui.put` at
+    /// [`crate::hud::rect`]s. A click on a widget that senses clicks is
+    /// swallowed (the game doesn't see it); every other click goes to the
+    /// game. Must not block; work that touches the game is best queued and
+    /// done in `on_frame`.
+    fn hud(&mut self, _ui: &mut egui::Ui) {}
 }
 
 /// Constructor of a built-in mod, as passed by the proxy.
@@ -1313,6 +1330,23 @@ impl Host {
             if mid == id {
                 m.menu(ui);
                 return true;
+            }
+            false
+        });
+    }
+
+    /// Whether any active mod draws on the HUD now ([`Mod::has_hud`]).
+    pub fn wants_hud(&self) -> bool {
+        self.order.iter().map(|&i| &self.slots[i]).any(|s| {
+            s.status == Status::Active && guard::call(&s.id, || s.m.has_hud()).unwrap_or(false)
+        })
+    }
+
+    /// Calls `hud` on every active mod that has HUD widgets now.
+    pub fn hud(&mut self, ui: &mut egui::Ui) {
+        self.each_active(|m, _, _| {
+            if m.has_hud() {
+                m.hud(ui);
             }
             false
         });

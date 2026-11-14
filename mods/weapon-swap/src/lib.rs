@@ -19,7 +19,8 @@
 //!   monsters not to be moving. Outside combat it's free.
 //! - Putting a weapon into the slot and taking it out are menu buttons (the
 //!   mod's section of the overlay menu). The character sheet has no slot
-//!   for it (yet): see PLAN.md.
+//!   for it (yet): see PLAN.md. On the HUD, a hero with a filled slot gets a
+//!   small button on their weapon hand slot; clicking it swaps.
 //! - Keys and buttons only queue an action; `on_frame` runs it on the game
 //!   thread between frames. Every action logs the item counts of the party
 //!   plus the slots before and after: they must stay equal.
@@ -32,8 +33,8 @@ use std::path::PathBuf;
 
 use uk_qol_runtime::egui;
 use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
-use uk_qol_runtime::hotkey;
 use uk_qol_runtime::input::InputEvent;
+use uk_qol_runtime::{hotkey, hud};
 
 use game::{Game, Readiness, SLOT_WEAPON, busy_reason};
 use state::{HEROES, Loaded, State, StoredItem};
@@ -52,6 +53,21 @@ const ACK_FILE: &str = "weapon-swap.notice-acknowledged";
 
 const HERO_KEYS: [&str; HEROES] = ["swap_hero_1", "swap_hero_2", "swap_hero_3", "swap_hero_4"];
 const SELECTED_KEY: &str = "swap_selected";
+/// The HUD swap button: a square of this many GUI units in the weapon hand
+/// slot's top-left corner (the slot is 29 units).
+const HUD_BUTTON: f32 = 11.0;
+
+/// The HUD swap button's rect in GUI space for a weapon slot rect.
+fn hud_button_rect(slot: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_size(slot.min, egui::vec2(HUD_BUTTON, HUD_BUTTON))
+}
+
+fn hud_setting(settings: &toml::Table) -> bool {
+    settings
+        .get("hud_button")
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true)
+}
 
 /// Messages kept for the menu.
 const MAX_MESSAGES: usize = 6;
@@ -85,6 +101,8 @@ struct Inner {
     refocus: Option<usize>,
     /// The party's [`state::identity`] when the mod was turned off.
     off_identity: Option<String>,
+    /// The `hud_button` setting.
+    hud_button: bool,
 }
 
 #[derive(Default)]
@@ -361,6 +379,7 @@ impl Mod for WeaponSwap {
             mismatch: parked_on_load,
             refocus: None,
             off_identity: None,
+            hud_button: hud_setting(cx.settings),
         });
         Ok(())
     }
@@ -380,6 +399,7 @@ impl Mod for WeaponSwap {
     fn on_settings(&mut self, settings: &toml::Table) {
         if let Some(i) = &mut self.inner {
             i.costs_turn = costs_turn(settings);
+            i.hud_button = hud_setting(settings);
         }
     }
 
@@ -447,6 +467,44 @@ impl Mod for WeaponSwap {
     fn menu(&mut self, ui: &mut egui::Ui) {
         let Some(inner) = &mut self.inner else { return };
         menu(inner, ui);
+    }
+
+    fn has_hud(&self) -> bool {
+        self.inner.as_ref().is_some_and(|i| {
+            i.hud_button && i.acknowledged && i.state.heroes.iter().any(|h| h.stored.is_some())
+        })
+    }
+
+    fn hud(&mut self, ui: &mut egui::Ui) {
+        let Some(inner) = &mut self.inner else { return };
+        let Some(t) = hud::transform() else { return };
+        if !inner.game.playing() {
+            return;
+        }
+        for h in 0..HEROES {
+            let Some(stored) = inner.state.heroes[h].stored.clone() else {
+                continue;
+            };
+            if !inner.game.hero_valid(h) {
+                continue;
+            }
+            let Some(slot) = hud::gui_rect(&hud::weapon_slot_name(h)) else {
+                continue;
+            };
+            let r = hud::button(
+                ui,
+                t.rect_to_points(hud_button_rect(slot)),
+                "R",
+                egui::Color32::from_rgb(60, 95, 50),
+            )
+            .on_hover_text(format!(
+                "Ranged slot: {}. Click: swap with the weapon in hand.",
+                item_label(&stored)
+            ));
+            if r.clicked() {
+                inner.queue.push(Action::Swap(h));
+            }
+        }
     }
 }
 

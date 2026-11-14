@@ -16,13 +16,19 @@
 //! a sort is allowed: in game with no menu or dialog open, in the HUD modes
 //! where the party inventory is on screen, and with no mouse press or drag
 //! in progress (an item being dragged).
+//!
+//! The same sort runs from a small "Sort" button the mod draws on the
+//! inventory panel's top-right corner (the HUD layout's `inventory_rect`),
+//! shown only while a sort is allowed.
 
 mod game;
 mod sort;
 
 use std::time::{Duration, Instant};
 
+use uk_qol_runtime::egui;
 use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod};
+use uk_qol_runtime::hud;
 use uk_qol_runtime::input::InputEvent;
 
 use game::{Game, Sorted};
@@ -32,6 +38,9 @@ const ID: &str = "inventory-sort";
 const KEYS: [&str; 2] = ["sort_key", "sort_pad"];
 /// Don't log "can't sort" more often than this.
 const REFUSE_LOG_EVERY: Duration = Duration::from_secs(2);
+/// The Sort button's size in GUI units (the panel's header rows are about
+/// 12 units high).
+const BUTTON: egui::Vec2 = egui::vec2(24.0, 9.0);
 
 #[derive(Default)]
 pub struct InventorySort {
@@ -39,7 +48,17 @@ pub struct InventorySort {
     pending: bool,
     merge: bool,
     debug: bool,
+    button: bool,
     last_refusal: Option<Instant>,
+}
+
+/// The Sort button's rect in GUI space: the inventory panel's top-right
+/// corner.
+fn button_rect(panel: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(panel.max.x - BUTTON.x - 2.0, panel.min.y + 2.0),
+        BUTTON,
+    )
 }
 
 fn log(msg: &str) {
@@ -56,6 +75,10 @@ impl InventorySort {
             .get("debug")
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
+        self.button = settings
+            .get("hud_button")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
     }
 
     fn run(&mut self, g: Game) {
@@ -140,6 +163,28 @@ impl Mod for InventorySort {
         }
     }
 
+    fn has_hud(&self) -> bool {
+        self.button && self.game.is_some()
+    }
+
+    fn hud(&mut self, ui: &mut egui::Ui) {
+        let Some(g) = self.game else { return };
+        // SAFETY: resolved addresses of this build, on the game thread.
+        if self.pending || unsafe { g.can_sort_unfocused() }.is_err() {
+            return;
+        }
+        let Some(r) =
+            hud::gui_rect("inventory_rect").and_then(|p| hud::rect_to_screen(button_rect(p)))
+        else {
+            return;
+        };
+        let b = hud::button(ui, r, "Sort", egui::Color32::from_rgb(70, 62, 52));
+        if b.on_hover_text("Sort the inventory").clicked() {
+            log("Sort button clicked");
+            self.pending = true;
+        }
+    }
+
     fn on_input(&mut self, ev: &InputEvent) -> bool {
         let Some(g) = self.game else { return false };
         if !KEYS
@@ -195,8 +240,17 @@ mod tests {
         let d = manifest.defaults();
         assert_eq!(d["sort_key"].as_str(), Some("Z"));
         assert_eq!(d["sort_pad"].as_str(), Some(""));
+        assert_eq!(d["hud_button"].as_bool(), Some(true));
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 10);
+    }
+
+    #[test]
+    fn button_in_the_panel_corner() {
+        let panel = egui::Rect::from_min_size(egui::pos2(3.0, 3.0), egui::vec2(142.0, 257.0));
+        let b = button_rect(panel);
+        assert!(panel.contains_rect(b));
+        assert!(b.max.x > panel.max.x - 4.0 && b.min.y < panel.min.y + 4.0);
     }
 
     /// With `UNDERKEEP_DIR` set to a 1.0.5 install: every pattern matches

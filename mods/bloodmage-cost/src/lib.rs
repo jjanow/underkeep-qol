@@ -19,22 +19,29 @@
 //! neither function touches the inventory except through that scan.
 //!
 //! The mode is per hero, keyed `<hero_id>:<name>`, switched with a hotkey
-//! for the selected hero (a toast says the new mode), and kept in the save's
-//! sidecar.
+//! for the selected hero or by clicking the badge the mod draws on each
+//! Blood Mage's skill slot (a toast says the new mode), and kept in the
+//! save's sidecar.
 
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicUsize, Ordering};
 
+use uk_qol_runtime::egui;
 use uk_qol_runtime::guard;
 use uk_qol_runtime::host::{LoadCtx, Mod, ModSaveState};
 use uk_qol_runtime::hotkey;
+use uk_qol_runtime::hud;
 use uk_qol_runtime::input::InputEvent;
 use uk_qol_runtime::savehook::{self, PartyHero};
 use uk_qol_runtime::toast;
 
 const ID: &str = "bloodmage-cost";
 const TOGGLE_KEY: &str = "toggle_key";
+const HUD_BADGE: &str = "hud_badge";
+/// The badge: a square of this many GUI units in the skill slot's top-right
+/// corner (the slot is 29 units).
+const BADGE: f32 = 11.0;
 
 // Hero struct fields (1.0.5); the rest are in `savehook`.
 const HERO_HP: usize = 0xfc; // i32
@@ -130,6 +137,55 @@ static MODES: Mutex<Modes> = Mutex::new(Modes {
 
 fn modes() -> std::sync::MutexGuard<'static, Modes> {
     MODES.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn hud_badge(settings: &toml::Table) -> bool {
+    settings
+        .get(HUD_BADGE)
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true)
+}
+
+/// Switches Blood Mage `h` and says so (toast and log).
+fn toggle(h: &PartyHero) -> PayMode {
+    let m = modes().toggle(&h.key);
+    let name = h.key.split_once(':').map_or(h.key.as_str(), |(_, n)| n);
+    toast::show(match m {
+        PayMode::Bones => format!("{name} pays with bones (health when out of bones)"),
+        PayMode::Health => format!("{name} pays with health, keeping the bones"),
+    });
+    uk_qol_runtime::log(&format!(
+        "{ID}: hero {} ({}) now pays with {}; bones {}",
+        h.index,
+        h.key,
+        m.name(),
+        bones()
+    ));
+    m
+}
+
+/// The badge's text, colour and tooltip for a mode.
+fn badge(m: PayMode) -> (&'static str, egui::Color32, &'static str) {
+    match m {
+        PayMode::Bones => (
+            "B",
+            egui::Color32::from_rgb(150, 140, 110),
+            "Pays with bones (health when out of bones). Click: pay with health.",
+        ),
+        PayMode::Health => (
+            "HP",
+            egui::Color32::from_rgb(170, 30, 30),
+            "Pays with health, keeping the bones. Click: pay with bones.",
+        ),
+    }
+}
+
+/// The badge's rect in GUI space for a skill slot rect.
+fn badge_rect(slot: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(slot.max.x - BADGE, slot.min.y),
+        egui::vec2(BADGE, BADGE),
+    )
 }
 
 fn default_mode(settings: &toml::Table) -> PayMode {
@@ -337,7 +393,10 @@ unsafe extern "system" fn lose_hp(h: usize, amount: i32) -> usize {
 // ---------------------------------------------------------------------------
 // The mod
 
-pub struct BloodmageCost;
+pub struct BloodmageCost {
+    /// The `hud_badge` setting.
+    badge: bool,
+}
 
 impl Mod for BloodmageCost {
     fn id(&self) -> &'static str {
@@ -363,6 +422,7 @@ impl Mod for BloodmageCost {
         INV_COUNT.store(at("party_inventory_count")?, Ordering::Relaxed);
         SELECTED.store(at("selected_hero")?, Ordering::Relaxed);
         modes().default = Some(default_mode(cx.settings));
+        self.badge = hud_badge(cx.settings);
         let e = |e: uk_qol_runtime::hook::HookError| e.to_string();
         // SAFETY: each target is the start of the named function (verified
         // patterns); each detour has the same signature and ABI. The
@@ -392,6 +452,7 @@ impl Mod for BloodmageCost {
 
     fn on_settings(&mut self, settings: &toml::Table) {
         modes().default = Some(default_mode(settings));
+        self.badge = hud_badge(settings);
     }
 
     fn on_input(&mut self, ev: &InputEvent) -> bool {
@@ -408,20 +469,29 @@ impl Mod for BloodmageCost {
             }
             return false;
         }
-        let m = modes().toggle(&h.key);
-        let name = h.key.split_once(':').map_or(h.key.as_str(), |(_, n)| n);
-        toast::show(match m {
-            PayMode::Bones => format!("{name} pays with bones (health when out of bones)"),
-            PayMode::Health => format!("{name} pays with health, keeping the bones"),
-        });
-        uk_qol_runtime::log(&format!(
-            "{ID}: hero {} ({}) now pays with {}; bones {}",
-            h.index,
-            h.key,
-            m.name(),
-            bones()
-        ));
+        toggle(h);
         true
+    }
+
+    fn has_hud(&self) -> bool {
+        self.badge
+    }
+
+    fn hud(&mut self, ui: &mut egui::Ui) {
+        let Some(t) = hud::transform() else { return };
+        for h in savehook::party_heroes() {
+            if h.class != CLASS_BLOODMAGE {
+                continue;
+            }
+            let Some(slot) = hud::gui_rect(&hud::skill_slot_name(h.index)) else {
+                continue;
+            };
+            let (text, fill, tip) = badge(modes().get(&h.key));
+            let r = hud::button(ui, t.rect_to_points(badge_rect(slot)), text, fill);
+            if r.on_hover_text(tip).clicked() {
+                toggle(&h);
+            }
+        }
     }
 
     fn on_save(&mut self, state: &mut ModSaveState) {
@@ -435,7 +505,7 @@ impl Mod for BloodmageCost {
 
 /// Constructor passed to `uk_qol_runtime::start`.
 pub fn new() -> Box<dyn Mod> {
-    Box::new(BloodmageCost)
+    Box::new(BloodmageCost { badge: true })
 }
 
 #[cfg(test)]
@@ -448,8 +518,9 @@ mod tests {
         let m = new();
         let manifest = Manifest::parse(m.manifest()).unwrap();
         assert_eq!(manifest.id, m.id());
-        assert_eq!(manifest.settings.len(), 2);
+        assert_eq!(manifest.settings.len(), 3);
         assert_eq!(default_mode(&manifest.defaults()), PayMode::Bones);
+        assert!(hud_badge(&manifest.defaults()));
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 5);
     }
@@ -480,6 +551,16 @@ mod tests {
         assert_eq!(other.get("2:Brazkin"), PayMode::Bones);
         assert_eq!(other.get("3:Other"), PayMode::Health);
         assert_eq!(other.get("1:Gone"), PayMode::Bones);
+    }
+
+    #[test]
+    fn badge_in_the_slot_corner() {
+        let slot = egui::Rect::from_min_size(egui::pos2(525.0, 92.0), egui::vec2(29.0, 29.0));
+        let b = badge_rect(slot);
+        assert_eq!(b.max.x, slot.max.x);
+        assert_eq!(b.min.y, slot.min.y);
+        assert!(slot.contains_rect(b));
+        assert_ne!(badge(PayMode::Bones).0, badge(PayMode::Health).0);
     }
 
     #[test]

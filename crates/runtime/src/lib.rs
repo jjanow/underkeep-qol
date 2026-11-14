@@ -4,7 +4,8 @@
 //! It writes `uk_qol/uk_qol.log` in the game folder, logs which build of the
 //! game it loaded into, starts the mod host (`host`) and installs its own
 //! hooks (`corehooks`): save sidecars (`savehook`) and in-memory data
-//! patches (`datapatch`), and connects the host to the overlay (`bridge`).
+//! patches (`datapatch`), and connects the host to the overlay (`bridge`)
+//! and mod widgets to the game's HUD (`hud`).
 
 /// The overlay's egui, for mods that draw in the menu (`Mod::menu`).
 pub use egui;
@@ -19,6 +20,7 @@ pub mod guard;
 pub mod hook;
 pub mod host;
 pub mod hotkey;
+pub mod hud;
 pub mod i18n;
 pub mod iat;
 pub mod input;

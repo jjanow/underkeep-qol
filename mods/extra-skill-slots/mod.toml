@@ -17,6 +17,13 @@ label = "Extra slots"
 description = "How many extra skill slots each hero has."
 
 [[settings]]
+key = "hud_buttons"
+type = "bool"
+default = true
+label = "Buttons on the HUD"
+description = "Shows each hero's extra slots next to their skill slot: left-click casts, right-click assigns."
+
+[[settings]]
 key = "slot_1_key"
 type = "key"
 default = ""

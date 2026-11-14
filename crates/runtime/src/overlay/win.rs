@@ -411,6 +411,8 @@ unsafe extern "C" fn swap_hook(window: Window) -> bool {
 struct Gfx {
     /// The SDL GL context these objects belong to.
     context: usize,
+    /// Mod HUD widgets were drawn last frame.
+    hud_was_on: bool,
     gl: Arc<glow::Context>,
     caps: gl::Caps,
     painter: Option<egui_glow::Painter>,
@@ -480,6 +482,7 @@ fn frame(window: Window) {
             }
             *slot = Some(Gfx {
                 context,
+                hud_was_on: false,
                 gl: Arc::new(gl),
                 caps,
                 painter: None,
@@ -489,19 +492,46 @@ fn frame(window: Window) {
         }
         let g = slot.as_mut().expect("just set");
         let open = OPEN.load(Ordering::Relaxed);
-        if open || crate::toast::any() {
-            draw(api, window, g, open);
-        }
         let (mut pw, mut ph) = (0, 0);
         // SAFETY: the game's window.
         unsafe { (api.get_window_size_in_pixels)(window, &mut pw, &mut ph) };
+        crate::hud::set_window(pw, ph, pixels_per_point(ph));
+        let hud = !open && hud_wanted();
+        if g.hud_was_on && !hud {
+            // Clicks go back to the game.
+            if let Some(st) = state().as_mut() {
+                st.router.clear_hud();
+            }
+        }
+        g.hud_was_on = hud;
+        if open || hud || crate::toast::any() {
+            draw(api, window, g, open, hud);
+        }
         super::capture::maybe(&g.gl, pw, ph);
     });
 }
 
-/// Draws the menu (if `open`) and any toasts. With the menu closed it only
-/// paints: no input, text-input or cursor changes.
-fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
+/// The overlay's UI scale: 1 at 1080 lines and below (Steam Deck 800),
+/// larger above.
+fn pixels_per_point(ph: c_int) -> f32 {
+    (ph as f32 / 1080.0).max(1.0)
+}
+
+/// Whether to run the HUD pass: some mod draws on the HUD (or the layout
+/// outlines are on) and the game's plain HUD is up.
+fn hud_wanted() -> bool {
+    (crate::hud::debug() || host().is_some_and(|h| h.wants_hud())) && crate::hud::shown()
+}
+
+/// The egui layer of the mods' HUD widgets.
+fn hud_layer() -> egui::LayerId {
+    egui::LayerId::new(egui::Order::Middle, egui::Id::unique("uk_qol_hud"))
+}
+
+/// Draws the menu (if `open`), the mods' HUD widgets (if `hud`) and any
+/// toasts. Only the menu changes text-input or cursor state; the HUD gets
+/// mouse input through the router's hit test.
+fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
     let (mut w, mut h, mut pw, mut ph) = (0, 0, 0, 0);
     // SAFETY: the game's window.
     unsafe {
@@ -511,8 +541,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
     if w <= 0 || h <= 0 || pw <= 0 || ph <= 0 {
         return;
     }
-    // UI scale: 1 at 1080 lines and below (Steam Deck 800), larger above.
-    let ppp = (ph as f32 / 1080.0).max(1.0);
+    let ppp = pixels_per_point(ph);
     let to_points = (pw as f32 / w as f32) / ppp;
     let now = START.get_or_init(Instant::now).elapsed().as_secs_f64();
 
@@ -534,10 +563,12 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
 
     let mut sg = state();
     let st = sg.as_mut().expect("initialized by state()");
+    st.router.to_points = to_points;
     let events = if open {
-        st.router.to_points = to_points;
         st.router.tick(now);
         std::mem::take(&mut st.router.ui_events)
+    } else if hud {
+        std::mem::take(&mut st.router.hud_events)
     } else {
         Vec::new()
     };
@@ -549,7 +580,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
         max_texture_side: Some(painter.max_texture_side()),
         time: Some(now),
         events,
-        focused: open,
+        focused: open || hud,
         ..Default::default()
     };
     raw.viewports
@@ -561,11 +592,42 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool) {
     let out = g.egui.run_ui(raw, |ui| {
         if open {
             close = ui::menu(ui.ctx(), host.as_deref(), &mut st.router, &mut g.ui);
+        } else if hud {
+            let layer = hud_layer();
+            let screen = ui.ctx().content_rect();
+            egui::Area::new(layer.id)
+                .order(layer.order)
+                .fixed_pos(egui::Pos2::ZERO)
+                .movable(false)
+                .constrain(false)
+                .sense(egui::Sense::hover())
+                .show(ui.ctx(), |ui| {
+                    ui.set_clip_rect(screen);
+                    if crate::hud::debug() {
+                        crate::hud::draw_debug(ui);
+                    }
+                    if let Some(h) = host.as_deref() {
+                        h.hud(ui);
+                    }
+                });
         }
         crate::toast::draw(ui.ctx());
     });
-    // With the menu closed (only toasts drawn), input and text-input state
-    // are left alone.
+    if hud {
+        // What the router lets the HUD have next: the widgets that take
+        // clicks or drags.
+        let layer = hud_layer();
+        st.router.hud_hits = g.egui.viewport(|v| {
+            v.prev_pass
+                .widgets
+                .get_layer(layer)
+                .filter(|w| w.sense.senses_click() || w.sense.senses_drag())
+                .map(|w| w.interact_rect)
+                .collect()
+        });
+    }
+    // With the menu closed (HUD widgets and toasts), text-input and cursor
+    // state are left alone.
     if open {
         let wants_keyboard = g.egui.egui_wants_keyboard_input();
         st.router.ui_wants_keyboard = wants_keyboard;

@@ -2,7 +2,7 @@ id = "inventory-sort"
 name = "Inventory sort"
 version = "0.1.0"
 author = "underkeep-qol"
-description = "Sorts the party inventory with one key press."
+description = "Sorts the party inventory with one key press or the Sort button on the inventory panel."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
 game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
 enabled = true
@@ -27,6 +27,13 @@ type = "bool"
 default = true
 label = "Merge split stacks"
 description = "Before sorting, merge stackable items of the same kind that are in separate stacks."
+
+[[settings]]
+key = "hud_button"
+type = "bool"
+default = true
+label = "Sort button on the inventory"
+description = "Shows a Sort button in the inventory panel's top-right corner while sorting is possible."
 
 [[settings]]
 key = "debug"

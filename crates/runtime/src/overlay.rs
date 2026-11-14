@@ -168,6 +168,14 @@ pub trait OverlayHost: Send + Sync {
     /// Draws the mod's own controls (`Mod::menu`) in its expanded section,
     /// below the settings. Only called for active mods.
     fn mod_menu(&self, _mod_id: &str, _ui: &mut egui::Ui) {}
+    /// Whether any active mod draws HUD widgets now (`Mod::has_hud`).
+    /// Called every frame while the menu is closed and the HUD is up.
+    fn wants_hud(&self) -> bool {
+        false
+    }
+    /// Draws the active mods' HUD widgets (`Mod::hud`) into `ui`, a
+    /// window-sized area in the HUD layer (see [`crate::hud`]).
+    fn hud(&self, _ui: &mut egui::Ui) {}
 }
 
 /// Receives each key / gamepad press and release while the menu is closed

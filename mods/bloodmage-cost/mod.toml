@@ -23,3 +23,10 @@ choices = ["bones", "health"]
 default = "bones"
 label = "Blood Mages pay with"
 description = "For Blood Mages you haven't switched yet. bones: bones first, health when out of bones (the game's rule). health: always health, keep the bones."
+
+[[settings]]
+key = "hud_badge"
+type = "bool"
+default = true
+label = "Badge on the skill slot"
+description = "Shows each Blood Mage's mode on their skill slot (B: bones, HP: health); click it to switch."
