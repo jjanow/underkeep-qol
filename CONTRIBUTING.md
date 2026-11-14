@@ -26,16 +26,131 @@ build test inputs by hand otherwise (see `crates/dft` for an example).
 
 ## Adding a mod
 
-Built-in mods live in `mods/<name>/` and are compiled into the runtime.
+Built-in mods live in `mods/<id>/`, each a crate named `uk-qol-mod-<id>`
+(see `mods/skip-logos`), and are compiled into the runtime:
 
-1. `mod.toml`: name, version, description, supported game builds, conflicts,
-   and the settings with their defaults (the overlay draws a form from them).
+1. `mod.toml`: the manifest (below).
 2. `patterns.toml`: every function or address the mod needs, as a named byte
-   pattern, with a comment saying what it is and how it was found.
+   pattern, with a comment saying what it is and how it was found (below).
 3. `patches/` (optional): declarative data patches for the game's definition
-   files, applied in memory.
+   files, applied in memory (see [Data patches](#data-patches)).
 4. The code: a type implementing the runtime's `Mod` trait (`on_load`,
-   `on_unload`, `on_frame`, `on_input`, `on_save`, `on_load_save`).
+   `on_unload`, `on_frame`, `on_input`, `on_settings`, `on_save`,
+   `on_load_save`), whose `manifest()` and `patterns()` return the two files
+   with `include_str!`, and a `pub fn new() -> Box<dyn Mod>`.
+5. Add the crate to the workspace members and `[workspace.dependencies]` in
+   the root `Cargo.toml`, to `crates/proxy/Cargo.toml`, and its `new` to
+   `BUILTIN` in `crates/proxy/src/lib.rs`; add `-p uk-qol-mod-<id>` to the
+   Windows clippy line in `.github/workflows/build.yml`.
+
+### `mod.toml`
+
+```toml
+id = "weapon-swap"            # lowercase letters, digits, single dashes; = Mod::id()
+name = "Weapon swap"          # shown in the overlay and manager
+version = "0.1.0"
+author = "..."                # optional
+description = "..."           # optional
+# Exe SHA-256s (uk-qol report) the mod was tested on, or "any" for a mod
+# that doesn't depend on the exe. Informational: on other builds the mod
+# still loads when every required pattern resolves, marked "not tested".
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+conflicts = ["other-mod"]     # optional: never active at the same time
+dependencies = ["core-mod"]   # optional: must be active first
+enabled = true                # optional (default true): on unless the user turns it off
+
+[[settings]]                  # one table per setting, in display order
+key = "swap_costs_turn"       # lowercase, digits, `_`; not `enabled`
+type = "bool"                 # bool | int | float | string | enum | key
+default = true
+label = "Swapping costs a turn"
+description = "..."           # optional
+
+[[settings]]
+key = "slots"
+type = "int"
+default = 3
+min = 1                       # int and float only, optional, inclusive
+max = 5
+label = "Extra slots"
+
+[[settings]]
+key = "cost"
+type = "enum"
+choices = ["bones", "health"] # enum only
+default = "bones"
+label = "Spell cost"
+
+[[settings]]
+key = "sort_key"
+type = "key"                  # hotkey: "" (unbound), "S", "Shift+1",
+default = "S"                 # "Ctrl+Alt+F5", "Pad:North"
+label = "Sort hotkey"
+```
+
+Unknown keys are errors, so typos don't pass silently. Every default is
+checked against its type and limits. A mod with one on/off switch declares no
+settings: `enabled` is that switch. The user's values come from
+`uk_qol/config.toml` (`[mods.<id>]`); a value of the wrong type, out of range,
+not among the choices or not a valid hotkey is logged and the default used.
+
+### `patterns.toml`
+
+One table per pattern; the name is what the mod looks up in
+`LoadCtx::patterns` (an RVA; add `LoadCtx::base` for the address).
+
+```toml
+# (Example.) The function that starts the startup logo animation. Found from the xref
+# to the "anim_startup_logo" string; this is the call right after it.
+[start_logo]
+pattern = "48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 84 C0"
+offset = 7                    # optional: added to the match (may be negative)
+call = true                   # optional: then follow the call/jmp rel32 there
+# rip = { disp = 3, len = 7 } # or: then take the RIP-relative operand's
+#                             # target (disp32 at +disp, instruction len bytes)
+section = ".text"             # optional: default is every executable section
+optional = false              # optional: a missing optional pattern doesn't
+                              # disable the mod; it's just absent from the map
+
+# Per-build alternatives: a list of candidates instead of one pattern.
+[menu_state]
+[[menu_state.candidates]]
+pattern = "48 89 05 ?? ?? ?? ?? C6 05"
+rip = { disp = 3, len = 7 }
+builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+[[menu_state.candidates]]
+pattern = "48 89 1D ?? ?? ?? ?? C6 05"
+rip = { disp = 3, len = 7 }
+```
+
+- A pattern must match **exactly once**; zero or several matches is a miss.
+  Patterns can't start with a wildcard.
+- Resolution order: the match, plus `offset`, then `call` or `rip`.
+- Candidates tagged with the running build (`builds`) are tried first and the
+  first that resolves wins. Otherwise every candidate is tried, and those
+  that resolve must agree on the address: two different answers are a miss,
+  never a guess.
+- If any required pattern misses, the mod is off with status "patterns not
+  found" and the log has each pattern's reason. Patterns are resolved at
+  start, before any mod's hooks change the code.
+- `uk_qol/patterns/<id>.toml` in the game folder, if present, replaces the
+  built-in file whole (the manager downloads updated patterns there). If it
+  doesn't parse, the log says so and the built-in file is used.
+
+### Lifecycle
+
+- At start (outside safe mode) mods load in dependency order: `on_load`
+  registers hooks on `LoadCtx::hooks`; the host enables them after `on_load`
+  returns Ok. An Err turns the mod off with that reason.
+- Turning a mod off in the overlay removes its hooks, then calls
+  `on_unload`; mods that depend on it are unloaded first. Turning it on again
+  calls `on_load` again with a fresh hook set, so `on_load` must work more
+  than once.
+- Every callback runs inside `guard::call`; a panic turns the mod off for the
+  session. Detours wrap their body in `guard::call_or(id, body, || original(...))`.
+- Statuses: active, off, off (safe mode), patterns not found, waiting (a
+  dependency isn't active or a conflicting mod is; retried when that
+  changes), failed.
 
 A mod must:
 
@@ -43,7 +158,53 @@ A mod must:
   `uk_qol/`. State it has to keep goes in the `<save>.qol.toml` sidecar;
 - leave the game playable when it's turned off or when its patterns aren't
   found;
-- undo all its hooks and patches in `on_unload`.
+- undo all its hooks and patches in `on_unload` (the host removes the hooks
+  registered on `LoadCtx::hooks` itself).
+
+## Data patches
+
+A patch changes one of the game's definition documents (the DfT files in
+`base/*.txt.rfile`) in memory. It is a TOML file in the mod's `patches/`
+folder, read by `dft::patch::Patch`:
+
+```toml
+# The document, by the game's name for it: base/def_def_skill.txt.rfile is
+# "def/def_skill.txt" (see the include list in def/def.txt).
+file = "def/def_skill.txt"
+
+[[op]]
+set = "hud_skill_slot_1.pos[0]"   # change an existing value
+value = 120
+
+[[op]]
+add = "my_record"                 # a new entry; fails if it already exists
+value = { parent = "engine_item", size = [1, 2] }
+
+[[op]]
+add = "my_record.size[]"          # append to a list ([n] inserts at n)
+value = 3
+
+[[op]]
+remove = "old_record.unused"      # in a list, later items move up
+```
+
+- **Paths** are names joined by `.`, with list positions in brackets:
+  `a.b[2].c`. Quote a name that contains `.`, `[`, `]`, `"` or spaces:
+  `"odd.name".x` (`\"` and `\\` escape inside quotes). `[]` means "after the
+  last item" and is only allowed at the end of an `add` path.
+- **Values:** integer → int (must fit 32 bits), float → float (stored as
+  f32), `true`/`false` → int 1/0, string → string (added to the document's
+  string table if new), array → list, table → table of named entries. TOML
+  sorts a table's keys, so entries added from an inline table are in key
+  order.
+- **`set` keeps the type** of the value it replaces: an int takes an integer
+  or bool, a float takes a float or an integer, a string a string, and a
+  table takes a table or an array and is replaced whole. Anything else is a
+  type-mismatch error.
+- **All or nothing:** if any op fails, the document is left unchanged and
+  the error names the op, its path and the cause, for example
+  ``op 2 (remove hud.q): path not found: no `hud.q` ``.
+- Setting a value to what it already is changes nothing, byte for byte.
 
 ## Updating patterns after a game patch
 

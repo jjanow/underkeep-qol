@@ -1,6 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/proxy", "crates/runtime", "crates/dft", "crates/manager"]
+members = [
+    "crates/proxy",
+    "crates/runtime",
+    "crates/dft",
+    "crates/manager",
+    "mods/skip-logos",
+]
 
 [workspace.package]
 version = "0.1.0"
@@ -11,6 +17,7 @@ repository = "https://github.com/jjanow/underkeep-qol"
 [workspace.dependencies]
 uk-qol-runtime = { path = "crates/runtime" }
 uk-qol-dft = { path = "crates/dft" }
+uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs
