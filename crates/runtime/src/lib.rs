@@ -88,3 +88,82 @@ pub fn log(msg: &str) {
         let _ = f.flush();
     }
 }
+
+// Session state for safe mode and crash triage (`safe`). The mod host calls
+// `begin_session` before loading mods and `log_active_mods` before enabling
+// their hooks; the proxy calls `stop` on process exit.
+
+static SESSION_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+static CRASHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Starts the safe-mode session in `uk_qol/` (crash counter, running marker,
+/// Shift check) and logs how the previous session ended. Call once, from the
+/// runtime thread, before loading mods; load none unless the result is
+/// `SafeMode::Off`. Without this call [`stop`] does nothing.
+pub fn begin_session() -> safe::SafeMode {
+    let Some(dir) = data_dir() else {
+        return safe::SafeMode::Off;
+    };
+    let s = safe::begin_session_with(&dir, safe::shift_held());
+    if let Some(prev) = &s.previous_abnormal {
+        let mods = if prev.mods.is_empty() {
+            "none".to_owned()
+        } else {
+            prev.mods.join(", ")
+        };
+        log(&format!(
+            "previous session (pid {}) ended abnormally with mods: {mods} \
+             ({} abnormal exits in a row)",
+            prev.pid, s.abnormal_exits
+        ));
+    }
+    match &s.mode {
+        safe::SafeMode::Off => {}
+        safe::SafeMode::Crashes(n) => log(&format!(
+            "safe mode: the game exited abnormally {n} times in a row; all mods off"
+        )),
+        safe::SafeMode::ShiftHeld => log("safe mode: Shift held at start; all mods off"),
+    }
+    let _ = SESSION_DIR.set(dir);
+    s.mode
+}
+
+/// Logs `active mods: a, b` and records them in the session file, so that a
+/// crash names them on the next start. Call before enabling their hooks.
+pub fn log_active_mods(ids: &[&str]) {
+    let list = if ids.is_empty() {
+        "none".to_owned()
+    } else {
+        ids.join(", ")
+    };
+    log(&format!("active mods: {list}"));
+    if let Some(dir) = SESSION_DIR.get() {
+        safe::note_active_mods(dir, ids);
+    }
+}
+
+/// Marks this session as crashed: [`stop`] then leaves the running marker, so
+/// the next start counts an abnormal exit even if the process goes on to exit
+/// through `ExitProcess` (e.g. a crash handler that exits "normally").
+pub fn note_crash() {
+    CRASHED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Clean process exit, called by the proxy's `DllMain` on
+/// `DLL_PROCESS_DETACH` during `ExitProcess`. Runs under the loader lock with
+/// every other thread already gone: only file I/O, never waits on a lock
+/// (another thread may have died holding it). Ends the safe-mode session
+/// unless [`begin_session`] never ran or [`note_crash`] was called.
+pub fn stop() {
+    let Some(dir) = SESSION_DIR.get() else { return };
+    if CRASHED.load(std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    safe::end_session(dir);
+    if let Ok(mut guard) = LOG.try_lock()
+        && let Some(f) = guard.as_mut()
+    {
+        let _ = writeln!(f, "clean exit");
+        let _ = f.flush();
+    }
+}
