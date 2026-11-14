@@ -93,7 +93,8 @@ Check items off as they land; add findings under the item they belong to.
   - 1.0.5 (Steam, 2026-11-11): `d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4`.
   - Saves record the version they were made with (the log says "Game
     version: 1.0.3" when loading one).
-  - The log line hasn't been seen in game yet; tested against the exe on disk.
+  - Seen in game (Proton, 2026-11-14): the log shows the 1.0.5 hash above and
+    `game version 1.0.5`, stamped in the same second as the load line.
 - [x] Byte-pattern scanner with wildcards, unique-match rule, RIP-relative
       and call-target resolution helpers. Unit tests against the current exe.
   - `runtime::pe` (minimal PE32+ reader; `map_file` lays a file out as
