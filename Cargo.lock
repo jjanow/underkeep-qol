@@ -3479,6 +3479,7 @@ dependencies = [
  "egui",
  "egui_glow",
  "iced-x86",
+ "png",
  "serde",
  "sha2",
  "toml",

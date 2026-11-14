@@ -1,5 +1,5 @@
-//! The mod's own state, independent of the game: what each hero's ranged
-//! slot holds, and how it goes into and comes out of a save's sidecar.
+//! The mod's own state, independent of the game: what each hero's second
+//! weapon slot holds, and how it goes into and comes out of a save's sidecar.
 //!
 //! A weapon in the slot is kept serialized (def name, count, cooldown: all
 //! that the game itself saves of an item, see `Item::SaveState`); the game
@@ -66,7 +66,7 @@ pub fn valid_def(s: &str) -> bool {
 /// One hero's part of the mod's state.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct HeroSlot {
-    /// The weapon in the ranged slot (after a swap: the one swapped out).
+    /// The weapon in the second slot (after a swap: the one swapped out).
     pub stored: Option<StoredItem>,
     /// The def of the shield a two-handed weapon pushed into the inventory
     /// on the last swap; put back on when a one-handed weapon comes back.
@@ -94,7 +94,8 @@ pub struct State {
     pub parked: Vec<Parked>,
 }
 
-/// Sidecar keys.
+/// Sidecar keys. `ranged` is the second slot's (named when it took only
+/// ranged weapons; kept so existing sidecars still load).
 const RANGED: &str = "ranged";
 const SHIELD: &str = "shield";
 const PARTY_ITEMS: &str = "party_items";
@@ -188,7 +189,9 @@ impl State {
                 None => None,
                 Some(Ok(v)) => Some(v),
                 Some(Err(e)) => {
-                    warn(format!("hero {key}: ranged slot unreadable ({e}); ignored"));
+                    warn(format!(
+                        "hero {key}: second weapon slot unreadable ({e}); ignored"
+                    ));
                     None
                 }
             };
@@ -202,7 +205,7 @@ impl State {
                 None => {
                     if let Some(item) = stored {
                         warn(format!(
-                            "hero {key} isn't in the party; their ranged weapon is parked"
+                            "hero {key} isn't in the party; their second-slot weapon is parked"
                         ));
                         s.parked.push(Parked {
                             key: key.clone(),
@@ -269,8 +272,8 @@ pub fn identity(keys: &[Option<String>; HEROES], party_items: &str) -> String {
     out
 }
 
-/// A fingerprint of the party's items (inventory and equipment; ranged
-/// slots not included): def names with counts, order-independent, as hex.
+/// A fingerprint of the party's items (inventory and equipment; second
+/// weapon slots not included): def names with counts, order-independent, as hex.
 /// Equal for a save and the same save loaded back.
 pub fn fingerprint(items: &BTreeMap<String, i64>) -> String {
     // FNV-1a over the sorted list.

@@ -26,7 +26,7 @@ Underkeep has no official mod support. This project adds it in a way that:
 |---|---|
 | `bloodmage-cost` | Choose how Blood Mages pay for spells: bones, or their own health. |
 | `inventory-sort` | Sort an inventory with one key press or button. |
-| `weapon-swap` | A ranged-weapon slot on each hero's character sheet and a key to swap to it. |
+| `weapon-swap` | A second weapon slot on each hero's character sheet and a key to swap to it. |
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 
@@ -127,13 +127,13 @@ mod. The overlay edits the same file.
 ### 4. Save safety
 
 - The game's save files are never rewritten by a mod.
-- State a mod must keep (the weapon in a ranged slot, extra skill slot
+- State a mod must keep (the weapon in a second weapon slot, extra skill slot
   assignments, per-hero toggles) is written to a sidecar file next to the
   save, keyed by hero, whenever the game saves (menu, quick save,
   autosave), and read when it loads. Deleting a save in game deletes its
   sidecar; a new game starts every mod empty.
 - Saves always load without the mods, with one exception the player must
-  know about: **an item in a ranged slot exists only in the sidecar file.**
+  know about: **an item in a second weapon slot exists only in the sidecar file.**
   If the mods are removed, or the sidecar is lost (a deleted file, a
   computer that plays the save without the mods and Steam Cloud), that
   weapon is gone. See [`weapon-swap`](#weapon-swap).
@@ -159,7 +159,7 @@ file, nothing else to install, dark and light mode.
 - Finds Steam installs on its own (Steam libraries, Flatpak, Proton, Wine
   bottles), or lets you pick the folder.
 - **Install / Uninstall** buttons. Before uninstalling, it warns that any
-  weapon still in a ranged slot will be lost and tells the player to move
+  weapon still in a second weapon slot will be lost and tells the player to move
   them to the inventory in game first. It doesn't move them itself. On Linux it shows the launch option to
   paste, with a copy button, and checks whether it's set in Steam.
 - A mod list with on/off switches and each mod's settings.
@@ -181,7 +181,7 @@ uk-qol enable  <mod>           # same as toggling in the overlay
 uk-qol disable <mod>
 uk-qol config  <mod> <key> <value>
 uk-qol uninstall               # remove everything the installer added (warns
-                               # about weapons left in ranged slots first)
+                               # about weapons left in second slots first)
 uk-qol report                  # bundle log, config and build info for a bug report
 ```
 
@@ -221,16 +221,19 @@ Sorts the open inventory (party stash or a hero's bag).
 
 ### `weapon-swap`
 
-Adds a **ranged slot** to each hero's character sheet, left of the helmet
-slot. It holds one ranged weapon (bow or other weapon the game
-flags as ranged). A key swaps it with the equipped weapon in one action, e.g.
-sword ⇄ bow. Keys: **Shift+1..4** for heroes 1–4, plus one for the selected
-hero; all rebindable.
+Adds a **second weapon slot** to each hero's character sheet, left of the
+helmet slot. It holds one spare weapon of any kind: a bow, a sword, a
+two-handed weapon. A key swaps it with the equipped weapon in one action:
+sword ⇄ bow, sword and shield ⇄ two-hander, one melee weapon ⇄ another.
+Keys: **Shift+1..4** for heroes 1–4, plus one for the selected hero; all
+rebindable.
 
-- Move a ranged weapon into the slot like into any equipment slot (the game
-  picks items up with a click and drops them with the next). Requirements
-  are checked when it's swapped in, like a normal equip.
-- The weapon in the ranged slot gives no stats until it's swapped in.
+- Move a weapon into the slot like into any equipment slot (the game picks
+  items up with a click and drops them with the next). Requirements are
+  checked when it's swapped in, like a normal equip.
+- The weapon in the second slot gives no stats until it's swapped in.
+- There is no second shield slot: the shield only has to move for a
+  two-handed weapon, and the swap handles that (below).
 - **In combat, a swap costs the hero's turn** by default. Setting:
   `swap_costs_turn = true | false`. Outside combat it's always free.
 - The game's save format has no room for this slot, so the weapon in it is
@@ -240,8 +243,9 @@ How it works now (0.1.0; tested in game 1.0.5 with a gamepad, mouse and
 keyboard):
 
 - On the character sheet the slot sits left of the helmet slot, drawn like
-  the game's empty slots with a bow silhouette (setting `sheet_slot`). Click
-  it with a bow or sling on the cursor (picked up from the inventory or a
+  the game's empty weapon slot (its own sword icon, read from your game
+  files) with a Roman numeral **II** in the corner (setting `sheet_slot`).
+  Click it with a weapon on the cursor (picked up from the inventory or a
   hand) to put it in; a weapon already there goes to the inventory. Click
   the filled slot to pick its weapon up, then click the inventory panel
   (moves it there) or the weapon slot (swaps); a click anywhere else puts
@@ -249,22 +253,23 @@ keyboard):
   the stored weapon's initials (no item icons) and turns green or red while
   an item that fits or doesn't is on the cursor.
 - With a gamepad (no mouse cursor) the same is in the mod's section of the
-  overlay menu: per hero, **Put the bow in hand in the slot**, **Put *item*
-  in the slot** (for each bow or sling in the inventory), **Swap now** and
+  overlay menu: per hero, **Put the weapon in hand in the slot**, **Put
+  *item* in the slot** (for each weapon in the inventory), **Swap now** and
   **Move to inventory**. The slot can always be emptied back into the
   inventory there. A hero with a filled slot also gets a small button on
   their weapon hand slot on the HUD, showing the stored weapon's initials;
   clicking it swaps (setting `hud_button`).
 - A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
-  next swap brings it back. One of the two is always a bow or sling; items
-  that stack and quest items never go in.
+  next swap brings it back. Only weapons go in; items that stack and quest
+  items never do.
 - The swap goes through the game's own equip function, as when equipping
   from the inventory: class checks, the item's equip scripts, stats and HUD
   update like a manual equip. A weapon the hero can't use stays where it
   was, with nothing lost.
-- A two-handed bow pushes the shield into the inventory, as a manual equip
-  does. Swapping back to a one-handed weapon puts that shield back on if it
-  is still in the inventory.
+- A two-handed weapon pushes the shield into the inventory, as a manual
+  equip does. Swapping back to a one-handed weapon puts that shield back on
+  if it is still in the inventory. Between two one-handed weapons the
+  shield stays on.
 - In combat (the game's own "battle" check) a swap needs the hero to be able
   to act and the monsters not to be moving, then ends that hero's turn
   (`swap_costs_turn`) through the turn queue's "hero is done" action: the
@@ -280,10 +285,10 @@ keyboard):
 and in the manager before uninstalling):
 
 ```
-A weapon in a ranged slot is kept by the mod, not by the game.
+A weapon in a second weapon slot is kept by the mod, not by the game.
 If you remove the mod, reinstall the game, play the save on another computer,
 or the mod's file next to your save is lost, that weapon is gone for good.
-Before uninstalling, move every ranged-slot weapon back to your inventory.
+Before uninstalling, move every second-slot weapon back to your inventory.
 ```
 
 The first-use notice must be acknowledged once per install; it can be

@@ -13,6 +13,7 @@ name = "uk_qol_runtime"
 egui = { version = "0.37", default-features = false, features = ["default_fonts"] }
 egui_glow = { version = "0.37", default-features = false }
 # Length decoding and relocation of hooked prologues (hook::x64); no formatters.
+png = "0.18.1"
 iced-x86 = { version = "1.22.0", default-features = false, features = ["std", "decoder", "block_encoder"] }
 serde = { version = "1.0.229", features = ["derive"] }
 sha2 = "0.11.1"

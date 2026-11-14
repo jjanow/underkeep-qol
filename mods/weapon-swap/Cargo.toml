@@ -1,6 +1,6 @@
 [package]
 name = "uk-qol-mod-weapon-swap"
-description = "Underkeep QoL mod: a ranged-weapon slot per hero and a key to swap to it"
+description = "Underkeep QoL mod: a second weapon slot per hero and a key to swap to it"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

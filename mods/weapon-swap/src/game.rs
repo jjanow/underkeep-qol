@@ -38,12 +38,11 @@ const OBJECT_DEF_NAME: usize = 0x78;
 const ITEM_COUNT: usize = 0xd0;
 const ITEM_COOLDOWN: usize = 0xe8;
 const ITEM_TYPE: usize = 0x100;
-const ITEM_WEAPON_TYPE: usize = 0x120;
 const ITEM_TWO_HANDED: usize = 0x430;
 const ITEM_STACKABLE: usize = 0x432;
 const ITEM_QUEST: usize = 0x433;
+/// Item type 1: weapons (swords, daggers, maces, axes, staves, bows).
 const TYPE_WEAPON: i32 = 1;
-const WEAPON_BOW: i32 = 5;
 
 // Inventory.
 const INV_COUNT: usize = 0x08;
@@ -182,7 +181,8 @@ pub struct ItemInfo {
     pub def: String,
     pub count: i32,
     pub cooldown: i32,
-    pub bow: bool,
+    /// A weapon (fits the weapon hand and the second weapon slot).
+    pub weapon: bool,
     pub two_handed: bool,
     pub stackable: bool,
     pub quest: bool,
@@ -197,7 +197,7 @@ impl ItemInfo {
         }
     }
 
-    /// Why this item can't go into (or through) the ranged slot, if so.
+    /// Why this item can't go into (or through) the second weapon slot, if so.
     pub fn slot_problem(&self) -> Option<&'static str> {
         if self.stackable {
             Some("it stacks")
@@ -376,8 +376,7 @@ impl Game {
                 def,
                 count: rd(a + ITEM_COUNT),
                 cooldown: rd(a + ITEM_COOLDOWN),
-                bow: rd::<i32>(a + ITEM_TYPE) == TYPE_WEAPON
-                    && rd::<i32>(a + ITEM_WEAPON_TYPE) == WEAPON_BOW,
+                weapon: rd::<i32>(a + ITEM_TYPE) == TYPE_WEAPON,
                 two_handed: rd::<u8>(a + ITEM_TWO_HANDED) != 0,
                 stackable: rd::<u8>(a + ITEM_STACKABLE) != 0,
                 quest: rd::<u8>(a + ITEM_QUEST) != 0,
@@ -491,17 +490,11 @@ impl Game {
         let r_info = unsafe { self.item_info(r) };
         let r_ok = r_info
             .as_ref()
-            .is_some_and(|ri| ri.slot_problem().is_none());
-        let bow_involved =
-            r_info.as_ref().is_some_and(|ri| ri.bow) || w_info.as_ref().is_some_and(|wi| wi.bow);
-        if !r_ok || !bow_involved {
+            .is_some_and(|ri| ri.weapon && ri.slot_problem().is_none());
+        if !r_ok {
             // SAFETY: ours, not handed over.
             unsafe { self.take(r) };
-            return Err(if r_ok {
-                "one of the two weapons must be a bow".into()
-            } else {
-                format!("the stored {} can't be equipped", stored.def)
-            });
+            return Err(format!("the stored {} can't be equipped", stored.def));
         }
         // Equip it as from the inventory panel: into the inventory first,
         // then the panel's own call (checks, scripts, stats, animation).
@@ -562,7 +555,7 @@ impl Game {
     }
 
     /// Takes inventory item `it` (expected def `def`) out of the game into
-    /// a stored form. Only bows.
+    /// a stored form. Only weapons.
     pub fn store_from_inventory(&self, it: Item, def: &str) -> Result<StoredItem, String> {
         if !self.in_inventory(it) {
             return Err(format!("{def} is no longer in the inventory"));
@@ -572,11 +565,11 @@ impl Game {
         if info.def != def {
             return Err(format!("{def} is no longer in the inventory"));
         }
-        if !info.bow {
-            return Err(format!("{def} isn't a ranged weapon"));
+        if !info.weapon {
+            return Err(format!("{def} isn't a weapon"));
         }
         if let Some(p) = info.slot_problem() {
-            return Err(format!("{def} can't go in the ranged slot: {p}"));
+            return Err(format!("{def} can't go in the second weapon slot: {p}"));
         }
         let s = info.stored();
         // SAFETY: in the inventory.
@@ -587,17 +580,20 @@ impl Game {
         Ok(s)
     }
 
-    /// Moves hero `i`'s bow in hand to the inventory (the game's unequip),
+    /// Moves hero `i`'s weapon in hand to the inventory (the game's unequip),
     /// then stores it.
     pub fn store_equipped(&self, i: usize) -> Result<StoredItem, String> {
         let w = self.equipped(i, SLOT_WEAPON);
         // SAFETY: the equipped weapon.
         let info = unsafe { self.item_info(w) }.ok_or("no weapon in hand")?;
-        if !info.bow {
-            return Err(format!("{} isn't a ranged weapon", info.def));
+        if !info.weapon {
+            return Err(format!("{} isn't a weapon", info.def));
         }
         if let Some(p) = info.slot_problem() {
-            return Err(format!("{} can't go in the ranged slot: {p}", info.def));
+            return Err(format!(
+                "{} can't go in the second weapon slot: {p}",
+                info.def
+            ));
         }
         // SAFETY: a live hero; mode 1 = as from the character sheet.
         unsafe { (self.unequip)(self.hero(i) as *mut u8, SLOT_WEAPON, MODE_PANEL, 1) };

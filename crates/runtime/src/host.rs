@@ -1627,7 +1627,7 @@ mod tests {
             name = "Weapon swap"
             version = "1.2.0"
             author = "someone"
-            description = "A ranged slot."
+            description = "A second weapon slot."
             game_builds = ["{}"]
             conflicts = ["other-swap"]
             dependencies = ["core-lib"]

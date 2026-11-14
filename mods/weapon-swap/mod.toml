@@ -2,7 +2,7 @@ id = "weapon-swap"
 name = "Weapon swap"
 version = "0.1.0"
 author = "underkeep-qol"
-description = "A ranged slot per hero and a key that swaps it with the weapon in hand (sword and bow)."
+description = "A second weapon slot per hero and a key that swaps it with the weapon in hand (any two weapons: sword and bow, sword and shield and a two-hander)."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
 game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
 enabled = true
@@ -12,7 +12,7 @@ key = "swap_hero_1"
 type = "key"
 default = "Shift+1"
 label = "Swap hero 1"
-description = "Swaps hero 1's weapon in hand with the one in their ranged slot."
+description = "Swaps hero 1's weapon in hand with the one in their second weapon slot."
 
 [[settings]]
 key = "swap_hero_2"
@@ -51,11 +51,11 @@ key = "hud_button"
 type = "bool"
 default = true
 label = "Swap button on the HUD"
-description = "Shows a small button with the stored weapon's initials on the weapon hand slot of each hero with a filled ranged slot; click it to swap."
+description = "Shows a small button with the stored weapon's initials on the weapon hand slot of each hero with a filled second weapon slot; click it to swap."
 
 [[settings]]
 key = "sheet_slot"
 type = "bool"
 default = true
-label = "Ranged slot on the character sheet"
-description = "Shows the ranged slot on the character sheet, left of the helmet slot: click it with a bow on the cursor to put the bow in; click it to pick its weapon up, then click the inventory or the weapon slot. Right-click moves it to the inventory."
+label = "Second weapon slot on the character sheet"
+description = "Shows the second weapon slot (a sword icon marked II) on the character sheet, left of the helmet slot: click it with a weapon on the cursor to put the weapon in; click it to pick its weapon up, then click the inventory or the weapon slot. Right-click moves it to the inventory."

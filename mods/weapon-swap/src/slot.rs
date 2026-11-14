@@ -1,11 +1,13 @@
-//! The ranged slot on the character sheet: where it goes and how it looks.
+//! The second weapon slot on the character sheet: where it goes and how it
+//! looks.
 //!
 //! Positions are in the game's GUI space (one unit is one pixel of the
 //! game's art), from the sheet's own equipment slot rects, so the slot
 //! follows the sheet at every window size. It is drawn in the style of the
 //! game's empty slots: a dark square with a shadowed top-left edge and a
-//! lighter bottom-right one, and a grey-blue silhouette (here a bow, drawn
-//! by the mod pixel by pixel) outlined in a darker shade.
+//! lighter bottom-right one. Its icon is the game's own empty-weapon-slot
+//! sword (read from the player's install at run time; no game art in the
+//! repo) with a Roman numeral "II" drawn by the mod in the same palette.
 
 use uk_qol_runtime::egui::{self, Color32, Pos2, Rect, Vec2};
 use uk_qol_runtime::hud;
@@ -18,7 +20,6 @@ pub const WEAPON: usize = 4;
 pub const FILL: Color32 = Color32::from_rgb(28, 28, 33);
 const SHADOW: Color32 = Color32::from_rgb(0, 0, 0);
 const BEVEL: Color32 = Color32::from_rgb(63, 63, 65);
-const SILHOUETTE: Color32 = Color32::from_rgb(45, 45, 57);
 const SILHOUETTE_EDGE: Color32 = Color32::from_rgb(15, 15, 27);
 /// Outline while an item that fits is on the cursor (like the game's).
 pub const FITS: Color32 = Color32::from_rgb(70, 200, 70);
@@ -27,7 +28,7 @@ pub const HOVER: Color32 = Color32::from_rgb(110, 110, 120);
 /// The fill behind a stored weapon's label.
 pub const STORED: Color32 = Color32::from_rgb(60, 95, 50);
 
-/// Where the ranged slot goes: the size of the helmet slot, on its row,
+/// Where the second weapon slot goes: the size of the helmet slot, on its row,
 /// in the leftmost column of the sheet's slots (left of the helmet), or
 /// one slot pitch left of the helmet if that column isn't free. If neither
 /// fits, beside the weapon slot. `slots` are the sheet's equipment slot
@@ -59,7 +60,7 @@ pub fn place(slots: &[Option<Rect>]) -> Option<Rect> {
     place_beside(weapon, &all)
 }
 
-/// Gap between the weapon slot and the ranged slot, in GUI units.
+/// Gap between the weapon slot and the second slot, in GUI units.
 const GAP: f32 = 2.0;
 
 /// The fallback: the size of the weapon slot, beside it (below, left,
@@ -114,84 +115,64 @@ pub fn paint_frame(p: &egui::Painter, t: &hud::Transform, gui: Rect, outline: Op
     }
 }
 
-/// Size of the bow silhouette's pixel grid.
-const BOW_GRID: i32 = 27;
+/// The game's sprite for the character sheet's empty weapon slot.
+pub const SWORD_SPRITE: &str = "hud_barbie_sword";
 
-/// Distance from point `p` to the segment `a`-`b`, if `p` projects onto it.
-fn seg_dist(p: Pos2, a: Pos2, b: Pos2) -> Option<f32> {
-    let d = b - a;
-    let k = (p - a).dot(d) / d.length_sq();
-    (0.0..=1.0).contains(&k).then(|| p.distance(a + d * k))
+/// The weapon icon of the second slot: the game's own empty-weapon-slot
+/// sprite (read from the player's install, see `runtime::sprite`) centred
+/// in `gui` on whole GUI units, as the sheet draws it. `false` if the
+/// sprite can't be read (only the "II" mark is drawn then).
+pub fn paint_sword(ctx: &egui::Context, p: &egui::Painter, t: &hud::Transform, gui: Rect) -> bool {
+    let Some((tex, size)) = uk_qol_runtime::sprite::texture(ctx, SWORD_SPRITE) else {
+        return false;
+    };
+    let at = gui.min + ((gui.size() - size) / 2.0).floor();
+    let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+    p.image(
+        tex.id(),
+        t.rect_to_points(Rect::from_min_size(at, size)),
+        uv,
+        Color32::WHITE,
+    );
+    true
 }
 
-/// The bow silhouette: `(x, y, edge)` per pixel of a `BOW_GRID` square. A
-/// bow drawn diagonally like the game's weapon icons: a limb curving
-/// through the top-left (thick at the grip, thin at the tips), its string,
-/// and an arrow nocked on the string pointing out past the grip. Edge
-/// pixels (and the string) take the darker outline shade.
-pub fn bow_pixels() -> Vec<(i32, i32, bool)> {
-    use std::f32::consts::PI;
-    let c = Pos2::new(19.5, 19.5);
-    let r = 13.0f32;
-    let (mid, span) = (PI * 1.25, 68f32.to_radians());
-    let at = |th: f32| c + r * Vec2::new(th.cos(), th.sin());
-    let (end_a, end_b, grip) = (at(mid - span), at(mid + span), at(mid));
-    let nock = end_a + (end_b - end_a) / 2.0;
-    let u = (grip - nock).normalized();
-    let (tail, head) = (nock - u * 3.0, grip + u * 5.5);
-    let limb = |p: Pos2| {
-        let d = ((p.y - c.y).atan2(p.x - c.x).rem_euclid(2.0 * PI) - mid).abs();
-        d <= span && ((p - c).length() - r).abs() <= 0.9 + 1.5 * (1.0 - d / span)
-    };
-    let arrow = |p: Pos2| {
-        if seg_dist(p, tail, head).is_some_and(|d| d <= 0.75) {
-            return true;
-        }
-        // The head: a small triangle beyond the shaft.
-        let q = p - (head + u * 1.5);
-        let along = -q.dot(u);
-        let across = q.dot(u.rot90()).abs();
-        (0.0..=4.0).contains(&along) && across <= along * 0.75
-    };
-    let px = |x: i32, y: i32| Pos2::new(x as f32 + 0.5, y as f32 + 0.5);
+/// The "II" mark: a Roman numeral two, 5x5 pixels (serifs top and bottom,
+/// two stems), outlined in the silhouettes' dark edge colour.
+const NUMERAL: [&str; 5] = ["#####", ".#.#.", ".#.#.", ".#.#.", "#####"];
+/// Lighter than the silhouette, so the mark reads on the empty and the
+/// filled slot.
+const NUMERAL_FILL: Color32 = Color32::from_rgb(92, 92, 110);
+
+/// The mark's pixels `(x, y, edge)` with its 1-pixel outline, in a 7x7 box.
+pub fn numeral_pixels() -> Vec<(i32, i32, bool)> {
     let on = |x: i32, y: i32| {
-        (0..BOW_GRID).contains(&x)
-            && (0..BOW_GRID).contains(&y)
-            && (limb(px(x, y)) || arrow(px(x, y)))
+        (0..5).contains(&x)
+            && (0..5).contains(&y)
+            && NUMERAL[y as usize].as_bytes()[x as usize] == b'#'
     };
     let mut out = Vec::new();
-    for y in 0..BOW_GRID {
-        for x in 0..BOW_GRID {
+    for y in -1..=5 {
+        for x in -1..=5 {
             if on(x, y) {
-                let edge = [(1, 0), (-1, 0), (0, 1), (0, -1)]
-                    .iter()
-                    .any(|(dx, dy)| !on(x + dx, y + dy));
-                out.push((x, y, edge));
-            } else if seg_dist(px(x, y), end_a, end_b).is_some_and(|d| d <= 0.5) {
-                out.push((x, y, true));
+                out.push((x + 1, y + 1, false));
+            } else if (-1..=1).any(|dy| (-1..=1).any(|dx| on(x + dx, y + dy))) {
+                out.push((x + 1, y + 1, true));
             }
         }
     }
     out
 }
 
-/// The bow silhouette centred in the slot `gui`.
-pub fn paint_bow(p: &egui::Painter, t: &hud::Transform, gui: Rect) {
-    let px = bow_pixels();
-    // Centre the drawing's bounding box, on whole pixels.
-    let (x0, x1) = px
-        .iter()
-        .fold((i32::MAX, i32::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
-    let (y0, y1) = px
-        .iter()
-        .fold((i32::MAX, i32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-    let size = Vec2::new((x1 - x0 + 1) as f32, (y1 - y0 + 1) as f32);
-    let o = gui.min + ((gui.size() - size) / 2.0).floor() - Vec2::new(x0 as f32, y0 as f32);
-    for (x, y, edge) in px {
+/// The "II" mark in the slot's top-right corner, inside the bevel (where
+/// the diagonal sword leaves room).
+pub fn paint_numeral(p: &egui::Painter, t: &hud::Transform, gui: Rect) {
+    let o = Pos2::new(gui.max.x - 2.0 - 7.0, gui.min.y + 2.0);
+    for (x, y, edge) in numeral_pixels() {
         let r = Rect::from_min_size(o + Vec2::new(x as f32, y as f32), Vec2::splat(1.0));
         // Slightly larger than a pixel, so neighbours don't show seams.
         let r = t.rect_to_points(r).expand(0.3);
-        p.rect_filled(r, 0.0, if edge { SILHOUETTE_EDGE } else { SILHOUETTE });
+        p.rect_filled(r, 0.0, if edge { SILHOUETTE_EDGE } else { NUMERAL_FILL });
     }
 }
 
@@ -263,21 +244,19 @@ mod tests {
     }
 
     #[test]
-    fn bow_silhouette() {
-        let px = bow_pixels();
-        assert!(px.len() > 80 && px.len() < 300, "{}", px.len());
-        let inside = |&(x, y, _): &(i32, i32, bool)| {
-            (0..BOW_GRID).contains(&x) && (0..BOW_GRID).contains(&y)
-        };
+    fn numeral() {
+        let px = numeral_pixels();
+        let inside = |&(x, y, _): &(i32, i32, bool)| (0..7).contains(&x) && (0..7).contains(&y);
         assert!(px.iter().all(inside));
-        let has = |x, y| px.iter().any(|&(a, b, _)| (a, b) == (x, y));
-        // Both tips, the grip, the string between the tips, the arrow's
-        // shaft between string and grip.
-        assert!(has(7, 24) && has(24, 7));
-        assert!(has(10, 10));
-        assert!(has(16, 16));
-        assert!(has(14, 14));
-        // The grip is thick enough to have inner (non-edge) pixels.
-        assert!(px.iter().any(|&(_, _, e)| !e));
+        let fill: Vec<(i32, i32)> = px.iter().filter(|p| !p.2).map(|p| (p.0, p.1)).collect();
+        // 5 + 5 serif pixels, 2 stems of 3.
+        assert_eq!(fill.len(), 16);
+        assert!(fill.contains(&(2, 3)) && fill.contains(&(4, 3)) && !fill.contains(&(3, 3)));
+        // Every fill pixel's neighbours are fill or outline.
+        for &(x, y) in &fill {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                assert!(px.iter().any(|p| (p.0, p.1) == (x + dx, y + dy)));
+            }
+        }
     }
 }

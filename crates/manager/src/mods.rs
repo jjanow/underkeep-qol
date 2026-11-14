@@ -303,7 +303,7 @@ mod tests {
 id = "weapon-swap"
 name = "Weapon swap"
 version = "0.1.0"
-description = "A ranged slot."
+description = "A second weapon slot."
 enabled = false
 future_field = { anything = 1 }
 

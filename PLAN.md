@@ -421,8 +421,8 @@ In order of difficulty; each ships when done, with settings and tests.
     opening forest). New-game `g_state` 3 is static only.
   - 2026-11-14: the slot on the character sheet, an overlay widget left of
     the helmet slot (placed from the sheet's live slot rects), drawn like
-    the game's empty slots with a bow silhouette drawn by the mod
-    (`sheet_slot`, default on). Tested in game with pushed SDL mouse and
+    the game's empty slots (`sheet_slot`, default on; its bow silhouette
+    was later replaced by the game's sword sprite and a "II", below). Tested in game with pushed SDL mouse and
     key events (3440x1440 and a 1706x960 window): a sling from the hand
     and from the inventory clicked into it, a shortbow onto the filled
     slot (the sling went to the inventory), the hand's bow onto the filled
@@ -444,15 +444,33 @@ In order of difficulty; each ships when done, with settings and tests.
   - The notice is the mod section's first content until acknowledged
     (`uk_qol/weapon-swap.notice-acknowledged`); putting a weapon into a
     slot or swapping is refused until then.
-- [ ] `weapon-swap`: turn the ranged slot into a second weapon slot that
+- [x] `weapon-swap`: turn the ranged slot into a second weapon slot that
       takes any weapon (decided 2026-11-14), so the swap covers sword and
       shield ↔ two-hander and melee ↔ melee as well as melee ↔ ranged. Drop
       the ranged-only check (item type 1, weapon type 5); rename "ranged
       slot" in settings, overlay text, README, the loss warning and the
-      manager's pre-uninstall text; a weapon silhouette instead of the bow
-      (drawn in code, no game art). Keep the shield behaviour (a two-hander
+      manager's pre-uninstall text. Keep the shield behaviour (a two-hander
       puts it in the inventory, swapping back puts it on). Test in game:
       one-hander ↔ one-hander with a shield, two-hander ↔ sword and shield.
+  - 2026-11-14: any item of type 1 (weapon) fits; shields are their own item
+    type, so they never do. No second shield slot: a shield only moves for a
+    two-hander, and the swap already puts it back. The sidecar key stays
+    `ranged`, so existing sidecars load.
+  - Icon (the user's choice): the game's own empty-weapon-slot sword with a
+    pixel "II" drawn by the mod in the slot's top-right corner. The sword is
+    read at run time from the player's install (`runtime::sprite`: sprite
+    `hud_barbie_sword` in `base/_sprite.db`, its texture in `_texture.db`,
+    cut out of the atlas PNG), so no game art is in the repo. The `.db`
+    files are a format separate from DfT (`dft::db`, read-only). If the
+    sprite can't be read, only the "II" is drawn (logged). The `png`
+    decoder adds no DLL imports.
+  - In game 1.0.5 (Proton, 2026-11-14, pushed SDL events at 3440x1440): the
+    slot looks like the sheet's own slots. Mace in slot II with the rusty
+    sword and a wooden shield on: Shift+1 swapped them, the shield stayed
+    on; back again. Greatsword dropped on the filled slot (the mace went to
+    the inventory), Shift+1: greatsword in hand, shield to the inventory;
+    Shift+1: sword in hand, shield back on. Right-click emptied the slot.
+    Item counts conserved in every action.
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).

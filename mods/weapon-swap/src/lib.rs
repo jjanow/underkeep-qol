@@ -1,17 +1,18 @@
-//! `weapon-swap`: a ranged slot per hero and keys that swap it with the
-//! weapon in hand (README, "Mod designs").
+//! `weapon-swap`: a second weapon slot per hero and keys that swap it with
+//! the weapon in hand (README, "Mod designs").
 //!
-//! - The slot holds one weapon, kept by the mod (serialized: def name,
-//!   count, cooldown) and saved in the save's sidecar. Only bows go in from
-//!   the menu; after a swap it holds the weapon that came out of the hand,
-//!   so sword ⇄ bow goes both ways. One of the two is always a bow.
+//! - The slot holds one weapon of any kind, kept by the mod (serialized: def
+//!   name, count, cooldown) and saved in the save's sidecar; after a swap it
+//!   holds the weapon that came out of the hand, so every swap goes both
+//!   ways (sword ⇄ bow, sword and shield ⇄ two-hander, melee ⇄ melee).
 //! - A swap creates the stored weapon and equips it through the game's own
 //!   `Hero::EquipItem` (as from the inventory panel: class checks, on_equip /
 //!   on_unequip scripts, stats, HUD). The weapon that was in hand lands in
 //!   the inventory as with a manual equip; the mod then takes it out of the
-//!   game into the slot. A two-handed bow pushes the shield into the
+//!   game into the slot. A two-handed weapon pushes the shield into the
 //!   inventory, like a manual equip; swapping back to a one-handed weapon
-//!   puts that shield back on if it is still in the inventory.
+//!   puts that shield back on if it is still in the inventory. So no second
+//!   shield slot is needed: the shield only moves for a two-hander.
 //! - In combat (the game's own "battle" check) a swap ends the hero's turn
 //!   by default (`swap_costs_turn`), by queueing the TurnManager's round
 //!   action 3, whose handler marks that hero as done and moves on (no game
@@ -20,10 +21,10 @@
 //!   monsters not to be moving. Outside combat it's free.
 //! - The character sheet shows the slot left of the helmet slot (an overlay
 //!   widget placed from the sheet's own slot rects, drawn like the game's
-//!   empty slots with a bow silhouette: `slot`). It works like the
-//!   game's slots, which pick an item up with a click and drop it with the
-//!   next: clicking it with a bow on the cursor (from the inventory or a
-//!   hand) puts the bow in; clicking it while it holds a weapon picks that
+//!   empty slots with the game's own weapon-slot sword and a "II" mark:
+//!   `slot`). It works like the game's slots, which pick an item up with a
+//!   click and drop it with the next: clicking it with a weapon on the
+//!   cursor (from the inventory or a hand) puts the weapon in; clicking it while it holds a weapon picks that
 //!   up (the mod's own pick-up: the weapon isn't in the game), and the next
 //!   click drops it on the inventory panel or the weapon slot (a swap);
 //!   anywhere else puts it back. A right click moves it to the inventory.
@@ -53,10 +54,10 @@ use state::{HEROES, Loaded, Parked, State, StoredItem};
 const ID: &str = "weapon-swap";
 
 /// Shown before first use, in the README and by the manager.
-pub const NOTICE: &str = "A weapon in a ranged slot is kept by the mod, not by the game.
+pub const NOTICE: &str = "A weapon in a second weapon slot is kept by the mod, not by the game.
 If you remove the mod, reinstall the game, play the save on another computer,
 or the mod's file next to your save is lost, that weapon is gone for good.
-Before uninstalling, move every ranged-slot weapon back to your inventory.";
+Before uninstalling, move every second-slot weapon back to your inventory.";
 
 /// File in `uk_qol/` that records the notice was acknowledged (once per
 /// install: uninstalling removes the folder).
@@ -116,7 +117,7 @@ enum Action {
     Swap(usize),
     /// Swap the hero selected in the game.
     SwapSelected,
-    /// Put the bow in hero `i`'s hand into their slot.
+    /// Put the weapon in hero `i`'s hand into their slot.
     StoreEquipped(usize),
     /// Put inventory item (pointer, def) into hero `i`'s slot.
     StoreFromInventory(usize, usize, String),
@@ -125,7 +126,7 @@ enum Action {
     /// Move parked weapon `k` to the inventory.
     ParkedToInventory(usize),
     /// Put the item the game holds on the cursor (dropped on the sheet's
-    /// ranged slot of hero `hero`) into that slot.
+    /// second weapon slot of hero `hero`) into that slot.
     DropCarried {
         hero: usize,
         item: usize,
@@ -156,11 +157,13 @@ struct Inner {
     hud_button: bool,
     /// The `sheet_slot` setting.
     sheet_slot: bool,
-    /// The hero whose ranged-slot weapon the mod has on the cursor (picked
-    /// up from the sheet's ranged slot; it stays in the slot until dropped).
+    /// The hero whose second-slot weapon the mod has on the cursor (picked
+    /// up from the sheet's second slot; it stays in the slot until dropped).
     carry: Option<usize>,
     /// Logged the sheet's slot positions (once per session).
     sheet_logged: bool,
+    /// Logged that the game's weapon-slot sprite couldn't be read.
+    sprite_missing_logged: bool,
     /// Last item seen on the game's cursor on the sheet, to log changes.
     seen_carried: Option<usize>,
 }
@@ -273,7 +276,7 @@ impl Inner {
                 self.need_empty(*i)?;
                 let s = self.game.store_equipped(*i)?;
                 let msg = format!(
-                    "{}: {} is now in the ranged slot",
+                    "{}: {} is now in the second weapon slot",
                     self.game.hero_name(*i),
                     s.def
                 );
@@ -285,7 +288,7 @@ impl Inner {
                 self.need_empty(*i)?;
                 let s = self.game.store_from_inventory(*ptr as game::Item, def)?;
                 let msg = format!(
-                    "{}: {} is now in the ranged slot",
+                    "{}: {} is now in the second weapon slot",
                     self.game.hero_name(*i),
                     s.def
                 );
@@ -296,7 +299,7 @@ impl Inner {
                 let s = self.state.heroes[*i]
                     .stored
                     .clone()
-                    .ok_or("the ranged slot is empty")?;
+                    .ok_or("the second weapon slot is empty")?;
                 self.game.to_inventory(&s)?;
                 self.state.heroes[*i].stored = None;
                 Ok(format!(
@@ -329,10 +332,10 @@ impl Inner {
         }
     }
 
-    /// Puts a weapon dropped on hero `h`'s ranged slot in it: from the
+    /// Puts a weapon dropped on hero `h`'s second slot in it: from the
     /// inventory, or from a hero's hand (`src`: hero and slot; the game's
     /// unequip first). A weapon already in the slot goes to the inventory,
-    /// as when the game equips over an item; the bow from `h`'s own hand on
+    /// as when the game equips over an item; the weapon from `h`'s own hand on
     /// a filled slot is a swap.
     fn drop_carried(
         &mut self,
@@ -353,7 +356,7 @@ impl Inner {
                 let from = usize::try_from(src.0)
                     .ok()
                     .filter(|&s| s < HEROES && src.1 == SLOT_WEAPON)
-                    .ok_or_else(|| format!("{def} isn't a ranged weapon"))?;
+                    .ok_or_else(|| format!("{def} isn't the weapon in a hand"))?;
                 if self.game.equipped(from, SLOT_WEAPON) != item {
                     return Err(format!("{def} is no longer in that hand"));
                 }
@@ -365,7 +368,7 @@ impl Inner {
             _ => return Err(format!("put {def} in the inventory first")),
         };
         let name = self.game.hero_name(h);
-        let mut msg = format!("{name}: {} is now in the ranged slot", new.def);
+        let mut msg = format!("{name}: {} is now in the second weapon slot", new.def);
         if let Some(old) = self.state.heroes[h].stored.take() {
             if let Err(e) = self.game.to_inventory(&old) {
                 // Keep the old one; the new one goes back to the game.
@@ -388,7 +391,7 @@ impl Inner {
         if self.acknowledged {
             Ok(())
         } else {
-            Err("read and acknowledge the ranged-slot warning in the mod menu first".into())
+            Err("read and acknowledge the second-slot warning in the mod menu first".into())
         }
     }
 
@@ -397,7 +400,9 @@ impl Inner {
             return Err("no hero there".into());
         }
         if self.state.heroes[i].stored.is_some() {
-            return Err("the ranged slot is taken; move its weapon to the inventory first".into());
+            return Err(
+                "the second weapon slot is taken; move its weapon to the inventory first".into(),
+            );
         }
         Ok(())
     }
@@ -411,7 +416,7 @@ impl Inner {
         let stored = self.state.heroes[i]
             .stored
             .clone()
-            .ok_or("the ranged slot is empty")?;
+            .ok_or("the second weapon slot is empty")?;
         let battle = self.game.in_battle();
         let charge = battle && self.costs_turn;
         if battle {
@@ -431,7 +436,7 @@ impl Inner {
             stored.def,
             res.out_of_hand
                 .as_ref()
-                .map(|o| format!("; {} is in the ranged slot", o.def))
+                .map(|o| format!("; {} is in the second weapon slot", o.def))
                 .unwrap_or_default()
         );
         if let Some(w) = res.warning {
@@ -457,7 +462,7 @@ fn describe(a: &Action) -> String {
     match a {
         Action::Swap(i) => format!("swap hero {}", i + 1),
         Action::SwapSelected => "swap selected hero".into(),
-        Action::StoreEquipped(i) => format!("store hero {}'s bow", i + 1),
+        Action::StoreEquipped(i) => format!("store hero {}'s weapon in hand", i + 1),
         Action::StoreFromInventory(i, _, d) => format!("put {d} in hero {}'s slot", i + 1),
         Action::ToInventory(i) => format!("move hero {}'s slot weapon to the inventory", i + 1),
         Action::ParkedToInventory(_) => "move a parked weapon to the inventory".into(),
@@ -511,7 +516,7 @@ impl Mod for WeaponSwap {
         let now = state::identity(&keys, &state::fingerprint(&game.tally()));
         let parked_on_load = !state.is_empty() && off_identity.as_deref() != Some(now.as_str());
         if parked_on_load {
-            log("turned back on, but the party changed while off; ranged-slot weapons are parked");
+            log("turned back on, but the party changed while off; second-slot weapons are parked");
             state = state.into_parked(&keys);
         }
         self.inner = Some(Inner {
@@ -529,6 +534,7 @@ impl Mod for WeaponSwap {
             sheet_slot: bool_setting(cx.settings, "sheet_slot"),
             carry: None,
             sheet_logged: false,
+            sprite_missing_logged: false,
             seen_carried: None,
         });
         Ok(())
@@ -542,7 +548,7 @@ impl Mod for WeaponSwap {
         if let Some(i) = &self.inner
             && !i.state.is_empty()
         {
-            log("turned off with weapons in ranged slots; they stay with the mod for this session");
+            log("turned off with weapons in second slots; they stay with the mod for this session");
         }
     }
 
@@ -618,7 +624,7 @@ impl Mod for WeaponSwap {
                 inner.mismatch = false;
                 let n = s.heroes.iter().filter(|h| h.stored.is_some()).count();
                 log(&format!(
-                    "save loaded: {n} ranged slot(s) filled, {} parked",
+                    "save loaded: {n} second weapon slot(s) filled, {} parked",
                     s.parked.len()
                 ));
                 inner.state = s;
@@ -679,7 +685,7 @@ fn hand_buttons(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
             egui::Color32::from_rgb(60, 95, 50),
         )
         .on_hover_text(format!(
-            "Ranged slot: {}. Click: swap with the weapon in hand.",
+            "Weapon slot II: {}. Click: swap with the weapon in hand.",
             item_label(&stored)
         ));
         if r.clicked() {
@@ -688,7 +694,7 @@ fn hand_buttons(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     }
 }
 
-/// The ranged slot's rect on the character sheet, in GUI space.
+/// The second weapon slot's rect on the character sheet, in GUI space.
 fn sheet_rect(game: &Game) -> Option<egui::Rect> {
     let slots: Vec<Option<egui::Rect>> = (0..game::SLOTS as i32)
         .map(|k| game.sheet_slot_rect(k).and_then(hud::rect_from_layout))
@@ -715,7 +721,7 @@ fn slot_text(p: &egui::Painter, rect: egui::Rect, text: &str, color: egui::Color
     );
 }
 
-/// The ranged slot on the character sheet (the selected hero's).
+/// The second weapon slot on the character sheet (the selected hero's).
 fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     let hero = inner
         .game
@@ -734,7 +740,7 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     if !inner.sheet_logged {
         inner.sheet_logged = true;
         log(&format!(
-            "character sheet: helmet slot {:?}, weapon slot {:?}, ranged slot {gui:?} (GUI space)",
+            "character sheet: helmet slot {:?}, weapon slot {:?}, second weapon slot {gui:?} (GUI space)",
             inner.game.sheet_slot_rect(slot::HELMET as i32),
             inner.game.sheet_slot_rect(SLOT_WEAPON)
         ));
@@ -757,9 +763,10 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     }
     let fits = carried_info
         .as_ref()
-        .map(|i| i.bow && i.slot_problem().is_none());
+        .map(|i| i.weapon && i.slot_problem().is_none());
 
     let r = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+    let ctx = ui.ctx().clone();
     {
         let p = ui.painter();
         let outline = match fits {
@@ -780,19 +787,25 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
                     egui::Color32::WHITE,
                 );
             }
-            _ => slot::paint_bow(p, t, gui),
+            _ => {
+                if !slot::paint_sword(&ctx, p, t, gui) && !inner.sprite_missing_logged {
+                    inner.sprite_missing_logged = true;
+                    log("the game's weapon-slot icon isn't available; drawing the slot without it");
+                }
+            }
         }
+        slot::paint_numeral(p, t, gui);
     }
     let r = r.on_hover_text(match (&stored, fits) {
-        (_, Some(false)) => {
-            "Ranged slot: only ranged weapons (bows, crossbows, slings) fit.".into()
-        }
+        (_, Some(false)) => "Weapon slot II: only weapons fit.".into(),
         (Some(s), _) => format!(
-            "Ranged slot: {}. Click to pick it up, then click the inventory or the weapon \
+            "Weapon slot II: {}. Click to pick it up, then click the inventory or the weapon \
              slot (swap). Right-click: move it to the inventory.",
             item_label(s)
         ),
-        (None, _) => "Ranged slot: put a bow here (click it with a bow on the cursor).".into(),
+        (None, _) => {
+            "Weapon slot II: put a spare weapon here (click it with a weapon on the cursor).".into()
+        }
     });
 
     if r.clicked() {
@@ -808,7 +821,7 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
                 });
             }
             (Some(_), Some(info)) => {
-                inner.say(format!("{} doesn't fit the ranged slot", info.def));
+                inner.say(format!("{} doesn't fit the second weapon slot", info.def));
             }
             (Some(_), None) => {}
             (None, _) if stored.is_some() => {
@@ -859,7 +872,7 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     }
 }
 
-/// Drops the mod's pick-up of hero `h`'s ranged-slot weapon at GUI point
+/// Drops the mod's pick-up of hero `h`'s second-slot weapon at GUI point
 /// `p`: on the inventory panel it moves there, on the weapon slot (the
 /// sheet's or the HUD's hand slot) it swaps; anywhere else nothing happens.
 fn drop_at(inner: &mut Inner, h: usize, p: egui::Pos2) {
@@ -892,7 +905,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         }
         return;
     }
-    egui::CollapsingHeader::new("About the ranged slot (read before uninstalling)")
+    egui::CollapsingHeader::new("About the second weapon slot (read before uninstalling)")
         .id_salt("ws-notice")
         .show(ui, |ui| {
             ui.colored_label(WARN, NOTICE);
@@ -901,7 +914,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         ui.weak(m);
     }
     if !inner.game.playing() {
-        ui.label("Load a game to use the ranged slots.");
+        ui.label("Load a game to use the second weapon slots.");
         return;
     }
     if !inner.state.parked.is_empty() {
@@ -912,7 +925,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
                 "Weapons from this save's mod file that don't match the save. They may \
                  already be in your party: check before moving them to the inventory."
             } else {
-                "Weapons from ranged slots of heroes not in the party:"
+                "Weapons from second weapon slots of heroes not in the party:"
             },
         );
         for (k, p) in inner.state.parked.iter().enumerate() {
@@ -934,7 +947,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         .into_iter()
         // SAFETY: inventory items are live.
         .filter_map(|it| unsafe { inner.game.item_info(it) })
-        .filter(|i| i.bow && i.slot_problem().is_none())
+        .filter(|i| i.weapon && i.slot_problem().is_none())
         .collect();
     for h in 0..HEROES {
         if !inner.game.hero_valid(h) {
@@ -947,7 +960,7 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.strong(format!("{}. {}", h + 1, inner.game.hero_name(h)));
             ui.label(format!(
-                "hand: {}  |  ranged slot: {}",
+                "hand: {}  |  weapon slot II: {}",
                 hand.as_ref().map_or("nothing".into(), |i| i.def.clone()),
                 stored.as_ref().map_or("empty".into(), item_label)
             ));
@@ -963,9 +976,9 @@ fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
                 buttons.push(("Move to inventory".into(), Action::ToInventory(h)));
             }
             None => {
-                if hand.as_ref().is_some_and(|i| i.bow) {
+                if hand.as_ref().is_some_and(|i| i.weapon) {
                     buttons.push((
-                        "Put the bow in hand in the slot".into(),
+                        "Put the weapon in hand in the slot".into(),
                         Action::StoreEquipped(h),
                     ));
                 }

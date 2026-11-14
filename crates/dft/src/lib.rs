@@ -19,6 +19,7 @@
 //! Everything is kept in a form that re-serializes byte-for-byte, so an
 //! unmodified document writes back identical to what was read.
 
+pub mod db;
 pub mod patch;
 
 use std::fmt;
