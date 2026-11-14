@@ -7,6 +7,7 @@ members = [
     "crates/manager",
     "mods/bloodmage-cost",
     "mods/skip-logos",
+    "mods/inventory-sort",
 ]
 
 [workspace.package]
@@ -20,6 +21,7 @@ uk-qol-runtime = { path = "crates/runtime" }
 uk-qol-dft = { path = "crates/dft" }
 uk-qol-mod-bloodmage-cost = { path = "mods/bloodmage-cost" }
 uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
+uk-qol-mod-inventory-sort = { path = "mods/inventory-sort" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs
