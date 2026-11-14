@@ -93,18 +93,17 @@ pub fn log(msg: &str) {
 // `begin_session` before loading mods and `log_active_mods` before enabling
 // their hooks; the proxy calls `stop` on process exit.
 
-static SESSION_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 static CRASHED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 /// Starts the safe-mode session in `uk_qol/` (crash counter, running marker,
-/// Shift check) and logs how the previous session ended. Call once, from the
-/// runtime thread, before loading mods; load none unless the result is
-/// `SafeMode::Off`. Without this call [`stop`] does nothing.
+/// Shift check; [`safe::begin_session`]) and logs how the previous session
+/// ended. Call once, from the runtime thread, before loading mods; load none
+/// unless the result is `SafeMode::Off`. Without it [`stop`] does nothing.
 pub fn begin_session() -> safe::SafeMode {
     let Some(dir) = data_dir() else {
         return safe::SafeMode::Off;
     };
-    let s = safe::begin_session_with(&dir, safe::shift_held());
+    let s = safe::begin_session_report(&dir);
     if let Some(prev) = &s.previous_abnormal {
         let mods = if prev.mods.is_empty() {
             "none".to_owned()
@@ -124,7 +123,6 @@ pub fn begin_session() -> safe::SafeMode {
         )),
         safe::SafeMode::ShiftHeld => log("safe mode: Shift held at start; all mods off"),
     }
-    let _ = SESSION_DIR.set(dir);
     s.mode
 }
 
@@ -137,7 +135,7 @@ pub fn log_active_mods(ids: &[&str]) {
         ids.join(", ")
     };
     log(&format!("active mods: {list}"));
-    if let Some(dir) = SESSION_DIR.get() {
+    if let Some(dir) = safe::armed_dir() {
         safe::note_active_mods(dir, ids);
     }
 }
@@ -155,7 +153,7 @@ pub fn note_crash() {
 /// (another thread may have died holding it). Ends the safe-mode session
 /// unless [`begin_session`] never ran or [`note_crash`] was called.
 pub fn stop() {
-    let Some(dir) = SESSION_DIR.get() else { return };
+    let Some(dir) = safe::armed_dir() else { return };
     if CRASHED.load(std::sync::atomic::Ordering::SeqCst) {
         return;
     }

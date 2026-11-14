@@ -28,6 +28,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use toml::{Table, Value};
@@ -125,13 +126,31 @@ pub struct SessionStart {
     pub previous_abnormal: Option<Session>,
 }
 
+/// The folder of this process's session, set by [`begin_session`].
+static ARMED: OnceLock<PathBuf> = OnceLock::new();
+
 /// Called at runtime start: reads and updates the crash counter in `dir`
 /// (`uk_qol/`), marks this session as running, and decides safe mode.
+/// Also arms the clean-exit path: [`crate::stop`] ends this session on
+/// process exit, and [`crate::log_active_mods`] records into it.
 pub fn begin_session(dir: &Path) -> SafeMode {
-    begin_session_with(dir, shift_held()).mode
+    begin_session_report(dir).mode
 }
 
-/// [`begin_session`] with the Shift state given, returning the details.
+/// [`begin_session`], returning the details (for the log and the overlay).
+pub fn begin_session_report(dir: &Path) -> SessionStart {
+    let s = begin_session_with(dir, shift_held());
+    let _ = ARMED.set(dir.to_owned());
+    s
+}
+
+/// The session folder if [`begin_session`] ran in this process.
+pub fn armed_dir() -> Option<&'static Path> {
+    ARMED.get().map(PathBuf::as_path)
+}
+
+/// The counter logic of [`begin_session`], with the Shift state given and
+/// without arming the clean-exit path (for tests and tools).
 /// Crashes take precedence over Shift in the returned mode (both mean mods off).
 pub fn begin_session_with(dir: &Path, shift: bool) -> SessionStart {
     let prev = read(dir);
