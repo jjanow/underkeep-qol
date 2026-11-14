@@ -14,9 +14,9 @@ Underkeep has no official mod support. This project adds it in a way that:
 - **keeps your saves loadable without the mods**: the save file format is never
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
-> Status: early development. The loader (`winmm.dll`) loads in game under
-> Proton, and the runtime identifies the game build and has its pattern
-> scanner; no hooks or mods yet and nothing is released. This README is the plan.
+> Status: in development, nothing released yet. The loader, runtime, overlay
+> (F10 / L3+R3), manager and all five mods work in game 1.0.5 under Proton;
+> Windows and Steam Deck are untested. See PLAN.md for what's left.
 > It's built for a public release, so installing, updating and recovering
 > from a game patch must work without any technical knowledge.
 
@@ -332,7 +332,7 @@ main menu. This mod skips them, so the game starts on the main menu.
 
 ## Repository layout
 
-`crates/` exists; `mods/` and `tools/` are planned.
+`crates/` and `mods/` exist; `tools/` is planned.
 
 ```
 crates/
