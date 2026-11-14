@@ -41,9 +41,20 @@ Check items off as they land; add findings under the item they belong to.
     first call (LoadLibrary of `<system dir>\winmm.dll`), not in DllMain.
     PE forwarders can't be used: `winmm.x` would resolve back to the proxy.
   - The DLL also exports `DllMain` (harmless; the real winmm doesn't).
+  - Smoke test (2026-11-14): a MinGW test exe calling `timeBeginPeriod`,
+    `timeGetTime`, `timeEndPeriod`, run with Proton 11's wine and
+    `WINEDLLOVERRIDES="winmm=n,b"` in a fresh prefix: calls forwarded (no
+    self-recursion through the full-path LoadLibrary), exits cleanly, log
+    line written. Not yet run inside the game.
+  - In the game folder only `SDL3.dll` and `fmod.dll` import winmm; the
+    BugSplat reporter (`BsSndRpt64.exe`) doesn't, so it won't start the runtime.
 - [ ] Confirm it loads on **Steam + Proton** with
       `WINEDLLOVERRIDES="winmm=n,b" %command%`.
 - [ ] Confirm it loads on **Windows** with no extra setup.
+  - Every module in the process that imports winmm binds to the proxy
+    (Steam overlay, Discord, GPU driver DLLs, MangoHud). Check the Steam
+    overlay still works, and diff our export list against a real
+    `System32\winmm.dll`: a name missing from ours makes its importer fail to load.
 - [ ] Confirm the game runs normally with the proxy and no mods: audio
       (fmod uses winmm), controller input, save/load, quit.
 - [ ] Fallback if winmm fails anywhere: `version.dll` (also imported by
