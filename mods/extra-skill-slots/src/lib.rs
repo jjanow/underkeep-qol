@@ -24,6 +24,7 @@ mod game;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use uk_qol_runtime::egui;
 use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
@@ -162,6 +163,8 @@ pub struct ExtraSkillSlots {
     presses: Vec<usize>,
     /// The slot whose skill list is open in the menu: (hero key, slot).
     picker: Option<(String, usize)>,
+    /// Move keyboard / gamepad focus into the picker next frame.
+    focus_picker: bool,
     /// Shown names by skill def name.
     names: HashMap<String, String>,
     /// A slot being assigned through the game's own skill picker panel.
@@ -177,17 +180,19 @@ struct PanelPick {
     key: String,
     hero: usize,
     slot: usize,
-    /// Frames spent in the current stage.
-    frames: u32,
+    /// When the current stage began.
+    since: Instant,
     /// None until the panel is opened; then the hero's original pair.
     orig: Option<u64>,
     /// The panel was seen open.
     seen: bool,
 }
 
-/// Frames to wait for the panel to open, or for the game to accept input
-/// after the menu closes, before giving up.
-const PANEL_WAIT_FRAMES: u32 = 600;
+/// How long to wait for the game to take input after the menu closes
+/// (a dialog may be up) before giving up on opening the panel.
+const PANEL_WAIT_INPUT: Duration = Duration::from_secs(30);
+/// How long to wait for the panel to show up once requested.
+const PANEL_WAIT_OPEN: Duration = Duration::from_secs(2);
 
 impl ExtraSkillSlots {
     fn apply_settings(&mut self, s: &toml::Table) {
@@ -248,6 +253,7 @@ impl ExtraSkillSlots {
             return;
         };
         if uk_qol_runtime::overlay::is_open() {
+            p.since = Instant::now();
             self.panel_pick = Some(p);
             return;
         }
@@ -255,10 +261,9 @@ impl ExtraSkillSlots {
         let h = g.hero(p.hero);
         // SAFETY: game thread (frame hook); a hero in the static array.
         let same_hero = unsafe { game::hero_valid(h) && game::hero_key(h) == p.key };
-        p.frames += 1;
         match p.orig {
             None => {
-                if !same_hero || p.frames > PANEL_WAIT_FRAMES {
+                if !same_hero || p.since.elapsed() > PANEL_WAIT_INPUT {
                     log("skill panel: gave up (the game didn't take input)");
                     return;
                 }
@@ -268,9 +273,14 @@ impl ExtraSkillSlots {
                     return;
                 }
                 // SAFETY: a valid hero; game thread, in game (gate passed).
-                p.orig = Some(unsafe { game::rd::<u64>(h + game::H_SELECTED_SKILL) });
-                unsafe { g.open_skill_panel(p.hero) };
-                p.frames = 0;
+                // The hero's own slot is emptied while the panel is open, so
+                // any pick (even the skill already there) shows as a change.
+                unsafe {
+                    p.orig = Some(game::rd::<u64>(h + game::H_SELECTED_SKILL));
+                    game::wr::<u64>(h + game::H_SELECTED_SKILL, game::NO_SKILL);
+                    g.open_skill_panel(p.hero);
+                }
+                p.since = Instant::now();
                 log(&format!("skill panel opened for slot {}", p.slot + 1));
                 self.panel_pick = Some(p);
             }
@@ -280,24 +290,26 @@ impl ExtraSkillSlots {
                 if open {
                     p.seen = true;
                 }
-                if open || (!p.seen && p.frames <= PANEL_WAIT_FRAMES / 10) {
+                if open || (!p.seen && p.since.elapsed() <= PANEL_WAIT_OPEN) {
                     self.panel_pick = Some(p);
                     return;
                 }
                 if !same_hero {
                     return;
                 }
-                // SAFETY: a valid hero; game thread.
-                let picked = unsafe { game::rd::<u64>(h + game::H_SELECTED_SKILL) };
-                if picked == orig {
-                    log("skill panel closed without a new pick");
+                // SAFETY: a valid hero; game thread. The original goes back
+                // whatever happened.
+                let picked = unsafe {
+                    let v = game::rd::<u64>(h + game::H_SELECTED_SKILL);
+                    game::wr::<u64>(h + game::H_SELECTED_SKILL, orig);
+                    v
+                };
+                if picked == game::NO_SKILL {
+                    log("skill panel closed without a pick");
                     return;
                 }
                 // SAFETY: as above.
-                let skill = unsafe {
-                    game::wr::<u64>(h + game::H_SELECTED_SKILL, orig);
-                    game::skill_of(h, picked)
-                };
+                let skill = unsafe { game::skill_of(h, picked) };
                 log(&format!(
                     "{}: slot {} = {} (from the skill panel)",
                     p.key,
@@ -375,13 +387,13 @@ impl ExtraSkillSlots {
                     .is_some_and(|p| p.key == key && p.slot == slot);
                 ui.horizontal(|ui| {
                     ui.label(format!("Slot {}: {label}", slot + 1));
-                    if ui.button(if open { "Close" } else { "Change" }).clicked() {
+                    if nav(ui.button(if open { "Close" } else { "Change" })).clicked() {
                         self.picker = (!open).then(|| (key.clone(), slot));
+                        self.focus_picker = !open;
                     }
                     if g.panel.is_some()
                         && !waiting
-                        && ui
-                            .button("Game panel")
+                        && nav(ui.button("Game panel"))
                             .on_hover_text(
                                 "Pick with the game's skill panel once this menu is closed.",
                             )
@@ -391,7 +403,7 @@ impl ExtraSkillSlots {
                             key: key.clone(),
                             hero: i,
                             slot,
-                            frames: 0,
+                            since: Instant::now(),
                             orig: None,
                             seen: false,
                         });
@@ -404,19 +416,28 @@ impl ExtraSkillSlots {
                     continue;
                 }
                 let mut pick: Option<Option<Skill>> = None;
+                let focus = std::mem::take(&mut self.focus_picker);
                 ui.indent(("pick", i, slot), |ui| {
                     if skills.is_empty() {
                         ui.weak("No active skills learned yet.");
                     }
+                    let mut first = true;
                     for s in &skills {
                         let mut n = self.display(&g, s);
                         if s.equip_slot >= 0 {
                             n.push_str(" (item)");
                         }
-                        if ui
-                            .selectable_label(current.as_ref() == Some(s), n)
-                            .clicked()
-                        {
+                        if current.as_ref() == Some(s) {
+                            n.push_str("  \u{2713}");
+                        }
+                        // Buttons, one per line: reachable with the pad's
+                        // d-pad, and the first one takes focus on open.
+                        let r = nav(ui.button(n));
+                        if focus && std::mem::take(&mut first) {
+                            r.request_focus();
+                            r.scroll_to_me(None);
+                        }
+                        if r.clicked() {
                             pick = Some(Some(s.clone()));
                         }
                     }
@@ -492,13 +513,29 @@ impl Mod for ExtraSkillSlots {
 
     fn on_unload(&mut self) {
         let mut sh = shared();
+        // A pick in progress: put the hero's own skill back if the panel
+        // left the slot empty (otherwise the player's pick stays there).
+        if let (
+            Some(g),
+            Some(PanelPick {
+                orig: Some(orig),
+                hero,
+                ..
+            }),
+        ) = (sh.game, self.panel_pick.take())
+        {
+            let at = g.hero(hero) + game::H_SELECTED_SKILL;
+            // SAFETY: static party array; unload runs on the game thread.
+            unsafe {
+                if game::rd::<u64>(at) == game::NO_SKILL {
+                    game::wr::<u64>(at, orig);
+                }
+            }
+        }
         sh.game = None;
         sh.pending.clear();
         self.presses.clear();
         self.picker = None;
-        // A pick in progress keeps whatever the player chose in the
-        // hero's own slot.
-        self.panel_pick = None;
     }
 
     fn on_settings(&mut self, s: &toml::Table) {
@@ -536,6 +573,14 @@ impl Mod for ExtraSkillSlots {
     fn menu(&mut self, ui: &mut egui::Ui) {
         self.draw_menu(ui);
     }
+}
+
+/// Keeps a widget reached with the d-pad or keyboard in view.
+fn nav(r: egui::Response) -> egui::Response {
+    if r.gained_focus() {
+        r.scroll_to_me(None);
+    }
+    r
 }
 
 /// Sidecar form: per hero `slots = [{ skill = "skill_x" }, {}, { skill =
@@ -597,6 +642,7 @@ pub fn new() -> Box<dyn Mod> {
         slots: DEFAULT_SLOTS,
         presses: Vec::new(),
         picker: None,
+        focus_picker: false,
         names: HashMap::new(),
         panel_pick: None,
     })

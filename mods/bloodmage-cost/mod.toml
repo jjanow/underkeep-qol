@@ -1,0 +1,25 @@
+id = "bloodmage-cost"
+name = "Blood Mage cost"
+version = "0.1.0"
+author = "underkeep-qol"
+description = "Choose per Blood Mage how spells are paid: bones first (the game's rule) or always with health, keeping the bones."
+# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+enabled = true
+
+[[settings]]
+key = "toggle_key"
+type = "key"
+# B (for blood / bones) has no default binding in the game; every pad
+# button already has one, so pad players bind their own.
+default = "B"
+label = "Switch the selected Blood Mage"
+description = "Switches the selected hero, if a Blood Mage, between paying with bones and paying with health."
+
+[[settings]]
+key = "default_mode"
+type = "enum"
+choices = ["bones", "health"]
+default = "bones"
+label = "Blood Mages pay with"
+description = "For Blood Mages you haven't switched yet. bones: bones first, health when out of bones (the game's rule). health: always health, keep the bones."

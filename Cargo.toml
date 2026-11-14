@@ -5,6 +5,7 @@ members = [
     "crates/runtime",
     "crates/dft",
     "crates/manager",
+    "mods/bloodmage-cost",
     "mods/skip-logos",
     "mods/extra-skill-slots",
 ]
@@ -18,6 +19,7 @@ repository = "https://github.com/jjanow/underkeep-qol"
 [workspace.dependencies]
 uk-qol-runtime = { path = "crates/runtime" }
 uk-qol-dft = { path = "crates/dft" }
+uk-qol-mod-bloodmage-cost = { path = "mods/bloodmage-cost" }
 uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
 uk-qol-mod-extra-skill-slots = { path = "mods/extra-skill-slots" }
 

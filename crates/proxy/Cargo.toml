@@ -13,6 +13,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 uk-qol-runtime.workspace = true
+uk-qol-mod-bloodmage-cost.workspace = true
 uk-qol-mod-skip-logos.workspace = true
 uk-qol-mod-extra-skill-slots.workspace = true
 
