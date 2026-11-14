@@ -315,8 +315,12 @@ In order of difficulty; each ships when done, with settings and tests.
     keys (tested with pad bindings), sidecar save / load / other save
     loaded with an empty slot; item counts logged before and after every
     action, all conserved.
-  - Not tested in game: a swap in combat (turn cost), a level change, a
-    two-handed bow pushing a shield out and back.
+  - Not tested in game: a swap in combat (turn cost; default on), a level
+    change (static: the level change runs `Game_SaveGameState` right
+    before re-restoring the party, so its snapshot is current), a
+    two-handed bow pushing a shield out and back, keyboard keys and mouse
+    play (only pad bindings were used; the drag check never ran, the
+    cursor object is null with a pad). New-game `g_state` 3 is static only.
   - Open: the slot on the character sheet with drag and drop (see §5).
 - [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
