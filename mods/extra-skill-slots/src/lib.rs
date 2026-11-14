@@ -11,9 +11,11 @@
 //! sequence number. The `_DoRoundAction` detour recognises that action on
 //! its first run, puts the slot's pair into Hero+0x278 for exactly that call
 //! and puts the original pair back right after. Every check, cost, cooldown
-//! and message is the game's own; skills that need a target carry their own
-//! copy of the pair into target selection, so nothing is left swapped while
-//! the player picks a target or cancels, and a save never sees the swap.
+//! and message is the game's own. A skill that needs a target (an ally)
+//! enters target selection instead, and the cast after the pick reads the
+//! pair again (Hero::CastSkill reads Hero+0x278 itself), so then the swap is
+//! kept until target selection is over (picked or cancelled). Saves happen
+//! outside both windows, so they never see the swap.
 //!
 //! Skills are assigned in this mod's section of the overlay menu. Slots are
 //! stored by skill name (item skills by equipment slot and name), per hero,
@@ -65,12 +67,33 @@ struct Shared {
     /// Slots by hero key ([`game::hero_key`]).
     assigned: BTreeMap<String, Slots>,
     pending: VecDeque<Pending>,
+    /// A swap kept while the player picks a target (see [`Targeting`]).
+    targeting: Option<Targeting>,
 }
+
+/// A skill that needs a target (an ally) enters target selection instead of
+/// casting, and the cast that follows the pick reads Hero+0x278 again. So
+/// for such a skill the slot's pair stays in place until target selection
+/// has been over for a moment, then the original goes back.
+#[derive(Debug, Clone, Copy)]
+struct Targeting {
+    /// Hero+0x278.
+    field: usize,
+    orig: u64,
+    swapped: u64,
+    /// When target selection was first seen over.
+    over_since: Option<Instant>,
+}
+
+/// How long to keep the swap after target selection ends, so the cast it
+/// triggered (an event handled on a following frame) still sees it.
+const TARGET_SETTLE: Duration = Duration::from_millis(500);
 
 static SHARED: Mutex<Shared> = Mutex::new(Shared {
     game: None,
     assigned: BTreeMap::new(),
     pending: VecDeque::new(),
+    targeting: None,
 });
 static ORIG_ROUND_ACTION: AtomicUsize = AtomicUsize::new(0);
 
@@ -99,11 +122,62 @@ extern "win64" fn on_round_action(tm: usize, act: usize, dt: f32) {
                 let old = game::rd::<u64>(field);
                 game::wr::<u64>(field, pair);
                 orig(tm, act, dt);
-                game::wr::<u64>(field, old);
+                if !keep_for_targeting(field, old, pair) {
+                    game::wr::<u64>(field, old);
+                }
             }
         }
         None => orig(tm, act, dt),
     }
+}
+
+/// After an extra slot's action ran: true if it entered target selection,
+/// in which case the swap stays until [`settle_targeting`] undoes it.
+fn keep_for_targeting(field: usize, orig: u64, swapped: u64) -> bool {
+    let mut sh = shared();
+    let Some(g) = sh.game else { return false };
+    // SAFETY: game thread (inside the detour).
+    if unsafe { g.interaction_mode() } != Some(game::MODE_TARGET) {
+        return false;
+    }
+    log("waiting for a target; the slot's skill stays selected until then");
+    sh.targeting = Some(Targeting {
+        field,
+        orig,
+        swapped,
+        over_since: None,
+    });
+    true
+}
+
+/// Puts the original skill back once target selection is over (each frame),
+/// or right away with `now` (unload).
+fn settle_targeting(now: bool) {
+    let mut sh = shared();
+    let (Some(g), Some(mut t)) = (sh.game, sh.targeting) else {
+        return;
+    };
+    // SAFETY: game thread (frame hook or unload).
+    let targeting = unsafe { g.interaction_mode() } == Some(game::MODE_TARGET);
+    if !now {
+        t.over_since = if targeting {
+            None
+        } else {
+            Some(t.over_since.unwrap_or_else(Instant::now))
+        };
+        if t.over_since.is_none_or(|at| at.elapsed() < TARGET_SETTLE) {
+            sh.targeting = Some(t);
+            return;
+        }
+    }
+    sh.targeting = None;
+    // SAFETY: Hero+0x278 of a party hero (static memory).
+    unsafe {
+        if game::rd::<u64>(t.field) == t.swapped {
+            game::wr::<u64>(t.field, t.orig);
+        }
+    }
+    log("target selection over; original skill back");
 }
 
 /// If `act` is one of ours running for the first time: the address of the
@@ -126,9 +200,14 @@ unsafe fn take_swap(act: usize) -> Option<(usize, u64)> {
         return None;
     }
     let mut sh = shared();
+    if sh.pending.is_empty() {
+        return None;
+    }
+    let g = sh.game?;
+    // SAFETY: the TurnManager global's sequence counter.
+    prune(&mut sh.pending, unsafe { g.action_counter() });
     let at = sh.pending.iter().position(|p| p.seq == seq)?;
     let p = sh.pending.remove(at)?;
-    let g = sh.game?;
     if hero != p.hero as i32 {
         log(&format!(
             "action {seq}: hero {hero} isn't the queued {}",
@@ -236,6 +315,8 @@ impl ExtraSkillSlots {
         let Some(seq) = (unsafe { g.queue_use_skill(hero) }) else {
             return;
         };
+        // SAFETY: game thread; the TurnManager global.
+        prune(&mut sh.pending, unsafe { g.action_counter() });
         if sh.pending.len() >= MAX_PENDING {
             sh.pending.pop_front();
         }
@@ -512,6 +593,7 @@ impl Mod for ExtraSkillSlots {
     }
 
     fn on_unload(&mut self) {
+        settle_targeting(true);
         let mut sh = shared();
         // A pick in progress: put the hero's own skill back if the panel
         // left the slot empty (otherwise the player's pick stays there).
@@ -557,6 +639,7 @@ impl Mod for ExtraSkillSlots {
             self.activate(slot);
         }
         self.panel_step();
+        settle_targeting(false);
     }
 
     fn on_save(&mut self, state: &mut ModSaveState) {
@@ -567,12 +650,21 @@ impl Mod for ExtraSkillSlots {
         let mut sh = shared();
         sh.assigned = load_heroes(&state.heroes);
         sh.pending.clear();
+        // The load rewrote the heroes.
+        sh.targeting = None;
         self.picker = None;
     }
 
     fn menu(&mut self, ui: &mut egui::Ui) {
         self.draw_menu(ui);
     }
+}
+
+/// Drops remembered actions the queue can no longer hold: the game's action
+/// counter went back below their sequence number (the queue was reset), so
+/// a later, unrelated action could otherwise reuse the number.
+fn prune(pending: &mut VecDeque<Pending>, counter: i32) {
+    pending.retain(|p| p.seq <= counter);
 }
 
 /// Keeps a widget reached with the d-pad or keyboard in view.
@@ -664,6 +756,20 @@ mod tests {
         }
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 11);
+    }
+
+    #[test]
+    fn prune_drops_numbers_past_the_counter() {
+        let p = |seq| Pending {
+            seq,
+            hero: 0,
+            slot: 0,
+        };
+        let mut q: VecDeque<Pending> = [p(180), p(182)].into();
+        prune(&mut q, 182);
+        assert_eq!(q.len(), 2);
+        prune(&mut q, 5);
+        assert!(q.is_empty());
     }
 
     #[test]

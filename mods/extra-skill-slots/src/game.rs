@@ -35,6 +35,8 @@ const DEF_PASSIVE: usize = 0x5a4;
 const ITEM_SKILL: usize = 0x578;
 const ITEM_HAS_SKILL: usize = 0x598;
 
+/// TurnManager: +0x104 the last action sequence number handed out.
+const TM_SEQ: usize = 0x104;
 pub const ACT_TYPE: usize = 0x00;
 pub const ACT_HERO: usize = 0x08;
 pub const ACT_USE_SKILL: usize = 0x0c;
@@ -121,6 +123,8 @@ pub struct Panel {
     pub event_free: usize,
 }
 
+/// Interaction mode while the player picks a skill's target.
+pub const MODE_TARGET: i32 = 1;
 /// Interaction mode while a skill picker panel is open.
 pub const MODE_SKILL_PANEL: i32 = 4;
 /// UI event that opens a hero's skill picker panel (hero index at +0x10).
@@ -216,6 +220,15 @@ impl Game {
         post(e);
         free(e);
         true
+    }
+
+    /// The TurnManager's action sequence counter (the last number given).
+    ///
+    /// # Safety
+    /// The game's globals must be mapped.
+    pub unsafe fn action_counter(&self) -> i32 {
+        // SAFETY: a field of the static TurnManager.
+        unsafe { rd::<i32>(self.turn_manager + TM_SEQ) }
     }
 
     /// The text for `key` in the game's language (None if the game doesn't
