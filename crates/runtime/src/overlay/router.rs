@@ -160,6 +160,20 @@ pub fn ui_key(scancode: u32) -> Option<Key> {
         Key::Num9,
         Key::Num0,
     ];
+    const FKEYS: [Key; 12] = [
+        Key::F1,
+        Key::F2,
+        Key::F3,
+        Key::F4,
+        Key::F5,
+        Key::F6,
+        Key::F7,
+        Key::F8,
+        Key::F9,
+        Key::F10,
+        Key::F11,
+        Key::F12,
+    ];
     Some(match scancode {
         s if (sc::A..sc::A + 26).contains(&s) => LETTERS[(s - sc::A) as usize],
         s if (sc::N1..=sc::N0).contains(&s) => DIGITS[(s - sc::N1) as usize],
@@ -184,18 +198,7 @@ pub fn ui_key(scancode: u32) -> Option<Key> {
         sc::RIGHT => Key::ArrowRight,
         sc::UP => Key::ArrowUp,
         sc::DOWN => Key::ArrowDown,
-        sc::F1 => Key::F1,
-        sc::F2 => Key::F2,
-        sc::F3 => Key::F3,
-        sc::F4 => Key::F4,
-        sc::F5 => Key::F5,
-        sc::F6 => Key::F6,
-        sc::F7 => Key::F7,
-        sc::F8 => Key::F8,
-        sc::F9 => Key::F9,
-        sc::F10 => Key::F10,
-        sc::F11 => Key::F11,
-        sc::F12 => Key::F12,
+        s if (sc::F1..sc::F1 + 12).contains(&s) => FKEYS[(s - sc::F1) as usize],
         _ => return None,
     })
 }
@@ -547,7 +550,14 @@ impl Router {
                     return (if self.open { Swallow } else { Deliver }, Toggle::None);
                 }
                 let swallowed = self.swallowed_pad & pad_bit(button) != 0;
-                (if self.open || swallowed { Swallow } else { Deliver }, toggle)
+                (
+                    if self.open || swallowed {
+                        Swallow
+                    } else {
+                        Deliver
+                    },
+                    toggle,
+                )
             }
             sdl::AXIS_LEFTX | sdl::AXIS_LEFTY if self.open => {
                 let i = axis as usize;
@@ -625,14 +635,26 @@ mod tests {
     fn menu_key_toggles_and_is_swallowed() {
         let mut r = Router::new();
         let env = Env::default();
-        assert_eq!(r.route(&key(F10, true), &env, &mut none), (Swallow, Toggle::Opened));
-        assert_eq!(r.route(&key(F10, false), &env, &mut none), (Swallow, Toggle::None));
+        assert_eq!(
+            r.route(&key(F10, true), &env, &mut none),
+            (Swallow, Toggle::Opened)
+        );
+        assert_eq!(
+            r.route(&key(F10, false), &env, &mut none),
+            (Swallow, Toggle::None)
+        );
         assert!(r.open);
         // Typing goes to the menu, not the game.
         assert_eq!(r.route(&key(W, true), &env, &mut none).0, Swallow);
         assert_eq!(r.route(&key(W, false), &env, &mut none).0, Swallow);
-        assert_eq!(r.route(&Input::Text("w".into()), &env, &mut none).0, Swallow);
-        assert_eq!(r.route(&key(F10, true), &env, &mut none), (Swallow, Toggle::Closed));
+        assert_eq!(
+            r.route(&Input::Text("w".into()), &env, &mut none).0,
+            Swallow
+        );
+        assert_eq!(
+            r.route(&key(F10, true), &env, &mut none),
+            (Swallow, Toggle::Closed)
+        );
         assert_eq!(r.route(&key(W, true), &env, &mut none).0, Deliver);
         // Other events always pass.
         assert_eq!(r.route(&Input::Other(0x100), &env, &mut none).0, Deliver);
@@ -697,18 +719,31 @@ mod tests {
         let mut r = Router::new();
         let env = Env::default();
         // LS goes to the game (nothing to know yet), RS completes the chord.
-        assert_eq!(r.route(&pad(sdl::PAD_LEFT_STICK, true), &env, &mut none).0, Deliver);
+        assert_eq!(
+            r.route(&pad(sdl::PAD_LEFT_STICK, true), &env, &mut none).0,
+            Deliver
+        );
         assert_eq!(
             r.route(&pad(sdl::PAD_RIGHT_STICK, true), &env, &mut none),
             (Swallow, Toggle::Opened)
         );
         assert!(r.focus_first);
         assert_eq!(r.swallowed_pad, pad_bit(sdl::PAD_RIGHT_STICK));
-        assert_eq!(r.route(&pad(sdl::PAD_RIGHT_STICK, false), &env, &mut none).0, Swallow);
-        assert_eq!(r.route(&pad(sdl::PAD_LEFT_STICK, false), &env, &mut none).0, Deliver);
+        assert_eq!(
+            r.route(&pad(sdl::PAD_RIGHT_STICK, false), &env, &mut none)
+                .0,
+            Swallow
+        );
+        assert_eq!(
+            r.route(&pad(sdl::PAD_LEFT_STICK, false), &env, &mut none).0,
+            Deliver
+        );
         assert_eq!(r.swallowed_pad, 0);
         r.ui_events.clear();
-        assert_eq!(r.route(&pad(sdl::PAD_DPAD_DOWN, true), &env, &mut none).0, Swallow);
+        assert_eq!(
+            r.route(&pad(sdl::PAD_DPAD_DOWN, true), &env, &mut none).0,
+            Swallow
+        );
         assert!(matches!(
             r.ui_events[0],
             UiEvent::Key {
@@ -729,7 +764,10 @@ mod tests {
         r.tick(11.0);
         assert!(r.ui_events.is_empty());
         // B closes.
-        assert_eq!(r.route(&pad(sdl::PAD_EAST, true), &env, &mut none), (Swallow, Toggle::Closed));
+        assert_eq!(
+            r.route(&pad(sdl::PAD_EAST, true), &env, &mut none),
+            (Swallow, Toggle::Closed)
+        );
     }
 
     #[test]
@@ -754,7 +792,10 @@ mod tests {
             repeat: false,
         };
         assert_eq!(r.route(&shift1, &env, &mut none).0, Swallow);
-        assert_eq!(r.captured.take(), Some(("m".into(), "k".into(), "Shift+1".into())));
+        assert_eq!(
+            r.captured.take(),
+            Some(("m".into(), "k".into(), "Shift+1".into()))
+        );
         // Pad: A was held when capture started (it pressed "Change"); its
         // release doesn't finish the capture.
         r.route(&pad(sdl::PAD_SOUTH, true), &env, &mut none);
@@ -769,7 +810,10 @@ mod tests {
         r.start_capture("m", "k");
         r.route(&key(sc::ESCAPE, true), &env, &mut none);
         assert!(r.capture.is_none() && r.captured.is_none());
-        assert!(r.open, "Escape that cancels a capture doesn't close the menu");
+        assert!(
+            r.open,
+            "Escape that cancels a capture doesn't close the menu"
+        );
     }
 
     #[test]
@@ -782,10 +826,14 @@ mod tests {
         r.route(&pad(sdl::PAD_LEFT_SHOULDER, true), &env, &mut none);
         r.route(&pad(sdl::PAD_WEST, true), &env, &mut none);
         assert!(r.captured.is_none());
-        assert_eq!(r.route(&pad(sdl::PAD_WEST, false), &env, &mut none).0, Swallow);
+        assert_eq!(
+            r.route(&pad(sdl::PAD_WEST, false), &env, &mut none).0,
+            Swallow
+        );
         assert_eq!(r.captured.take().unwrap().2, "Pad:X+Pad:LB");
         assert_eq!(
-            r.route(&pad(sdl::PAD_LEFT_SHOULDER, false), &env, &mut none).0,
+            r.route(&pad(sdl::PAD_LEFT_SHOULDER, false), &env, &mut none)
+                .0,
             Swallow
         );
         assert!(r.captured.is_none());
@@ -814,9 +862,15 @@ mod tests {
         let env = Env::default();
         r.set_open(true);
         r.ui_wants_keyboard = true;
-        assert_eq!(r.route(&key(sc::ESCAPE, true), &env, &mut none), (Swallow, Toggle::None));
+        assert_eq!(
+            r.route(&key(sc::ESCAPE, true), &env, &mut none),
+            (Swallow, Toggle::None)
+        );
         r.ui_wants_keyboard = false;
-        assert_eq!(r.route(&key(sc::ESCAPE, true), &env, &mut none), (Swallow, Toggle::Closed));
+        assert_eq!(
+            r.route(&key(sc::ESCAPE, true), &env, &mut none),
+            (Swallow, Toggle::Closed)
+        );
     }
 
     #[test]
@@ -824,7 +878,14 @@ mod tests {
         let mut r = Router::new();
         r.set_open(true);
         r.to_points = 0.5;
-        r.route(&Input::MouseMotion { x: 100.0, y: 40.0 }, &Env::default(), &mut none);
-        assert_eq!(r.ui_events, vec![UiEvent::PointerMoved(Pos2::new(50.0, 20.0))]);
+        r.route(
+            &Input::MouseMotion { x: 100.0, y: 40.0 },
+            &Env::default(),
+            &mut none,
+        );
+        assert_eq!(
+            r.ui_events,
+            vec![UiEvent::PointerMoved(Pos2::new(50.0, 20.0))]
+        );
     }
 }

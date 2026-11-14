@@ -19,8 +19,12 @@
 //! through [`set_input_sink`]. Both can be called at any time; until then the
 //! menu says no mods are loaded and input goes straight to the game.
 
+#[cfg(windows)]
+mod gl;
+#[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 pub(crate) mod router;
 pub(crate) mod sdl;
+#[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 mod ui;
 #[cfg(windows)]
 mod win;
@@ -176,6 +180,7 @@ pub fn set_host(host: Arc<dyn OverlayHost>) {
     *HOST.write().unwrap_or_else(|e| e.into_inner()) = Some(host);
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 pub(crate) fn host() -> Option<Arc<dyn OverlayHost>> {
     HOST.read().unwrap_or_else(|e| e.into_inner()).clone()
 }
@@ -185,6 +190,7 @@ pub fn set_input_sink(sink: InputSink) {
     SINK.store(sink as usize, Ordering::Release);
 }
 
+#[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 pub(crate) fn sink() -> Option<InputSink> {
     let p = SINK.load(Ordering::Acquire);
     // SAFETY: only ever stored from a valid `InputSink` fn pointer.
@@ -222,7 +228,10 @@ mod tests {
 
     #[test]
     fn setting_kinds_from_manifest() {
-        assert_eq!(SettingKind::from_manifest(&table("type = 'bool'")), Ok(SettingKind::Bool));
+        assert_eq!(
+            SettingKind::from_manifest(&table("type = 'bool'")),
+            Ok(SettingKind::Bool)
+        );
         assert_eq!(
             SettingKind::from_manifest(&table("type = 'int'\nmin = 1\nmax = 5")),
             Ok(SettingKind::Int {
@@ -241,7 +250,10 @@ mod tests {
             SettingKind::from_manifest(&table("type = 'enum'\nchoices = ['bones', 'health']")),
             Ok(SettingKind::Enum(vec!["bones".into(), "health".into()]))
         );
-        assert_eq!(SettingKind::from_manifest(&table("type = 'key'")), Ok(SettingKind::Key));
+        assert_eq!(
+            SettingKind::from_manifest(&table("type = 'key'")),
+            Ok(SettingKind::Key)
+        );
         assert!(SettingKind::from_manifest(&table("type = 'enum'")).is_err());
         assert!(SettingKind::from_manifest(&table("type = 'color'")).is_err());
         assert!(SettingKind::from_manifest(&table("default = 1")).is_err());

@@ -1,0 +1,511 @@
+//! Windows side of the overlay: SDL imports hooked through the exe's IAT,
+//! SDL functions resolved from `SDL3.dll`, and the egui frame on the game's
+//! GL context.
+
+use std::cell::RefCell;
+use std::ffi::{CStr, c_char, c_int, c_void};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::time::Instant;
+
+use egui_glow::glow;
+
+use super::gl::{self, Saved};
+use super::router::{Env, Router, Toggle, Verdict};
+use super::sdl::{self, Event, Input};
+use super::ui::{self, UiState};
+use super::{OPEN, host, sink};
+use crate::hotkey::{PAD_LT, PAD_RT, pad_bit};
+use crate::iat::IatHook;
+use crate::input::InputEvent;
+use crate::{guard, i18n};
+
+/// Panics in overlay code are contained under this id; once it has failed,
+/// every hook is a plain pass-through.
+const GUARD_ID: &str = "overlay";
+
+#[link(name = "kernel32")]
+unsafe extern "system" {
+    fn GetModuleHandleW(name: *const u16) -> *mut c_void;
+    fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
+}
+
+type Window = *mut c_void;
+type SwapFn = unsafe extern "C" fn(Window) -> bool;
+type PollFn = unsafe extern "C" fn(*mut Event) -> bool;
+type ButtonFn = unsafe extern "C" fn(*mut c_void, c_int) -> bool;
+type AxisFn = unsafe extern "C" fn(*mut c_void, c_int) -> i16;
+
+#[repr(C)]
+struct Locale {
+    language: *const c_char,
+    country: *const c_char,
+}
+
+/// SDL functions the overlay calls itself (not hooked).
+struct Api {
+    gl_get_proc_address: unsafe extern "C" fn(*const c_char) -> *const c_void,
+    gl_get_current_context: unsafe extern "C" fn() -> *mut c_void,
+    get_window_size: unsafe extern "C" fn(Window, *mut c_int, *mut c_int) -> bool,
+    get_window_size_in_pixels: unsafe extern "C" fn(Window, *mut c_int, *mut c_int) -> bool,
+    get_keyboard_focus: unsafe extern "C" fn() -> Window,
+    text_input_active: unsafe extern "C" fn(Window) -> bool,
+    start_text_input: unsafe extern "C" fn(Window) -> bool,
+    stop_text_input: unsafe extern "C" fn(Window) -> bool,
+    cursor_visible: unsafe extern "C" fn() -> bool,
+    show_cursor: unsafe extern "C" fn() -> bool,
+    hide_cursor: unsafe extern "C" fn() -> bool,
+    get_preferred_locales: unsafe extern "C" fn(*mut c_int) -> *mut *mut Locale,
+    free: unsafe extern "C" fn(*mut c_void),
+}
+
+impl Api {
+    #[allow(clippy::missing_transmute_annotations)] // each target type is the field type
+    fn resolve(sdl: *mut c_void) -> Result<Api, String> {
+        macro_rules! f {
+            ($name:literal) => {{
+                // SAFETY: `sdl` is the loaded SDL3.dll; the name is NUL-terminated.
+                let p = unsafe { GetProcAddress(sdl, concat!($name, "\0").as_ptr()) };
+                if p.is_null() {
+                    return Err(format!("SDL3.dll has no {}", $name));
+                }
+                // SAFETY: signature per the SDL 3.4 headers.
+                unsafe { std::mem::transmute::<*mut c_void, _>(p) }
+            }};
+        }
+        Ok(Api {
+            gl_get_proc_address: f!("SDL_GL_GetProcAddress"),
+            gl_get_current_context: f!("SDL_GL_GetCurrentContext"),
+            get_window_size: f!("SDL_GetWindowSize"),
+            get_window_size_in_pixels: f!("SDL_GetWindowSizeInPixels"),
+            get_keyboard_focus: f!("SDL_GetKeyboardFocus"),
+            text_input_active: f!("SDL_TextInputActive"),
+            start_text_input: f!("SDL_StartTextInput"),
+            stop_text_input: f!("SDL_StopTextInput"),
+            cursor_visible: f!("SDL_CursorVisible"),
+            show_cursor: f!("SDL_ShowCursor"),
+            hide_cursor: f!("SDL_HideCursor"),
+            get_preferred_locales: f!("SDL_GetPreferredLocales"),
+            free: f!("SDL_free"),
+        })
+    }
+}
+
+static API: OnceLock<Api> = OnceLock::new();
+static ORIG_SWAP: AtomicUsize = AtomicUsize::new(0);
+static ORIG_POLL: AtomicUsize = AtomicUsize::new(0);
+static ORIG_BUTTON: AtomicUsize = AtomicUsize::new(0);
+static ORIG_AXIS: AtomicUsize = AtomicUsize::new(0);
+static HOOKS: Mutex<Vec<IatHook>> = Mutex::new(Vec::new());
+/// The window last presented (for text-input checks).
+static WINDOW: AtomicUsize = AtomicUsize::new(0);
+/// Mirror of `Router::swallowed_pad` for the lock-free pad-state hooks.
+static SWALLOWED: AtomicU64 = AtomicU64::new(0);
+
+struct State {
+    router: Router,
+    /// The cursor was hidden by the game when the menu opened.
+    cursor_was_hidden: bool,
+    /// We started SDL text input for a menu text field.
+    text_started: bool,
+}
+
+static STATE: Mutex<Option<State>> = Mutex::new(None);
+
+fn state() -> MutexGuard<'static, Option<State>> {
+    let mut g = STATE.lock().unwrap_or_else(|e| e.into_inner());
+    if g.is_none() {
+        *g = Some(State {
+            router: Router::new(),
+            cursor_was_hidden: false,
+            text_started: false,
+        });
+    }
+    g
+}
+
+pub fn install() {
+    let name: Vec<u16> = "SDL3.dll\0".encode_utf16().collect();
+    // SAFETY: plain module lookups.
+    let (exe, sdl) = unsafe {
+        (
+            GetModuleHandleW(std::ptr::null()),
+            GetModuleHandleW(name.as_ptr()),
+        )
+    };
+    if exe.is_null() || sdl.is_null() {
+        crate::log("overlay: SDL3.dll is not loaded; overlay off");
+        return;
+    }
+    match Api::resolve(sdl) {
+        Ok(api) => {
+            let _ = API.set(api);
+        }
+        Err(e) => {
+            crate::log(&format!("overlay: {e}; overlay off"));
+            return;
+        }
+    }
+    let hooks: [(&str, usize, &AtomicUsize); 4] = [
+        ("SDL_PollEvent", poll_hook as PollFn as usize, &ORIG_POLL),
+        (
+            "SDL_GL_SwapWindow",
+            swap_hook as SwapFn as usize,
+            &ORIG_SWAP,
+        ),
+        (
+            "SDL_GetGamepadButton",
+            button_hook as ButtonFn as usize,
+            &ORIG_BUTTON,
+        ),
+        (
+            "SDL_GetGamepadAxis",
+            axis_hook as AxisFn as usize,
+            &ORIG_AXIS,
+        ),
+    ];
+    let mut installed = HOOKS.lock().unwrap_or_else(|e| e.into_inner());
+    for (func, detour, orig) in hooks {
+        // SAFETY: the exe is loaded and its imports are bound (the runtime
+        // thread starts after process initialization); the detours have the
+        // SDL signatures.
+        match unsafe { IatHook::install(exe as usize, "SDL3.dll", func, detour, orig) } {
+            Ok(h) => {
+                // SAFETY: as above.
+                let real = unsafe { GetProcAddress(sdl, format!("{func}\0").as_ptr()) };
+                if h.original() != real as usize {
+                    crate::log(&format!(
+                        "overlay: {func} was already redirected ({:#x}, SDL's is {:#x}); chaining",
+                        h.original(),
+                        real as usize
+                    ));
+                }
+                installed.push(h);
+            }
+            Err(e) => {
+                crate::log(&format!("overlay: can't hook {func}: {e}; overlay off"));
+                for h in installed.drain(..).rev() {
+                    let _ = h.remove();
+                }
+                return;
+            }
+        }
+    }
+    crate::log(
+        "overlay: hooked SDL_PollEvent, SDL_GL_SwapWindow, SDL_GetGamepadButton, SDL_GetGamepadAxis (exe IAT); F10 or LS+RS opens the menu",
+    );
+}
+
+pub fn uninstall() {
+    let mut hooks = HOOKS.lock().unwrap_or_else(|e| e.into_inner());
+    for h in hooks.drain(..).rev() {
+        if let Err(e) = h.remove() {
+            crate::log(&format!("overlay: unhook {}: {e}", h.name));
+        }
+    }
+}
+
+// ---- hooks ----
+
+unsafe extern "C" fn poll_hook(ev: *mut Event) -> bool {
+    // SAFETY: set before the slot was swapped.
+    let orig: PollFn = unsafe { std::mem::transmute(ORIG_POLL.load(Ordering::Relaxed)) };
+    if ev.is_null() {
+        // A peek: nothing to inspect.
+        return unsafe { orig(ev) };
+    }
+    loop {
+        // SAFETY: the game's event buffer.
+        if !unsafe { orig(ev) } {
+            return false;
+        }
+        // The original is called outside the guard, exactly once per event;
+        // a panic in routing delivers the event.
+        // SAFETY: SDL just filled it.
+        let swallow = guard::call_or(GUARD_ID, || route(unsafe { &*ev }), || false);
+        if !swallow {
+            return true;
+        }
+    }
+}
+
+/// Returns true to swallow.
+fn route(ev: &Event) -> bool {
+    // SAFETY: filled by SDL.
+    let input = unsafe { ev.decode() };
+    if matches!(input, Input::Other(_)) {
+        return false;
+    }
+    let Some(api) = API.get() else { return false };
+    let mut g = state();
+    let st = g.as_mut().expect("initialized by state()");
+    let window = current_window(api);
+    // SAFETY: SDL calls on the thread that polls events.
+    let active = !window.is_null() && unsafe { (api.text_input_active)(window) };
+    let env = Env {
+        game_text_input: active && !st.text_started,
+    };
+    let sink = sink();
+    let mut to_mods = |e: &InputEvent, held: u64| match sink {
+        Some(s) => {
+            crate::hotkey::set_input_state(held, false);
+            s(e)
+        }
+        None => false,
+    };
+    let (v, t) = st.router.route(&input, &env, &mut to_mods);
+    SWALLOWED.store(st.router.swallowed_pad, Ordering::Relaxed);
+    apply_toggle(api, st, t);
+    v == Verdict::Swallow
+}
+
+fn current_window(api: &Api) -> Window {
+    let w = WINDOW.load(Ordering::Relaxed) as Window;
+    if w.is_null() {
+        // SAFETY: plain SDL query.
+        unsafe { (api.get_keyboard_focus)() }
+    } else {
+        w
+    }
+}
+
+fn apply_toggle(api: &Api, st: &mut State, t: Toggle) {
+    // SAFETY: SDL video calls on the game's event/render thread.
+    unsafe {
+        match t {
+            Toggle::None => {}
+            Toggle::Opened => {
+                OPEN.store(true, Ordering::Relaxed);
+                st.cursor_was_hidden = !(api.cursor_visible)();
+                if st.cursor_was_hidden {
+                    (api.show_cursor)();
+                }
+            }
+            Toggle::Closed => {
+                OPEN.store(false, Ordering::Relaxed);
+                if std::mem::take(&mut st.cursor_was_hidden) {
+                    (api.hide_cursor)();
+                }
+                if std::mem::take(&mut st.text_started) {
+                    (api.stop_text_input)(current_window(api));
+                }
+                SWALLOWED.store(st.router.swallowed_pad, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
+unsafe extern "C" fn button_hook(pad: *mut c_void, button: c_int) -> bool {
+    // SAFETY: set before the slot was swapped.
+    let orig: ButtonFn = unsafe { std::mem::transmute(ORIG_BUTTON.load(Ordering::Relaxed)) };
+    let down = unsafe { orig(pad, button) };
+    if down
+        && (OPEN.load(Ordering::Relaxed)
+            || (0..32).contains(&button)
+                && SWALLOWED.load(Ordering::Relaxed) & pad_bit(button as u32) != 0)
+    {
+        return false;
+    }
+    down
+}
+
+unsafe extern "C" fn axis_hook(pad: *mut c_void, axis: c_int) -> i16 {
+    // SAFETY: set before the slot was swapped.
+    let orig: AxisFn = unsafe { std::mem::transmute(ORIG_AXIS.load(Ordering::Relaxed)) };
+    let v = unsafe { orig(pad, axis) };
+    if OPEN.load(Ordering::Relaxed) {
+        return 0;
+    }
+    let trigger = match axis as u8 {
+        sdl::AXIS_LEFT_TRIGGER => PAD_LT,
+        sdl::AXIS_RIGHT_TRIGGER => PAD_RT,
+        _ => return v,
+    };
+    if SWALLOWED.load(Ordering::Relaxed) & pad_bit(trigger) != 0 {
+        0
+    } else {
+        v
+    }
+}
+
+unsafe extern "C" fn swap_hook(window: Window) -> bool {
+    // SAFETY: set before the slot was swapped.
+    let orig: SwapFn = unsafe { std::mem::transmute(ORIG_SWAP.load(Ordering::Relaxed)) };
+    // Draw under the guard; present exactly once, outside it.
+    guard::call_or(GUARD_ID, || frame(window), || ());
+    unsafe { orig(window) }
+}
+
+// ---- rendering ----
+
+struct Gfx {
+    /// The SDL GL context these objects belong to.
+    context: usize,
+    gl: Arc<glow::Context>,
+    caps: gl::Caps,
+    painter: Option<egui_glow::Painter>,
+    egui: egui::Context,
+    ui: UiState,
+}
+
+thread_local! {
+    static GFX: RefCell<Option<Gfx>> = const { RefCell::new(None) };
+}
+
+static START: OnceLock<Instant> = OnceLock::new();
+
+fn detect_language(api: &Api) {
+    let mut n: c_int = 0;
+    // SAFETY: SDL returns a NULL-terminated array freed with SDL_free.
+    unsafe {
+        let list = (api.get_preferred_locales)(&mut n);
+        if list.is_null() {
+            return;
+        }
+        for i in 0..n.max(0) as usize {
+            let l = *list.add(i);
+            if l.is_null() || (*l).language.is_null() {
+                continue;
+            }
+            let code = CStr::from_ptr((*l).language).to_string_lossy();
+            if let Some(lang) = i18n::Lang::from_locale(&code) {
+                crate::log(&format!(
+                    "overlay: language {} (system locale {code})",
+                    lang.code()
+                ));
+                i18n::set_default_lang(lang);
+                break;
+            }
+        }
+        (api.free)(list.cast());
+    }
+}
+
+fn frame(window: Window) {
+    let Some(api) = API.get() else { return };
+    WINDOW.store(window as usize, Ordering::Relaxed);
+    // SAFETY: called by the game right before presenting, with its context current.
+    let context = unsafe { (api.gl_get_current_context)() } as usize;
+    if context == 0 {
+        return;
+    }
+    GFX.with_borrow_mut(|slot| {
+        if slot.as_ref().is_none_or(|g| g.context != context) {
+            if slot.is_some() {
+                // The old context is gone; its objects went with it.
+                crate::log("overlay: GL context changed; recreating renderer");
+            } else {
+                detect_language(api);
+            }
+            // SAFETY: loader for the current context.
+            let gl = unsafe {
+                glow::Context::from_loader_function_cstr(|name| {
+                    (api.gl_get_proc_address)(name.as_ptr())
+                })
+            };
+            let caps = gl::caps(&gl);
+            if let Some(old) = slot.take() {
+                // Don't free GL names on the new context.
+                std::mem::forget(old.painter);
+            }
+            *slot = Some(Gfx {
+                context,
+                gl: Arc::new(gl),
+                caps,
+                painter: None,
+                egui: egui::Context::default(),
+                ui: UiState::default(),
+            });
+        }
+        let g = slot.as_mut().expect("just set");
+        if !OPEN.load(Ordering::Relaxed) {
+            return;
+        }
+        draw(api, window, g);
+    });
+}
+
+fn draw(api: &Api, window: Window, g: &mut Gfx) {
+    let (mut w, mut h, mut pw, mut ph) = (0, 0, 0, 0);
+    // SAFETY: the game's window.
+    unsafe {
+        (api.get_window_size)(window, &mut w, &mut h);
+        (api.get_window_size_in_pixels)(window, &mut pw, &mut ph);
+    }
+    if w <= 0 || h <= 0 || pw <= 0 || ph <= 0 {
+        return;
+    }
+    // UI scale: 1 at 1080 lines and below (Steam Deck 800), larger above.
+    let ppp = (ph as f32 / 1080.0).max(1.0);
+    let to_points = (pw as f32 / w as f32) / ppp;
+    let now = START.get_or_init(Instant::now).elapsed().as_secs_f64();
+
+    // SAFETY: the context is current; the scope restores everything it changes.
+    let saved = unsafe { Saved::save(&g.gl, g.caps) };
+    if g.painter.is_none() {
+        match egui_glow::Painter::new(g.gl.clone(), "", None, false) {
+            Ok(p) => g.painter = Some(p),
+            Err(e) => {
+                drop(saved);
+                crate::log(&format!("overlay: can't create the renderer: {e}"));
+                guard::fail(GUARD_ID, format!("renderer: {e}"));
+                return;
+            }
+        }
+    }
+    let painter = g.painter.as_mut().expect("just set");
+
+    let mut sg = state();
+    let st = sg.as_mut().expect("initialized by state()");
+    st.router.to_points = to_points;
+    st.router.tick(now);
+    let mut raw = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(pw as f32 / ppp, ph as f32 / ppp),
+        )),
+        max_texture_side: Some(painter.max_texture_side()),
+        time: Some(now),
+        events: std::mem::take(&mut st.router.ui_events),
+        focused: true,
+        ..Default::default()
+    };
+    raw.viewports
+        .entry(egui::ViewportId::ROOT)
+        .or_default()
+        .native_pixels_per_point = Some(ppp);
+    let host = host();
+    let mut close = false;
+    let out = g.egui.run_ui(raw, |ui| {
+        close = ui::menu(ui.ctx(), host.as_deref(), &mut st.router, &mut g.ui);
+    });
+    let wants_keyboard = g.egui.egui_wants_keyboard_input();
+    st.router.ui_wants_keyboard = wants_keyboard;
+    if close {
+        let t = st.router.set_open(false);
+        apply_toggle(api, st, t);
+    } else {
+        // SAFETY: SDL keyboard calls on the render thread.
+        unsafe {
+            if wants_keyboard && !st.text_started && !(api.text_input_active)(window) {
+                st.text_started = (api.start_text_input)(window);
+            } else if !wants_keyboard && st.text_started {
+                (api.stop_text_input)(window);
+                st.text_started = false;
+            }
+        }
+    }
+    drop(sg);
+
+    let mut out = out;
+    let prims = g
+        .egui
+        .tessellate(std::mem::take(&mut out.shapes), out.pixels_per_point);
+    painter.paint_and_update_textures(
+        [pw as u32, ph as u32],
+        out.pixels_per_point,
+        &prims,
+        &mut out.textures_delta,
+    );
+    drop(saved);
+}

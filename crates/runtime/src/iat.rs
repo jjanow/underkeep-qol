@@ -102,7 +102,8 @@ pub fn imports(img: &[u8]) -> Result<Vec<Import>, IatError> {
         if i > 4096 {
             return Err(m("unterminated import directory"));
         }
-        let dll = String::from_utf8_lossy(cstr_at(img, name_rva).ok_or(m("DLL name"))?).into_owned();
+        let dll =
+            String::from_utf8_lossy(cstr_at(img, name_rva).ok_or(m("DLL name"))?).into_owned();
         // Without a lookup table the names are only in the IAT, which is
         // valid before binding (files, not loaded images).
         let names = if lookup != 0 { lookup } else { iat };
@@ -155,8 +156,15 @@ pub use win::IatHook;
 #[cfg(windows)]
 mod win {
     use super::*;
+    use std::ffi::c_void;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use windows_sys::Win32::System::Memory::{PAGE_READWRITE, VirtualProtect};
+
+    const PAGE_READWRITE: u32 = 0x04;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn VirtualProtect(addr: *mut c_void, size: usize, new: u32, old: *mut u32) -> i32;
+    }
 
     /// An installed IAT hook. Dropping it does not unhook; call [`remove`].
     ///
@@ -173,12 +181,16 @@ mod win {
     unsafe impl Send for IatHook {}
     unsafe impl Sync for IatHook {}
 
-    unsafe fn write_slot(slot: *const AtomicUsize, expect: usize, new: usize) -> Result<(), IatError> {
+    unsafe fn write_slot(
+        slot: *const AtomicUsize,
+        expect: usize,
+        new: usize,
+    ) -> Result<(), IatError> {
         let mut old = 0u32;
         // SAFETY: the slot is mapped (it's in the module image); protection
         // is restored right after.
         unsafe {
-            if VirtualProtect(slot as *const _, 8, PAGE_READWRITE, &mut old) == 0 {
+            if VirtualProtect(slot as *mut _, 8, PAGE_READWRITE, &mut old) == 0 {
                 return Err(IatError::Memory(format!(
                     "VirtualProtect failed ({})",
                     std::io::Error::last_os_error()
@@ -186,7 +198,7 @@ mod win {
             }
             let r = (*slot).compare_exchange(expect, new, Ordering::SeqCst, Ordering::SeqCst);
             let mut ignored = 0u32;
-            VirtualProtect(slot as *const _, 8, old, &mut ignored);
+            VirtualProtect(slot as *mut _, 8, old, &mut ignored);
             r.map(|_| ()).map_err(|now| {
                 IatError::Memory(format!(
                     "slot changed while hooking (now {now:#x}, expected {expect:#x})"
@@ -215,7 +227,8 @@ mod win {
             // covers every section, and all of them are mapped.
             let img = unsafe {
                 let hdr = std::slice::from_raw_parts(base as *const u8, 0x1000);
-                let h = crate::pe::Headers::parse(hdr).map_err(|_| IatError::Malformed("headers"))?;
+                let h =
+                    crate::pe::Headers::parse(hdr).map_err(|_| IatError::Malformed("headers"))?;
                 std::slice::from_raw_parts(base as *const u8, h.size_of_image as usize)
             };
             let rva = find_slot(img, dll, func)?;
@@ -264,7 +277,7 @@ mod tests {
     fn image_with_imports(dlls: &[(&str, &[Option<&str>])], with_lookup: bool) -> Vec<u8> {
         const BASE: usize = 0x2000;
         let mut idata = vec![0u8; 20 * (dlls.len() + 1)];
-        let mut put = |bytes: &[u8], idata: &mut Vec<u8>| -> usize {
+        let put = |bytes: &[u8], idata: &mut Vec<u8>| -> usize {
             let at = idata.len().next_multiple_of(8);
             idata.resize(at, 0);
             idata.extend_from_slice(bytes);
@@ -297,7 +310,10 @@ mod tests {
             idata[d + 12..d + 16].copy_from_slice(&(name_rva as u32).to_le_bytes());
             idata[d + 16..d + 20].copy_from_slice(&(iat as u32).to_le_bytes());
         }
-        let mut f = build_pe(&[(".text", 0x1000, &[0xc3], 0x2000_0000), (".idata", BASE as u32, &idata, 0)]);
+        let mut f = build_pe(&[
+            (".text", 0x1000, &[0xc3], 0x2000_0000),
+            (".idata", BASE as u32, &idata, 0),
+        ]);
         // `build_pe` leaves the data directories empty: set the count and
         // the import directory (index 1).
         let opt = 0x80 + 24;
@@ -314,7 +330,12 @@ mod tests {
                 ("KERNEL32.dll", &[Some("Sleep"), Some("ExitProcess")]),
                 (
                     "SDL3.dll",
-                    &[Some("SDL_Init"), None, Some("SDL_PollEvent"), Some("SDL_GL_SwapWindow")],
+                    &[
+                        Some("SDL_Init"),
+                        None,
+                        Some("SDL_PollEvent"),
+                        Some("SDL_GL_SwapWindow"),
+                    ],
                 ),
             ],
             true,
@@ -356,7 +377,9 @@ mod tests {
 
     #[test]
     fn game_exe_imports_sdl_entry_points() {
-        let Some(p) = crate::pe::tests::game_exe() else { return };
+        let Some(p) = crate::pe::tests::game_exe() else {
+            return;
+        };
         let img = map_file(&std::fs::read(p).unwrap()).unwrap();
         for f in [
             "SDL_PollEvent",

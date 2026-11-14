@@ -67,8 +67,20 @@ impl Lang {
 
 static CURRENT: AtomicU8 = AtomicU8::new(Lang::En as u8);
 
+static EXPLICIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Sets the language (e.g. from the user's config). Wins over the system
+/// locale the overlay detects.
 pub fn set_lang(lang: Lang) {
+    EXPLICIT.store(true, Ordering::Relaxed);
     CURRENT.store(lang as u8, Ordering::Relaxed);
+}
+
+/// Sets the language from the system locale, unless [`set_lang`] was called.
+pub fn set_default_lang(lang: Lang) {
+    if !EXPLICIT.load(Ordering::Relaxed) {
+        CURRENT.store(lang as u8, Ordering::Relaxed);
+    }
 }
 
 pub fn lang() -> Lang {
@@ -85,7 +97,9 @@ fn lookup(lang: Lang, id: &str) -> Option<&'static str> {
 
 /// The text for `id` in the current language, else English, else the id.
 pub fn tr(id: &'static str) -> &'static str {
-    lookup(lang(), id).or_else(|| lookup(Lang::En, id)).unwrap_or(id)
+    lookup(lang(), id)
+        .or_else(|| lookup(Lang::En, id))
+        .unwrap_or(id)
 }
 
 /// [`tr`] with `{0}`, `{1}`… replaced by `args`.
@@ -102,19 +116,28 @@ const EN: &[(&str, &str)] = &[
     ("menu.version", "Version {0}"),
     ("menu.close_hint", "{0} or {1} closes this menu."),
     ("menu.close", "Close"),
-    ("menu.no_host", "The mod host isn't running, so no mods are loaded."),
+    (
+        "menu.no_host",
+        "The mod host isn't running, so no mods are loaded.",
+    ),
     ("menu.no_mods", "No mods are installed."),
     ("mod.enabled", "Enabled"),
     ("mod.settings", "Settings"),
     ("status.active", "Active"),
     ("status.off", "Off"),
     ("status.failed", "Turned off after an error: {0}"),
-    ("status.unsupported", "Not available on this game version: {0}"),
+    (
+        "status.unsupported",
+        "Not available on this game version: {0}",
+    ),
     ("setting.rebind", "Change"),
     ("setting.unbound", "Not set"),
     ("setting.clear", "Clear"),
     ("setting.default", "Default"),
-    ("setting.press", "Press a key or gamepad button (Esc cancels)"),
+    (
+        "setting.press",
+        "Press a key or gamepad button (Esc cancels)",
+    ),
     ("setting.error", "Couldn't change this setting: {0}"),
 ];
 
@@ -131,7 +154,9 @@ mod tests {
     use super::*;
 
     fn placeholders(s: &str) -> Vec<usize> {
-        (0..10).filter(|i| s.contains(&format!("{{{i}}}"))).collect()
+        (0..10)
+            .filter(|i| s.contains(&format!("{{{i}}}")))
+            .collect()
     }
 
     #[test]
@@ -142,7 +167,8 @@ mod tests {
         }
         for lang in Lang::ALL {
             for (id, text) in lang.table() {
-                let en = lookup(Lang::En, id).unwrap_or_else(|| panic!("{lang:?}: unknown id {id}"));
+                let en =
+                    lookup(Lang::En, id).unwrap_or_else(|| panic!("{lang:?}: unknown id {id}"));
                 assert_eq!(placeholders(text), placeholders(en), "{lang:?} {id}");
             }
         }

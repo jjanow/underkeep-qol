@@ -221,7 +221,8 @@ fn setting(
                     .to_owned();
                 let r = ui.text_edit_singleline(&mut text);
                 if r.changed() {
-                    st.drafts.insert(key.clone(), toml::Value::String(text.clone()));
+                    st.drafts
+                        .insert(key.clone(), toml::Value::String(text.clone()));
                 }
                 if r.lost_focus() && st.drafts.contains_key(&key) {
                     st.apply(h, m, &s.key, toml::Value::String(text));
@@ -244,7 +245,11 @@ fn setting(
                     ui.colored_label(AMBER, tr("setting.press"));
                 } else {
                     let spec = s.value.as_str().unwrap_or("");
-                    let shown = if spec.is_empty() { tr("setting.unbound") } else { spec };
+                    let shown = if spec.is_empty() {
+                        tr("setting.unbound")
+                    } else {
+                        spec
+                    };
                     ui.monospace(shown);
                     if ui.button(tr("setting.rebind")).clicked() {
                         router.start_capture(m, &s.key);
@@ -310,7 +315,11 @@ mod tests {
         }
         fn set_setting(&self, m: &str, k: &str, v: toml::Value) -> Result<(), String> {
             self.calls.lock().unwrap().push(format!("{m}.{k}={v}"));
-            if k == "bad" { Err("nope".into()) } else { Ok(()) }
+            if k == "bad" {
+                Err("nope".into())
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -340,7 +349,14 @@ mod tests {
                     },
                     3.into(),
                 ),
-                s("f", SettingKind::Float { min: None, max: None }, 0.5.into()),
+                s(
+                    "f",
+                    SettingKind::Float {
+                        min: None,
+                        max: None,
+                    },
+                    0.5.into(),
+                ),
                 s("name", SettingKind::String, "x".into()),
                 s(
                     "mode",
@@ -352,14 +368,24 @@ mod tests {
         }
     }
 
-    fn frame(ctx: &egui::Context, h: &FakeHost, r: &mut Router, st: &mut UiState, events: Vec<egui::Event>) -> bool {
+    fn frame(
+        ctx: &egui::Context,
+        h: &FakeHost,
+        r: &mut Router,
+        st: &mut UiState,
+        events: Vec<egui::Event>,
+    ) -> bool {
         let raw = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(Default::default(), egui::vec2(1280.0, 800.0))),
+            screen_rect: Some(egui::Rect::from_min_size(
+                Default::default(),
+                egui::vec2(1280.0, 800.0),
+            )),
             events,
             ..Default::default()
         };
         let mut close = false;
-        let _ = ctx.run_ui(raw, |ui| close = menu(ui.ctx(), Some(h), r, st));
+        ctx.run_ui(raw, |ui| close = menu(ui.ctx(), Some(h), r, st))
+            .drop_without_applying_deltas();
         close
     }
 
@@ -377,11 +403,19 @@ mod tests {
         }
         r.captured = Some(("inventory-sort".into(), "key".into(), "Shift+S".into()));
         frame(&ctx, &h, &mut r, &mut st, vec![]);
-        assert_eq!(*h.calls.lock().unwrap(), vec!["inventory-sort.key=\"Shift+S\"".to_string()]);
+        assert_eq!(
+            *h.calls.lock().unwrap(),
+            vec!["inventory-sort.key=\"Shift+S\"".to_string()]
+        );
         // Errors stick to the setting.
         r.captured = Some(("inventory-sort".into(), "bad".into(), "".into()));
         frame(&ctx, &h, &mut r, &mut st, vec![]);
-        assert_eq!(st.errors.get(&id("inventory-sort", "bad")).map(String::as_str), Some("nope"));
+        assert_eq!(
+            st.errors
+                .get(&id("inventory-sort", "bad"))
+                .map(String::as_str),
+            Some("nope")
+        );
     }
 
     #[test]
@@ -415,8 +449,9 @@ mod tests {
         let mut r = Router::new();
         let mut st = UiState::default();
         let raw = egui::RawInput::default();
-        let _ = ctx.run_ui(raw, |ui| {
+        ctx.run_ui(raw, |ui| {
             assert!(!menu(ui.ctx(), None, &mut r, &mut st));
-        });
+        })
+        .drop_without_applying_deltas();
     }
 }

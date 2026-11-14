@@ -12,7 +12,6 @@ const CONTEXT_COMPATIBILITY_PROFILE_BIT: i32 = 0x2;
 #[derive(Debug, Clone, Copy)]
 pub struct Caps {
     pub major: u32,
-    pub minor: u32,
     pub gles: bool,
     pub vao: bool,
     pub samplers: bool,
@@ -52,7 +51,7 @@ pub fn caps(gl: &glow::Context) -> Caps {
     let ext = gl.supported_extensions();
     Caps {
         major,
-        minor,
+
         gles,
         vao: at_least(3, 0) || ext.contains("GL_ARB_vertex_array_object"),
         samplers: at_least(3, 3) || ext.contains("GL_ARB_sampler_objects"),
@@ -124,17 +123,21 @@ impl<'a> Saved<'a> {
         }
         let mut viewport = [0; 4];
         let mut scissor_box = [0; 4];
-        let mut mask = [false; 4];
+        let mask;
         let mut poly = [glow::FILL as i32; 2];
         unsafe {
             gl.get_parameter_i32_slice(glow::VIEWPORT, &mut viewport);
             gl.get_parameter_i32_slice(glow::SCISSOR_BOX, &mut scissor_box);
-            gl.get_parameter_bool_slice(glow::COLOR_WRITEMASK, &mut mask);
+            mask = gl.get_parameter_bool_array::<4>(glow::COLOR_WRITEMASK);
             if caps.polygon_mode {
                 gl.get_parameter_i32_slice(glow::POLYGON_MODE, &mut poly[..1]);
             }
         }
-        let vao = if caps.vao { i(glow::VERTEX_ARRAY_BINDING) } else { 0 };
+        let vao = if caps.vao {
+            i(glow::VERTEX_ARRAY_BINDING)
+        } else {
+            0
+        };
         let element_buffer = i(glow::ELEMENT_ARRAY_BUFFER_BINDING);
         // egui unbinds ELEMENT_ARRAY_BUFFER with VAO 0 bound when it's done,
         // which changes VAO 0's binding; remember it.
@@ -160,7 +163,11 @@ impl<'a> Saved<'a> {
             element_buffer,
             active_texture,
             texture0: i(glow::TEXTURE_BINDING_2D),
-            sampler0: if caps.samplers { i(glow::SAMPLER_BINDING) } else { 0 },
+            sampler0: if caps.samplers {
+                i(glow::SAMPLER_BINDING)
+            } else {
+                0
+            },
             unpack_buffer: if caps.major >= 3 || caps.gles {
                 i(glow::PIXEL_UNPACK_BUFFER_BINDING)
             } else {
@@ -224,7 +231,10 @@ impl Drop for Saved<'_> {
                     nz(self.element_buffer).map(glow::NativeBuffer),
                 );
             }
-            gl.bind_buffer(glow::ARRAY_BUFFER, nz(self.array_buffer).map(glow::NativeBuffer));
+            gl.bind_buffer(
+                glow::ARRAY_BUFFER,
+                nz(self.array_buffer).map(glow::NativeBuffer),
+            );
             gl.active_texture(glow::TEXTURE0);
             gl.bind_texture(glow::TEXTURE_2D, nz(self.texture0).map(glow::NativeTexture));
             if c.samplers {
@@ -240,8 +250,14 @@ impl Drop for Saved<'_> {
             for (p, v) in UNPACK.iter().zip(self.unpack) {
                 gl.pixel_store_i32(*p, v);
             }
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, nz(self.draw_fb).map(glow::NativeFramebuffer));
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, nz(self.read_fb).map(glow::NativeFramebuffer));
+            gl.bind_framebuffer(
+                glow::DRAW_FRAMEBUFFER,
+                nz(self.draw_fb).map(glow::NativeFramebuffer),
+            );
+            gl.bind_framebuffer(
+                glow::READ_FRAMEBUFFER,
+                nz(self.read_fb).map(glow::NativeFramebuffer),
+            );
             let [x, y, w, h] = self.viewport;
             gl.viewport(x, y, w, h);
             let [x, y, w, h] = self.scissor_box;

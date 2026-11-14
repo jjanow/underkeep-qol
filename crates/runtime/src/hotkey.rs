@@ -225,7 +225,8 @@ impl FromStr for Binding {
             }
             let mut buttons = Vec::new();
             for p in &parts {
-                let b = parse_pad(&p[4..]).ok_or_else(|| format!("unknown gamepad button {p:?}"))?;
+                let b =
+                    parse_pad(&p[4..]).ok_or_else(|| format!("unknown gamepad button {p:?}"))?;
                 if !buttons.contains(&b) {
                     buttons.push(b);
                 }
@@ -254,7 +255,11 @@ impl fmt::Display for Binding {
         match self {
             Binding::None => Ok(()),
             Binding::Key { scancode, mods } => {
-                for (on, name) in [(mods.ctrl, "Ctrl+"), (mods.shift, "Shift+"), (mods.alt, "Alt+")] {
+                for (on, name) in [
+                    (mods.ctrl, "Ctrl+"),
+                    (mods.shift, "Shift+"),
+                    (mods.alt, "Alt+"),
+                ] {
                     if on {
                         f.write_str(name)?;
                     }
@@ -366,6 +371,7 @@ pub fn pressed(mod_id: &str, name: &str, ev: &InputEvent) -> bool {
 
 /// Set by the overlay: the pad buttons held before the event being
 /// dispatched, and whether hotkeys are suppressed (text input or menu).
+#[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn set_input_state(pad_held: u64, suppressed: bool) {
     PAD_HELD.store(pad_held, Ordering::Relaxed);
     SUPPRESSED.store(suppressed, Ordering::Relaxed);
@@ -429,7 +435,16 @@ mod tests {
 
     #[test]
     fn rejects_bad_specs() {
-        for spec in ["Hyper+S", "Shift+", "F25", "Pad:Q", "Shift+Pad:A", "Pad:A+B", "Num10", "SS"] {
+        for spec in [
+            "Hyper+S",
+            "Shift+",
+            "F25",
+            "Pad:Q",
+            "Shift+Pad:A",
+            "Pad:A+B",
+            "Num10",
+            "SS",
+        ] {
             assert!(spec.parse::<Binding>().is_err(), "{spec}");
         }
     }
