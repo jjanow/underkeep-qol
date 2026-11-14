@@ -4,7 +4,7 @@
 
 use std::cell::RefCell;
 use std::ffi::{CStr, c_char, c_int, c_void};
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
@@ -101,6 +101,10 @@ static HOOKS: Mutex<Vec<IatHook>> = Mutex::new(Vec::new());
 static WINDOW: AtomicUsize = AtomicUsize::new(0);
 /// Mirror of `Router::swallowed_pad` for the lock-free pad-state hooks.
 static SWALLOWED: AtomicU64 = AtomicU64::new(0);
+/// Set once the overlay has been shut down after a failure.
+static FORCED_CLOSED: AtomicBool = AtomicBool::new(false);
+/// Last logged game text-input state (0 unknown, 1 off, 2 on).
+static GAME_TEXT: AtomicU8 = AtomicU8::new(0);
 
 struct State {
     router: Router,
@@ -238,7 +242,14 @@ unsafe extern "C" fn poll_hook(ev: *mut Event) -> bool {
         // The original is called outside the guard, exactly once per event;
         // a panic in routing delivers the event.
         // SAFETY: SDL just filled it.
-        let swallow = guard::call_or(GUARD_ID, || route(unsafe { &*ev }), || false);
+        let swallow = guard::call_or(
+            GUARD_ID,
+            || route(unsafe { &*ev }),
+            || {
+                force_close();
+                false
+            },
+        );
         if !swallow {
             return true;
         }
@@ -261,6 +272,20 @@ fn route(ev: &Event) -> bool {
     let env = Env {
         game_text_input: active && !st.text_started,
     };
+    // Hotkeys are off while this is on; log changes so a game that leaves
+    // text input on shows up in the log.
+    let now = if env.game_text_input { 2 } else { 1 };
+    if GAME_TEXT.swap(now, Ordering::Relaxed) != now {
+        crate::log(&format!(
+            "overlay: game text input {} (hotkeys {})",
+            if env.game_text_input { "on" } else { "off" },
+            if env.game_text_input {
+                "paused"
+            } else {
+                "active"
+            }
+        ));
+    }
     let sink = sink();
     let mut to_mods = |e: &InputEvent, held: u64| match sink {
         Some(s) => {
@@ -273,6 +298,32 @@ fn route(ev: &Event) -> bool {
     SWALLOWED.store(st.router.swallowed_pad, Ordering::Relaxed);
     apply_toggle(api, st, t);
     v == Verdict::Swallow
+}
+
+/// After the overlay failed (panic, renderer error): closes the menu so the
+/// pad-state hooks (which keep running) and the cursor go back to normal.
+/// Runs once; never blocks or panics (it's also the hooks' fallback).
+fn force_close() {
+    if FORCED_CLOSED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    OPEN.store(false, Ordering::Relaxed);
+    SWALLOWED.store(0, Ordering::Relaxed);
+    let lock = match STATE.try_lock() {
+        Ok(g) => Some(g),
+        // A panic while drawing poisons the lock; the state is still usable.
+        Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner()),
+        Err(std::sync::TryLockError::WouldBlock) => None,
+    };
+    if let (Some(api), Some(mut g)) = (API.get(), lock)
+        && let Some(st) = g.as_mut()
+    {
+        let t = st.router.set_open(false);
+        apply_toggle(api, st, t);
+        st.router.swallowed_pad = 0;
+    }
+    SWALLOWED.store(0, Ordering::Relaxed);
+    crate::try_log("overlay: turned off after an error; the game keeps running without it");
 }
 
 fn current_window(api: &Api) -> Window {
@@ -348,7 +399,7 @@ unsafe extern "C" fn swap_hook(window: Window) -> bool {
     // SAFETY: set before the slot was swapped.
     let orig: SwapFn = unsafe { std::mem::transmute(ORIG_SWAP.load(Ordering::Relaxed)) };
     // Draw under the guard; present exactly once, outside it.
-    guard::call_or(GUARD_ID, || frame(window), || ());
+    guard::call_or(GUARD_ID, || frame(window), force_close);
     unsafe { orig(window) }
 }
 
@@ -465,6 +516,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx) {
                 drop(saved);
                 crate::log(&format!("overlay: can't create the renderer: {e}"));
                 guard::fail(GUARD_ID, format!("renderer: {e}"));
+                force_close();
                 return;
             }
         }

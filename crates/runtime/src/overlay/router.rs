@@ -10,7 +10,8 @@
 //!   whose press the game saw (so nothing stays held in the game).
 //! - While closed, presses go to the mods (hotkeys) unless the game has a
 //!   text field focused; a press a mod handles is swallowed, and so is its
-//!   release.
+//!   release. Releases go to the mods too, but only to observe: whether the
+//!   game gets a release depends only on whether it got the press.
 
 use std::collections::BTreeSet;
 
@@ -331,6 +332,10 @@ impl Router {
                     {
                         self.ui_key_event(k, false, false);
                     }
+                    if !self.open && !env.game_text_input {
+                        // Releases are observed by mods, never swallowed by them.
+                        sink(&InputEvent::KeyUp { scancode, mods: km }, self.pad_held);
+                    }
                     let game_had = self.game_keys.remove(&scancode);
                     return (if game_had { Deliver } else { Swallow }, Toggle::None);
                 }
@@ -477,6 +482,9 @@ impl Router {
             self.swallowed_pad &= !bit;
             if let Some(k) = nav_key(button) {
                 self.nav_release(k);
+            }
+            if !self.open && !env.game_text_input {
+                sink(&InputEvent::PadUp { button }, self.pad_held);
             }
             let game_had = self.game_pad & bit != 0;
             self.game_pad &= !bit;
@@ -712,6 +720,38 @@ mod tests {
         };
         r.route(&key(S, true), &env, &mut spy);
         assert!(!called);
+    }
+
+    #[test]
+    fn releases_reach_mods_but_cannot_be_swallowed_by_them() {
+        let mut r = Router::new();
+        let env = Env::default();
+        let mut seen = Vec::new();
+        let mut all = |ev: &InputEvent, _: u64| {
+            seen.push(ev.clone());
+            true
+        };
+        // The mod swallows W's press; its release is shown to the mod and
+        // swallowed (the game never saw the press).
+        assert_eq!(r.route(&key(W, true), &env, &mut all).0, Swallow);
+        assert_eq!(r.route(&key(W, false), &env, &mut all).0, Swallow);
+        assert_eq!(
+            r.route(&pad(sdl::PAD_NORTH, false), &env, &mut all).0,
+            Swallow
+        );
+        assert_eq!(seen.len(), 3);
+        assert!(matches!(seen[1], InputEvent::KeyUp { scancode: W, .. }));
+        assert_eq!(
+            seen[2],
+            InputEvent::PadUp {
+                button: sdl::PAD_NORTH
+            }
+        );
+        // A release whose press the game got is delivered even if the mod
+        // returns true for it.
+        let mut ups = |ev: &InputEvent, _: u64| matches!(ev, InputEvent::KeyUp { .. });
+        assert_eq!(r.route(&key(S, true), &env, &mut ups).0, Deliver);
+        assert_eq!(r.route(&key(S, false), &env, &mut ups).0, Deliver);
     }
 
     #[test]

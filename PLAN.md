@@ -182,6 +182,12 @@ Check items off as they land; add findings under the item they belong to.
     enum/key) and `overlay::set_input_sink(fn(&InputEvent) -> bool)`.
     `SettingKind::from_manifest` reads `type`, `min`, `max`, `choices` from
     a `[settings.<key>]` table. Not wired to the host yet.
+  - The sink gets presses and releases (a release's return value is
+    ignored). Host and sink run inside the overlay's guard, so the host must
+    wrap each mod call in `guard::call(mod_id, …)`. If the overlay itself
+    fails, the menu is force-closed so pad polling and the cursor recover.
+  - The log notes each change of the game's text-input state
+    (`overlay: game text input on/off`), since hotkeys pause while it's on.
 - [x] Hotkey system on SDL events: keyboard and gamepad, rebindable,
       swallows the event when a mod handles it.
   - `runtime::hotkey`: specs `S`, `Shift+1`, `Ctrl+Alt+F5`, `Num5`, `Pad:Y`,

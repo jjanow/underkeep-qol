@@ -151,8 +151,9 @@ pub struct ModRow {
 
 /// What the menu needs from the mod host. Called on the game's render
 /// thread while the menu is open (`mods` once per frame), so keep it cheap
-/// and don't block. Must not call back into the overlay (except
-/// [`is_open`]).
+/// and don't block. Runs inside the overlay's panic guard: wrap calls into
+/// a mod (`on_settings`, ...) in `guard::call(mod_id, ...)`. Must not call
+/// back into the overlay (except [`is_open`]).
 pub trait OverlayHost: Send + Sync {
     fn mods(&self) -> Vec<ModRow>;
     /// The user flipped a mod's switch. Err is shown under the mod.
@@ -165,10 +166,14 @@ pub trait OverlayHost: Send + Sync {
 }
 
 /// Receives each key / gamepad press and release while the menu is closed
-/// and the game has no text field focused. Return true to swallow the
-/// event (the host returns true if any mod's `on_input` did). Called on the
-/// thread that polls SDL events; must not call back into the overlay
-/// (except [`is_open`] and [`crate::hotkey`] functions).
+/// and the game has no text field focused. For a press, return true to
+/// swallow it (the host returns true if any mod's `on_input` did); the
+/// return value for a release is ignored (the game gets a release exactly
+/// when it got the press). Called on the thread that polls SDL events,
+/// inside the overlay's panic guard: the host must run each mod's
+/// `on_input` in `guard::call(mod_id, ...)`, or a mod's panic turns the
+/// overlay off. Must not call back into the overlay (except [`is_open`] and
+/// [`crate::hotkey`] functions).
 pub type InputSink = fn(&InputEvent) -> bool;
 
 static HOST: RwLock<Option<Arc<dyn OverlayHost>>> = RwLock::new(None);
