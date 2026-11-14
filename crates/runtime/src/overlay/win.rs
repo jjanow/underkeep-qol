@@ -489,10 +489,13 @@ fn frame(window: Window) {
         }
         let g = slot.as_mut().expect("just set");
         let open = OPEN.load(Ordering::Relaxed);
-        if !open && !crate::toast::any() {
-            return;
+        if open || crate::toast::any() {
+            draw(api, window, g, open);
         }
-        draw(api, window, g, open);
+        let (mut pw, mut ph) = (0, 0);
+        // SAFETY: the game's window.
+        unsafe { (api.get_window_size_in_pixels)(window, &mut pw, &mut ph) };
+        super::capture::maybe(&g.gl, pw, ph);
     });
 }
 
