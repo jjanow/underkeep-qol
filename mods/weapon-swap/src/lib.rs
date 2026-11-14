@@ -18,15 +18,25 @@
 //!   code was found that queues it itself; tested in a fight: the round
 //!   goes on normally). It needs the hero to be able to act and the
 //!   monsters not to be moving. Outside combat it's free.
-//! - Putting a weapon into the slot and taking it out are menu buttons (the
-//!   mod's section of the overlay menu). The character sheet has no slot
-//!   for it (yet): see PLAN.md. On the HUD, a hero with a filled slot gets a
-//!   small button on their weapon hand slot; clicking it swaps.
+//! - The character sheet shows the slot left of the helmet slot (an overlay
+//!   widget placed from the sheet's own slot rects, drawn like the game's
+//!   empty slots with a bow silhouette: `slot`). It works like the
+//!   game's slots, which pick an item up with a click and drop it with the
+//!   next: clicking it with a bow on the cursor (from the inventory or a
+//!   hand) puts the bow in; clicking it while it holds a weapon picks that
+//!   up (the mod's own pick-up: the weapon isn't in the game), and the next
+//!   click drops it on the inventory panel or the weapon slot (a swap);
+//!   anywhere else puts it back. A right click moves it to the inventory.
+//!   With a gamepad there is no mouse cursor: the mod's section of the
+//!   overlay menu has buttons for the same. On the HUD, a hero with a
+//!   filled slot gets a small button on their weapon hand slot; clicking it
+//!   swaps.
 //! - Keys and buttons only queue an action; `on_frame` runs it on the game
 //!   thread between frames. Every action logs the item counts of the party
 //!   plus the slots before and after: they must stay equal.
 
 mod game;
+mod slot;
 mod state;
 
 use std::collections::BTreeMap;
@@ -37,8 +47,8 @@ use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
 use uk_qol_runtime::input::InputEvent;
 use uk_qol_runtime::{hotkey, hud};
 
-use game::{Game, Readiness, SLOT_WEAPON, busy_reason};
-use state::{HEROES, Loaded, State, StoredItem};
+use game::{Game, KIND_EQUIPPED, KIND_INVENTORY, Readiness, SLOT_WEAPON, UI_SHEET, busy_reason};
+use state::{HEROES, Loaded, Parked, State, StoredItem};
 
 const ID: &str = "weapon-swap";
 
@@ -87,9 +97,9 @@ fn hud_label(def: &str) -> String {
     }
 }
 
-fn hud_setting(settings: &toml::Table) -> bool {
+fn bool_setting(settings: &toml::Table, key: &str) -> bool {
     settings
-        .get("hud_button")
+        .get(key)
         .and_then(toml::Value::as_bool)
         .unwrap_or(true)
 }
@@ -114,6 +124,16 @@ enum Action {
     ToInventory(usize),
     /// Move parked weapon `k` to the inventory.
     ParkedToInventory(usize),
+    /// Put the item the game holds on the cursor (dropped on the sheet's
+    /// ranged slot of hero `hero`) into that slot.
+    DropCarried {
+        hero: usize,
+        item: usize,
+        def: String,
+        kind: i32,
+        src_hero: i32,
+        src_slot: i32,
+    },
 }
 
 struct Inner {
@@ -134,6 +154,15 @@ struct Inner {
     seen: Option<(bool, i32)>,
     /// The `hud_button` setting.
     hud_button: bool,
+    /// The `sheet_slot` setting.
+    sheet_slot: bool,
+    /// The hero whose ranged-slot weapon the mod has on the cursor (picked
+    /// up from the sheet's ranged slot; it stays in the slot until dropped).
+    carry: Option<usize>,
+    /// Logged the sheet's slot positions (once per session).
+    sheet_logged: bool,
+    /// Last item seen on the game's cursor on the sheet, to log changes.
+    seen_carried: Option<usize>,
 }
 
 #[derive(Default)]
@@ -183,6 +212,16 @@ impl Inner {
     }
 
     fn run(&mut self, a: Action) {
+        if let Action::DropCarried { item, .. } = &a {
+            // The game's drop targets end the drag before acting on it.
+            match self.game.carried() {
+                Some(c) if c.item as usize == *item => self.game.end_drag(),
+                _ => {
+                    self.say(format!("{}: it's no longer on the cursor", describe(&a)));
+                    return;
+                }
+            }
+        }
         let r = self.game.readiness();
         if let Some(why) = busy_reason(&r) {
             self.say(format!("{}: not now, {why} ({})", describe(&a), raw(&r)));
@@ -272,7 +311,77 @@ impl Inner {
                 self.state.parked.remove(*k);
                 Ok(format!("{} moved to the inventory", p.item.def))
             }
+            Action::DropCarried {
+                hero,
+                item,
+                def,
+                kind,
+                src_hero,
+                src_slot,
+            } => self.drop_carried(
+                *hero,
+                *item as game::Item,
+                def,
+                *kind,
+                (*src_hero, *src_slot),
+                r,
+            ),
         }
+    }
+
+    /// Puts a weapon dropped on hero `h`'s ranged slot in it: from the
+    /// inventory, or from a hero's hand (`src`: hero and slot; the game's
+    /// unequip first). A weapon already in the slot goes to the inventory,
+    /// as when the game equips over an item; the bow from `h`'s own hand on
+    /// a filled slot is a swap.
+    fn drop_carried(
+        &mut self,
+        h: usize,
+        item: game::Item,
+        def: &str,
+        kind: i32,
+        src: (i32, i32),
+        r: &Readiness,
+    ) -> Result<String, String> {
+        self.need_ack()?;
+        if h >= HEROES || !self.game.hero_valid(h) {
+            return Err("no hero there".into());
+        }
+        let new = match kind {
+            KIND_INVENTORY => self.game.store_from_inventory(item, def)?,
+            KIND_EQUIPPED => {
+                let from = usize::try_from(src.0)
+                    .ok()
+                    .filter(|&s| s < HEROES && src.1 == SLOT_WEAPON)
+                    .ok_or_else(|| format!("{def} isn't a ranged weapon"))?;
+                if self.game.equipped(from, SLOT_WEAPON) != item {
+                    return Err(format!("{def} is no longer in that hand"));
+                }
+                if from == h && self.state.heroes[h].stored.is_some() {
+                    return self.swap(h, r);
+                }
+                self.game.store_equipped(from)?
+            }
+            _ => return Err(format!("put {def} in the inventory first")),
+        };
+        let name = self.game.hero_name(h);
+        let mut msg = format!("{name}: {} is now in the ranged slot", new.def);
+        if let Some(old) = self.state.heroes[h].stored.take() {
+            if let Err(e) = self.game.to_inventory(&old) {
+                // Keep the old one; the new one goes back to the game.
+                self.state.heroes[h].stored = Some(old);
+                if self.game.to_inventory(&new).is_err() {
+                    self.state.parked.push(Parked {
+                        key: format!("slot {}", h + 1),
+                        item: new,
+                    });
+                }
+                return Err(format!("can't move the slot's weapon out: {e}"));
+            }
+            msg.push_str(&format!("; {} moved to the inventory", old.def));
+        }
+        self.state.heroes[h].stored = Some(new);
+        Ok(msg)
     }
 
     fn need_ack(&self) -> Result<(), String> {
@@ -352,6 +461,9 @@ fn describe(a: &Action) -> String {
         Action::StoreFromInventory(i, _, d) => format!("put {d} in hero {}'s slot", i + 1),
         Action::ToInventory(i) => format!("move hero {}'s slot weapon to the inventory", i + 1),
         Action::ParkedToInventory(_) => "move a parked weapon to the inventory".into(),
+        Action::DropCarried { hero, def, .. } => {
+            format!("put {def} from the cursor in hero {}'s slot", hero + 1)
+        }
     }
 }
 
@@ -413,7 +525,11 @@ impl Mod for WeaponSwap {
             refocus: None,
             off_identity: None,
             seen: None,
-            hud_button: hud_setting(cx.settings),
+            hud_button: bool_setting(cx.settings, "hud_button"),
+            sheet_slot: bool_setting(cx.settings, "sheet_slot"),
+            carry: None,
+            sheet_logged: false,
+            seen_carried: None,
         });
         Ok(())
     }
@@ -433,7 +549,11 @@ impl Mod for WeaponSwap {
     fn on_settings(&mut self, settings: &toml::Table) {
         if let Some(i) = &mut self.inner {
             i.costs_turn = costs_turn(settings);
-            i.hud_button = hud_setting(settings);
+            i.hud_button = bool_setting(settings, "hud_button");
+            i.sheet_slot = bool_setting(settings, "sheet_slot");
+            if !i.sheet_slot {
+                i.carry = None;
+            }
         }
     }
 
@@ -459,6 +579,11 @@ impl Mod for WeaponSwap {
         for a in std::mem::take(&mut inner.queue) {
             inner.run(a);
         }
+        // The mod's pick-up ends when the sheet closes or something covers
+        // it (the weapon never left the slot).
+        if inner.carry.is_some() && !(inner.game.ui_mode() == UI_SHEET && hud::shown()) {
+            inner.carry = None;
+        }
         // Log battle and turn-phase changes, for triage of the combat path.
         if inner.game.playing() {
             let r = inner.game.readiness();
@@ -480,6 +605,7 @@ impl Mod for WeaponSwap {
     fn on_load_save(&mut self, st: &ModSaveState) {
         let Some(inner) = &mut self.inner else { return };
         inner.queue.clear();
+        inner.carry = None;
         let keys = inner.keys();
         let fp = inner.fingerprint();
         let mut warns = Vec::new();
@@ -516,7 +642,8 @@ impl Mod for WeaponSwap {
 
     fn has_hud(&self) -> bool {
         self.inner.as_ref().is_some_and(|i| {
-            i.hud_button && i.acknowledged && i.state.heroes.iter().any(|h| h.stored.is_some())
+            (i.hud_button && i.acknowledged && i.state.heroes.iter().any(|h| h.stored.is_some()))
+                || (i.sheet_slot && i.game.playing() && i.game.ui_mode() == UI_SHEET)
         })
     }
 
@@ -526,30 +653,226 @@ impl Mod for WeaponSwap {
         if !inner.game.playing() {
             return;
         }
-        for h in 0..HEROES {
-            let Some(stored) = inner.state.heroes[h].stored.clone() else {
-                continue;
-            };
-            if !inner.game.hero_valid(h) {
-                continue;
-            }
-            let Some(slot) = hud::gui_rect(&hud::weapon_slot_name(h)) else {
-                continue;
-            };
-            let r = hud::button(
-                ui,
-                t.rect_to_points(hud_button_rect(slot)),
-                &hud_label(&stored.def),
-                egui::Color32::from_rgb(60, 95, 50),
-            )
-            .on_hover_text(format!(
-                "Ranged slot: {}. Click: swap with the weapon in hand.",
-                item_label(&stored)
-            ));
-            if r.clicked() {
-                inner.queue.push(Action::Swap(h));
-            }
+        if inner.hud_button && inner.acknowledged {
+            hand_buttons(inner, ui, &t);
         }
+        sheet_slot(inner, ui, &t);
+    }
+}
+
+/// The swap buttons on the HUD's weapon hand slots.
+fn hand_buttons(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
+    for h in 0..HEROES {
+        let Some(stored) = inner.state.heroes[h].stored.clone() else {
+            continue;
+        };
+        if !inner.game.hero_valid(h) {
+            continue;
+        }
+        let Some(slot) = hud::gui_rect(&hud::weapon_slot_name(h)) else {
+            continue;
+        };
+        let r = hud::button(
+            ui,
+            t.rect_to_points(hud_button_rect(slot)),
+            &hud_label(&stored.def),
+            egui::Color32::from_rgb(60, 95, 50),
+        )
+        .on_hover_text(format!(
+            "Ranged slot: {}. Click: swap with the weapon in hand.",
+            item_label(&stored)
+        ));
+        if r.clicked() {
+            inner.queue.push(Action::Swap(h));
+        }
+    }
+}
+
+/// The ranged slot's rect on the character sheet, in GUI space.
+fn sheet_rect(game: &Game) -> Option<egui::Rect> {
+    let slots: Vec<Option<egui::Rect>> = (0..game::SLOTS as i32)
+        .map(|k| game.sheet_slot_rect(k).and_then(hud::rect_from_layout))
+        .collect();
+    slot::place(&slots)
+}
+
+/// Text centred in `rect` (points), sized to it, with a shadow.
+fn slot_text(p: &egui::Painter, rect: egui::Rect, text: &str, color: egui::Color32) {
+    let font = egui::FontId::proportional((rect.height() * 0.45).max(6.0));
+    p.text(
+        rect.center() + egui::vec2(1.0, 1.0),
+        egui::Align2::CENTER_CENTER,
+        text,
+        font.clone(),
+        egui::Color32::from_black_alpha(200),
+    );
+    p.text(
+        rect.center(),
+        egui::Align2::CENTER_CENTER,
+        text,
+        font,
+        color,
+    );
+}
+
+/// The ranged slot on the character sheet (the selected hero's).
+fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
+    let hero = inner
+        .game
+        .selected_hero()
+        .filter(|&h| inner.game.hero_valid(h));
+    let (Some(h), true, true) = (hero, inner.sheet_slot, inner.game.ui_mode() == UI_SHEET) else {
+        inner.carry = None;
+        return;
+    };
+    if inner.carry.is_some_and(|c| c != h) {
+        inner.carry = None;
+    }
+    let Some(gui) = sheet_rect(&inner.game) else {
+        return;
+    };
+    if !inner.sheet_logged {
+        inner.sheet_logged = true;
+        log(&format!(
+            "character sheet: helmet slot {:?}, weapon slot {:?}, ranged slot {gui:?} (GUI space)",
+            inner.game.sheet_slot_rect(slot::HELMET as i32),
+            inner.game.sheet_slot_rect(SLOT_WEAPON)
+        ));
+    }
+    let rect = t.rect_to_points(gui);
+    let stored = inner.state.heroes[h].stored.clone();
+    let carried = inner.game.carried();
+    // SAFETY: the item the game holds on the cursor is live (it stays in
+    // the inventory or on its hero while carried).
+    let carried_info = carried.and_then(|c| unsafe { inner.game.item_info(c.item) });
+    let seen = carried.map(|c| c.item as usize);
+    if seen != inner.seen_carried {
+        inner.seen_carried = seen;
+        if let (Some(c), Some(i)) = (carried, &carried_info) {
+            log(&format!(
+                "on the cursor: {} (from {}, hero {} slot {})",
+                i.def, c.kind, c.hero, c.slot
+            ));
+        }
+    }
+    let fits = carried_info
+        .as_ref()
+        .map(|i| i.bow && i.slot_problem().is_none());
+
+    let r = ui.allocate_rect(rect, egui::Sense::click_and_drag());
+    {
+        let p = ui.painter();
+        let outline = match fits {
+            Some(true) => Some(slot::FITS),
+            Some(false) => Some(slot::NO_FIT),
+            None if r.hovered() => Some(slot::HOVER),
+            None => None,
+        };
+        slot::paint_frame(p, t, gui, outline);
+        match &stored {
+            Some(s) if inner.carry.is_none() => {
+                let label = gui.shrink(3.0);
+                p.rect_filled(t.rect_to_points(label), 0.0, slot::STORED);
+                slot_text(
+                    p,
+                    t.rect_to_points(label),
+                    &hud_label(&s.def),
+                    egui::Color32::WHITE,
+                );
+            }
+            _ => slot::paint_bow(p, t, gui),
+        }
+    }
+    let r = r.on_hover_text(match (&stored, fits) {
+        (_, Some(false)) => {
+            "Ranged slot: only ranged weapons (bows, crossbows, slings) fit.".into()
+        }
+        (Some(s), _) => format!(
+            "Ranged slot: {}. Click to pick it up, then click the inventory or the weapon \
+             slot (swap). Right-click: move it to the inventory.",
+            item_label(s)
+        ),
+        (None, _) => "Ranged slot: put a bow here (click it with a bow on the cursor).".into(),
+    });
+
+    if r.clicked() {
+        match (carried, carried_info) {
+            (Some(c), Some(info)) if fits == Some(true) => {
+                inner.queue.push(Action::DropCarried {
+                    hero: h,
+                    item: c.item as usize,
+                    def: info.def,
+                    kind: c.kind,
+                    src_hero: c.hero,
+                    src_slot: c.slot,
+                });
+            }
+            (Some(_), Some(info)) => {
+                inner.say(format!("{} doesn't fit the ranged slot", info.def));
+            }
+            (Some(_), None) => {}
+            (None, _) if stored.is_some() => {
+                inner.carry = if inner.carry.is_some() { None } else { Some(h) };
+            }
+            (None, _) => {}
+        }
+    } else if r.secondary_clicked() && carried.is_none() && stored.is_some() {
+        inner.carry = None;
+        inner.queue.push(Action::ToInventory(h));
+    } else if r.drag_started() && carried.is_none() && stored.is_some() {
+        inner.carry = Some(h);
+    } else if r.drag_stopped() && inner.carry.is_some() {
+        // Pressed on the slot, released elsewhere: drop there.
+        if let Some(p) = ui.ctx().input(|i| i.pointer.latest_pos())
+            && !rect.contains(p)
+        {
+            drop_at(inner, h, t.from_points(p));
+        }
+        inner.carry = None;
+    }
+
+    // The mod's pick-up: the weapon's label follows the pointer, and the
+    // next click anywhere is the mod's (so it can't reach the game).
+    if inner.carry == Some(h) && !r.dragged() {
+        let screen = ui.clip_rect();
+        let catch = ui.interact(
+            screen,
+            egui::Id::unique("weapon-swap-carry"),
+            egui::Sense::click(),
+        );
+        if catch.clicked() {
+            if let Some(p) = catch.interact_pointer_pos() {
+                drop_at(inner, h, t.from_points(p));
+            }
+            inner.carry = None;
+        } else if catch.secondary_clicked() {
+            inner.carry = None;
+        }
+    }
+    if inner.carry == Some(h)
+        && let (Some(s), Some(p)) = (&stored, ui.ctx().input(|i| i.pointer.latest_pos()))
+    {
+        let ghost = egui::Rect::from_center_size(p, rect.size() * 0.8);
+        let painter = ui.painter();
+        painter.rect_filled(ghost, 0.0, slot::STORED.gamma_multiply(0.85));
+        slot_text(painter, ghost, &hud_label(&s.def), egui::Color32::WHITE);
+    }
+}
+
+/// Drops the mod's pick-up of hero `h`'s ranged-slot weapon at GUI point
+/// `p`: on the inventory panel it moves there, on the weapon slot (the
+/// sheet's or the HUD's hand slot) it swaps; anywhere else nothing happens.
+fn drop_at(inner: &mut Inner, h: usize, p: egui::Pos2) {
+    let on = |r: Option<egui::Rect>| r.is_some_and(|r| r.contains(p));
+    if on(hud::gui_rect("inventory_rect")) {
+        inner.queue.push(Action::ToInventory(h));
+    } else if on(inner
+        .game
+        .sheet_slot_rect(SLOT_WEAPON)
+        .and_then(hud::rect_from_layout))
+        || on(hud::gui_rect(&hud::weapon_slot_name(h)))
+    {
+        inner.queue.push(Action::Swap(h));
     }
 }
 
@@ -707,8 +1030,9 @@ mod tests {
             assert!(manifest.setting(k).is_some(), "{k}");
         }
         assert!(manifest.setting("swap_costs_turn").is_some());
+        assert!(manifest.setting("sheet_slot").is_some());
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 15);
+        assert_eq!(pats.patterns.len(), 19);
     }
 
     #[test]
@@ -749,6 +1073,10 @@ mod tests {
             ("ui_mode", 0x440430),
             ("cursor", 0x442bc8),
             ("target_mode", 0x441384),
+            ("drag_item", 0x1418a0),
+            ("drag_end", 0x165f90),
+            ("char_sheet", 0x440db0),
+            ("ui_context", 0x43ca68),
         ]
         .into_iter()
         .collect();
