@@ -143,6 +143,7 @@ extern "system" fn unavailable() -> usize {
 static BUILTIN: &[uk_qol_runtime::host::ModCtor] = &[
     uk_qol_mod_bloodmage_cost::new,
     uk_qol_mod_skip_logos::new,
+    uk_qol_mod_weapon_swap::new,
     uk_qol_mod_inventory_sort::new,
 ];
 

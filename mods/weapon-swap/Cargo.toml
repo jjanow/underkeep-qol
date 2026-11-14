@@ -1,0 +1,14 @@
+[package]
+name = "uk-qol-mod-weapon-swap"
+description = "Underkeep QoL mod: a ranged-weapon slot per hero and a key to swap to it"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_mod_weapon_swap"
+
+[dependencies]
+uk-qol-runtime.workspace = true
+toml = "1.2.1"

@@ -146,6 +146,9 @@ fn mod_section(
                         }
                     });
             }
+            if row.state == ModState::Active {
+                h.mod_menu(&row.id, ui);
+            }
         });
     if std::mem::take(focus_first) {
         header.header_response.request_focus();

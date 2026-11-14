@@ -3444,12 +3444,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "uk-qol-mod-weapon-swap"
+version = "0.1.0"
+dependencies = [
+ "toml",
+ "uk-qol-runtime",
+]
+
+[[package]]
 name = "uk-qol-proxy"
 version = "0.1.0"
 dependencies = [
  "uk-qol-mod-bloodmage-cost",
  "uk-qol-mod-inventory-sort",
  "uk-qol-mod-skip-logos",
+ "uk-qol-mod-weapon-swap",
  "uk-qol-runtime",
  "windows-sys 0.61.2",
 ]

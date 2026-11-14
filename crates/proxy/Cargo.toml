@@ -15,6 +15,7 @@ crate-type = ["cdylib"]
 uk-qol-runtime.workspace = true
 uk-qol-mod-bloodmage-cost.workspace = true
 uk-qol-mod-skip-logos.workspace = true
+uk-qol-mod-weapon-swap.workspace = true
 uk-qol-mod-inventory-sort.workspace = true
 
 [target.'cfg(windows)'.dependencies]

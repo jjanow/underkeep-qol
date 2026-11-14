@@ -6,6 +6,9 @@
 //! hooks (`corehooks`): save sidecars (`savehook`) and in-memory data
 //! patches (`datapatch`), and connects the host to the overlay (`bridge`).
 
+/// The overlay's egui, for mods that draw in the menu (`Mod::menu`).
+pub use egui;
+
 pub mod bridge;
 pub mod build;
 pub mod config;
