@@ -264,6 +264,7 @@ dependencies = [
  "serde",
  "sha2",
  "toml",
+ "uk-qol-dft",
 ]
 
 [[package]]
