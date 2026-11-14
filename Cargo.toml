@@ -10,6 +10,7 @@ members = [
     "mods/weapon-swap",
     "mods/inventory-sort",
     "mods/extra-skill-slots",
+    "mods/borderless-compat",
 ]
 
 [workspace.package]
@@ -26,6 +27,7 @@ uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
 uk-qol-mod-weapon-swap = { path = "mods/weapon-swap" }
 uk-qol-mod-inventory-sort = { path = "mods/inventory-sort" }
 uk-qol-mod-extra-skill-slots = { path = "mods/extra-skill-slots" }
+uk-qol-mod-borderless-compat = { path = "mods/borderless-compat" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs

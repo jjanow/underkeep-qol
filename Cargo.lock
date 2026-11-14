@@ -3429,6 +3429,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "uk-qol-mod-borderless-compat"
+version = "0.1.0"
+dependencies = [
+ "uk-qol-runtime",
+]
+
+[[package]]
 name = "uk-qol-mod-extra-skill-slots"
 version = "0.1.0"
 dependencies = [
@@ -3464,6 +3471,7 @@ name = "uk-qol-proxy"
 version = "0.1.0"
 dependencies = [
  "uk-qol-mod-bloodmage-cost",
+ "uk-qol-mod-borderless-compat",
  "uk-qol-mod-extra-skill-slots",
  "uk-qol-mod-inventory-sort",
  "uk-qol-mod-skip-logos",

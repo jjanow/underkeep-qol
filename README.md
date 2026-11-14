@@ -29,6 +29,7 @@ Underkeep has no official mod support. This project adds it in a way that:
 | `weapon-swap` | A second weapon slot on each hero's character sheet and a key to swap to it. |
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
+| `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -384,6 +385,27 @@ main menu. This mod skips them, so the game starts on the main menu.
   (or a data patch of its length) is enough, or the hand-over has to be
   called directly.
 
+### `borderless-compat`
+
+The game draws with OpenGL. In its default borderless mode (Video settings →
+Borderless Mode → **Performance**) Windows graphics drivers often take the
+screen over as if it were exclusive fullscreen: Alt+Tab is slow and HDR
+displays look wrong. The game's other borderless mode, **Compatibility**,
+keeps a normal desktop window, but players have to know to pick it.
+
+- The mod makes borderless fullscreen always use the Compatibility path,
+  whatever the setting says. Windowed and exclusive fullscreen are
+  unchanged.
+- Side effect (the game's own, from its tooltip): screenshots and recordings
+  can show a one-pixel edge.
+- One on/off switch, on by default; nothing saved. It takes effect the next
+  time the game sets the display mode (at start, or when a video setting
+  changes).
+- Under Proton/Wine the driver takeover doesn't happen, so it changes
+  little there; it's meant for Windows. NVIDIA users can get the same
+  result without the mod: NVIDIA Control Panel → *Vulkan/OpenGL present
+  method* → *Prefer layered on DXGI swapchain*.
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -420,6 +442,7 @@ crates/
   manager/      Manager app and uk-qol CLI
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
+  borderless-compat/
 ```
 
 ## Building

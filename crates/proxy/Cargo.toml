@@ -18,6 +18,7 @@ uk-qol-mod-skip-logos.workspace = true
 uk-qol-mod-weapon-swap.workspace = true
 uk-qol-mod-inventory-sort.workspace = true
 uk-qol-mod-extra-skill-slots.workspace = true
+uk-qol-mod-borderless-compat.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

@@ -1,0 +1,13 @@
+# Patterns for borderless-compat. Format: CONTRIBUTING.md, "Adding a mod".
+
+# The display-mode setter's choice between the two borderless fullscreen
+# modes: `movsxd rcx, [borderless_fullscreen_mode cvar index]; mov r8d, edi;
+# mov rax, [cvar table]; shl rcx, 7; cmp dword [rcx+rax+0x70], 1; je
+# <emulated borderless>`. The match + 26 is that `je` (0F 84 rel32): taken
+# for Compatibility (1), the "Changing display mode to emulated borderless
+# fullscreen..." path; the fall-through is Performance (0), SDL's own
+# fullscreen-desktop mode. Found from that log string's only use; the
+# setting's cvar descriptor is the one that names "borderless_fullscreen_mode".
+[borderless_choice]
+pattern = "48 63 0D ?? ?? ?? ?? 44 8B C7 48 8B 05 ?? ?? ?? ?? 48 C1 E1 07 83 7C 01 70 01 0F 84 ?? ?? ?? ?? 48 8D 15"
+offset = 26

@@ -146,6 +146,7 @@ static BUILTIN: &[uk_qol_runtime::host::ModCtor] = &[
     uk_qol_mod_weapon_swap::new,
     uk_qol_mod_inventory_sort::new,
     uk_qol_mod_extra_skill_slots::new,
+    uk_qol_mod_borderless_compat::new,
 ];
 
 #[unsafe(no_mangle)]

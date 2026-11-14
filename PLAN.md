@@ -482,6 +482,18 @@ In order of difficulty; each ships when done, with settings and tests.
     cast through the game's checks ("Cooldown not finished yet!"), a right
     click opened the panel, closing it put the original skill back. Text
     labels, not the game's skill icons (their textures weren't traced).
+- [x] `borderless-compat`: borderless fullscreen always takes the game's
+      Compatibility ("emulated borderless") path; one on/off setting, on
+      by default, nothing saved.
+  - Why: players report that on Windows the default Performance mode takes
+    the screen over like exclusive fullscreen (OpenGL), which breaks HDR;
+    the game's own fix is the Compatibility setting, which few find.
+  - 2026-11-14: a 6-byte patch of the display-mode setter's `je` to the
+    emulated path (`mods/borderless-compat/patterns.toml`); the pattern
+    matches once in 1.0.5. Leaving the mode uses the game's own state
+    flag, so windowed and exclusive still work.
+  - [ ] Test in game: the log's "emulated borderless" line with Borderless
+    Mode on Performance (Proton), then HDR and Alt+Tab on Windows (§1).
 
 ## 7. Manager
 
