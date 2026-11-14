@@ -228,11 +228,31 @@ hero; all rebindable.
   `swap_costs_turn = true | false`. Outside combat it's always free.
 - The game's save format has no room for this slot, so the weapon in it is
   stored in the save's sidecar file (`<save>.qol.toml`), not in the save.
-- To investigate: the slot is drawn and handled by the mod (the game's own
-  equipment slots are fixed); what happens to a shield when a two-handed
-  ranged weapon is swapped in; the swap goes through the game's own equip
-  function so that stats, skills and the HUD update the same way as a manual
-  equip.
+
+How it works now (0.1.0; tested in game 1.0.5 except combat):
+
+- The slot lives in the mod's section of the overlay menu, not yet on the
+  character sheet: per hero, **Put the bow in hand in the slot**, **Put
+  *item* in the slot** (for each bow or sling in the inventory), **Swap now**
+  and **Move to inventory**. The slot can always be emptied back into the
+  inventory there.
+- A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
+  next swap brings it back. One of the two is always a bow or sling; items
+  that stack and quest items never go in.
+- The swap goes through the game's own equip function, as when equipping
+  from the inventory: class checks, the item's equip scripts, stats and HUD
+  update like a manual equip. A weapon the hero can't use stays where it
+  was, with nothing lost.
+- A two-handed bow pushes the shield into the inventory, as a manual equip
+  does. Swapping back to a one-handed weapon puts that shield back on if it
+  is still in the inventory.
+- In combat (the game's own "battle" check) a swap needs the hero to be able
+  to act and the monsters not to be moving, then ends that hero's turn the
+  way the game ends a hero's turn (`swap_costs_turn`).
+- If a save's sidecar doesn't match the save (e.g. it was saved while the
+  mod was off), its weapons aren't put back in the slots; the menu lists
+  them with a **Move to inventory** button, warning that they may already
+  be in the party.
 
 **What players are told** (in the README, on the mod's first use in game,
 and in the manager before uninstalling):

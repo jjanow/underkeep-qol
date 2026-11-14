@@ -36,7 +36,7 @@ Built-in mods live in `mods/<id>/`, each a crate named `uk-qol-mod-<id>`
    files, applied in memory (see [Data patches](#data-patches)).
 4. The code: a type implementing the runtime's `Mod` trait (`on_load`,
    `on_unload`, `on_frame`, `on_input`, `on_settings`, `on_save`,
-   `on_load_save`), whose `manifest()` and `patterns()` return the two files
+   `on_load_save`, optionally `menu`), whose `manifest()` and `patterns()` return the two files
    with `include_str!` (and `patches()` its data patches, if any), and a
    `pub fn new() -> Box<dyn Mod>`.
 5. Add the crate to the workspace members and `[workspace.dependencies]` in
@@ -178,6 +178,18 @@ Key per-hero state by `savehook::hero_key` (`"<hero_id>:<name>"`): the game's
 replaced. `savehook::party_heroes()` lists the party's heroes (struct
 address, key, class id; `savehook::class_name`). Sidecars are local
 (`uk_qol/saves/<Steam account id>/<save>.qol.toml`), not in Steam Cloud.
+
+### Controls in the overlay menu
+
+Besides its settings, a mod can draw its own controls (buttons, status text)
+in its section of the overlay menu: implement `Mod::menu(&mut self, ui:
+&mut egui::Ui)` with the runtime's re-exported `uk_qol_runtime::egui`. It is
+called every frame while the menu is open, the section expanded and the mod
+active, on the game's render thread inside the mod's panic guard. Don't
+touch the game from it: queue the work and do it in `on_frame`. Keep the
+widgets in rows of one (the gamepad's d-pad moves between rows, not along
+one), and when a click changes which buttons exist, `request_focus` a
+button that's still there, or gamepad focus is lost.
 
 ## Data patches
 

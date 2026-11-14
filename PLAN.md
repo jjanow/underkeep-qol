@@ -261,11 +261,28 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
 - [ ] **Inventory:** inventory container struct, item struct (category,
       rarity, value, stack size, max stack), "dragging" and trade state,
       the function that marks the inventory changed / refreshes the UI.
-- [ ] **Weapon swap:** how the character sheet draws and handles equipment
+- [x] **Weapon swap:** how the character sheet draws and handles equipment
       slots (to add a ranged slot that behaves like them), the game's equip
       function, how combat turns are spent (to charge a turn on swap), the
       `ranged_weapon` flag, two-handed weapons vs shields, how to serialize
       an item into the sidecar and rebuild it on load.
+  - 2026-11-14, game 1.0.5 (`mods/weapon-swap/patterns.toml`):
+    `Hero::EquipItem(hero, item, slot, mode, notify)`; mode 1 = from the
+    inventory panel (mode 3, the HUD hand slot, reads the mouse cursor
+    object, which is null with a gamepad: crash). A two-handed weapon
+    unequips the shield into the inventory. Ranged = item type 1, weapon
+    type 5 (bows, crossbows and slings). An item is def name + count +
+    cooldown (`Item::SaveState`); `Item_Create(def)` rebuilds it;
+    `Item_Take(item, all, n)` (the game's "used up" path) removes and
+    deletes one. In battle = the game's own check (living, aware monster);
+    a hero's turn ends with round action 3 (`TurnManager` queue), which
+    sets `+0x208`/`+0x209` and moves on. `g_state` is 4 after loading a
+    save.
+  - Still open: the character sheet's slot drawing and the drag state.
+    Leads: the cursor object `*0x140442bc8` (+0x58 drag phase, +0x60 drag
+    source kind, +0x7c/+0x80 slot/hero; null with a gamepad), the HUD
+    hand-slot drop in `0x14021d310`, equipment slot rects at
+    `0x140440dc4 + slot*0x28` while UI mode `0x140440430` is 6.
 - [ ] **Skill slots:** how `selected_skill_slot` and the skill slot are
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
@@ -292,9 +309,21 @@ In order of difficulty; each ships when done, with settings and tests.
       only), drag in/out like other slots, swap via the game's equip function;
       Shift+1..4 and a selected-hero key; `swap_costs_turn` (default true);
       the slot's item saved to and restored from the sidecar.
-- [ ] Ranged-slot loss warning: in README, as a first-use notice in game
+  - 2026-11-14, 0.1.0 works in game 1.0.5: slot per hero in the mod's
+    overlay menu section (store the bow in hand or one from the inventory,
+    swap, move to inventory), symmetric swap through `Hero::EquipItem`,
+    keys (tested with pad bindings), sidecar save / load / other save
+    loaded with an empty slot; item counts logged before and after every
+    action, all conserved.
+  - Not tested in game: a swap in combat (turn cost), a level change, a
+    two-handed bow pushing a shield out and back.
+  - Open: the slot on the character sheet with drag and drop (see §5).
+- [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
       the manager before uninstall. The player handles emptying slots.
+  - The notice is the mod section's first content until acknowledged
+    (`uk_qol/weapon-swap.notice-acknowledged`); putting a weapon into a
+    slot or swapping is refused until then.
 - [ ] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
 

@@ -64,7 +64,6 @@ const ACTION_HERO: usize = 0x08;
 /// Cursor state: +0x58 drag phase (0 = nothing held).
 const CURSOR_DRAG: usize = 0x58;
 
-
 /// `g_state` values in a game: 4 after loading a save (seen in game),
 /// 3 for a game started from the menu (static analysis).
 const STATES_PLAYING: [i32; 2] = [3, 4];
