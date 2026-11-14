@@ -146,26 +146,37 @@ pub fn install() {
             return;
         }
     }
-    let hooks: [(&str, usize, &AtomicUsize); 4] = [
-        ("SDL_PollEvent", poll_hook as PollFn as usize, &ORIG_POLL),
+    // (function, detour, original, required). The pad-state hooks only
+    // keep a polling game from seeing the pad while the menu is open.
+    let hooks: [(&str, usize, &AtomicUsize, bool); 4] = [
+        (
+            "SDL_PollEvent",
+            poll_hook as PollFn as usize,
+            &ORIG_POLL,
+            true,
+        ),
         (
             "SDL_GL_SwapWindow",
             swap_hook as SwapFn as usize,
             &ORIG_SWAP,
+            true,
         ),
         (
             "SDL_GetGamepadButton",
             button_hook as ButtonFn as usize,
             &ORIG_BUTTON,
+            false,
         ),
         (
             "SDL_GetGamepadAxis",
             axis_hook as AxisFn as usize,
             &ORIG_AXIS,
+            false,
         ),
     ];
     let mut installed = HOOKS.lock().unwrap_or_else(|e| e.into_inner());
-    for (func, detour, orig) in hooks {
+    let mut hooked = Vec::new();
+    for (func, detour, orig, required) in hooks {
         // SAFETY: the exe is loaded and its imports are bound (the runtime
         // thread starts after process initialization); the detours have the
         // SDL signatures.
@@ -181,6 +192,10 @@ pub fn install() {
                     ));
                 }
                 installed.push(h);
+                hooked.push(func);
+            }
+            Err(e) if !required => {
+                crate::log(&format!("overlay: not hooking {func}: {e}"));
             }
             Err(e) => {
                 crate::log(&format!("overlay: can't hook {func}: {e}; overlay off"));
@@ -191,9 +206,10 @@ pub fn install() {
             }
         }
     }
-    crate::log(
-        "overlay: hooked SDL_PollEvent, SDL_GL_SwapWindow, SDL_GetGamepadButton, SDL_GetGamepadAxis (exe IAT); F10 or LS+RS opens the menu",
-    );
+    crate::log(&format!(
+        "overlay: hooked {} in the exe's import table; F10 or LS+RS opens the menu",
+        hooked.join(", ")
+    ));
 }
 
 pub fn uninstall() {
