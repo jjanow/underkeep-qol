@@ -521,8 +521,9 @@ In order of difficulty; each ships when done, with settings and tests.
     (fmt, both clippys, tests), runtime, Windows and Linux managers passed;
     the DLL's imports are system DLLs only, the CI-built Linux manager runs
     (`update --check`: no release yet). The macOS job failed at once:
-    `macos-14` images are retired; now `macos-15`. The `release` job (tags
-    only) hasn't run yet.
+    `macos-14` images are retired; now `macos-15`, and the rerun (run
+    43648802829) passed every job. The `release` job (tags only) hasn't
+    run yet.
 - [ ] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
 - [ ] README: replace "planned" with real install steps and screenshots.
