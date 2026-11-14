@@ -495,6 +495,8 @@ impl Router {
                         return (Swallow, Toggle::None);
                     }
                     self.game_mouse |= bit;
+                    // A HUD release that never came can't hold this one.
+                    self.hud_mouse &= !bit;
                     (Deliver, Toggle::None)
                 } else {
                     let game_had = self.game_mouse & bit != 0;
@@ -518,7 +520,12 @@ impl Router {
             }
             Input::PadButton { button, down } => self.pad_button(button, down, env, sink),
             Input::PadAxis { axis, value } => self.pad_axis(axis, value, env, sink),
-            Input::FocusLost | Input::Other(_) => (Deliver, Toggle::None),
+            Input::FocusLost => {
+                // A HUD button's release may never come.
+                self.hud_mouse = 0;
+                (Deliver, Toggle::None)
+            }
+            Input::Other(_) => (Deliver, Toggle::None),
         }
     }
 
@@ -1102,6 +1109,43 @@ mod tests {
         r.set_open(false);
         assert_eq!(
             r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Deliver
+        );
+        assert_eq!(
+            r.route(&mouse(left, false, 220.0, 220.0), &env, &mut none)
+                .0,
+            Deliver
+        );
+        // A HUD press whose release is lost (focus lost): the next game
+        // press and release still reach the game.
+        r.hud_hits = vec![Rect::from_min_size(
+            Pos2::new(100.0, 100.0),
+            Vec2::splat(20.0),
+        )];
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Swallow
+        );
+        r.route(&Input::FocusLost, &env, &mut none);
+        assert_eq!(
+            r.route(&mouse(left, true, 20.0, 20.0), &env, &mut none).0,
+            Deliver
+        );
+        assert_eq!(
+            r.route(&mouse(left, false, 20.0, 20.0), &env, &mut none).0,
+            Deliver
+        );
+        // Same without the focus event: a game press clears the stale bit.
+        assert_eq!(
+            r.route(&mouse(left, true, 220.0, 220.0), &env, &mut none).0,
+            Swallow
+        );
+        assert_eq!(
+            r.route(&mouse(left, true, 20.0, 20.0), &env, &mut none).0,
+            Deliver
+        );
+        assert_eq!(
+            r.route(&mouse(left, false, 20.0, 20.0), &env, &mut none).0,
             Deliver
         );
     }

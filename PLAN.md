@@ -309,10 +309,10 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
   - 2026-11-14: `face_hand_slot_(2i+1)` / `(2i+2)` are hero i's weapon and
-    skill slots, 29x29 at (494|569, 93|216) in GUI space; `face_rect_1..4`
-    the portraits (60x70); `inventory_rect` (2, 2, 154, 258). The game's
-    code reads a fixed set of rects, so new slots are overlay widgets
-    (`runtime::hud`), not layout patches.
+    skill slots (29x29 in GUI space), `face_rect_1..4` the portraits,
+    `inventory_rect` the party inventory panel. The game's code reads a
+    fixed set of rects, so new slots are overlay widgets (`runtime::hud`),
+    not layout patches.
 
 - [ ] **Skip logos:** where `anim_startup_logo` (Rake in Grass and FMOD
       logos, ~3 s on every launch) is started and how it hands over to the
@@ -359,9 +359,9 @@ In order of difficulty; each ships when done, with settings and tests.
     play (only pad bindings were used; the drag check never ran, the
     cursor object is null with a pad). New-game `g_state` 3 is static only.
   - Open: the slot on the character sheet with drag and drop (see §5).
-  - 2026-11-14: HUD **R** button on the weapon hand slot of heroes with a
-    filled slot, click swaps (`hud_button`, default on). Not seen in game:
-    the test save's slot was parked (sidecar mismatch).
+  - 2026-11-14: HUD button on the weapon hand slot of heroes with a filled
+    slot, showing the stored weapon's initials; click swaps (`hud_button`,
+    default on).
 - [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
       the manager before uninstall. The player handles emptying slots.

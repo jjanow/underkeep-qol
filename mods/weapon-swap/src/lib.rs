@@ -54,13 +54,37 @@ const ACK_FILE: &str = "weapon-swap.notice-acknowledged";
 
 const HERO_KEYS: [&str; HEROES] = ["swap_hero_1", "swap_hero_2", "swap_hero_3", "swap_hero_4"];
 const SELECTED_KEY: &str = "swap_selected";
-/// The HUD swap button: a square of this many GUI units in the weapon hand
-/// slot's top-left corner (the slot is 29 units).
+/// The HUD swap button (the stored weapon's initials): a square of this
+/// many GUI units in the weapon hand slot's top-left corner (the slot is 29
+/// units).
 const HUD_BUTTON: f32 = 11.0;
 
 /// The HUD swap button's rect in GUI space for a weapon slot rect.
 fn hud_button_rect(slot: egui::Rect) -> egui::Rect {
     egui::Rect::from_min_size(slot.min, egui::vec2(HUD_BUTTON, HUD_BUTTON))
+}
+
+/// A short label for an item def name: `item_short_bow` -> `SB`,
+/// `item_sling` -> `Sl`.
+fn hud_label(def: &str) -> String {
+    let name = def.strip_prefix("item_").unwrap_or(def);
+    let words: Vec<&str> = name.split('_').filter(|w| !w.is_empty()).collect();
+    match words.as_slice() {
+        [] => "?".into(),
+        [one] => {
+            let mut c = one.chars();
+            c.next()
+                .into_iter()
+                .flat_map(char::to_uppercase)
+                .chain(c.next())
+                .collect()
+        }
+        [.., a, b] => [a, b]
+            .iter()
+            .filter_map(|w| w.chars().next())
+            .flat_map(char::to_uppercase)
+            .collect(),
+    }
 }
 
 fn hud_setting(settings: &toml::Table) -> bool {
@@ -515,7 +539,7 @@ impl Mod for WeaponSwap {
             let r = hud::button(
                 ui,
                 t.rect_to_points(hud_button_rect(slot)),
-                "R",
+                &hud_label(&stored.def),
                 egui::Color32::from_rgb(60, 95, 50),
             )
             .on_hover_text(format!(
@@ -663,6 +687,16 @@ pub fn new() -> Box<dyn Mod> {
 mod tests {
     use super::*;
     use uk_qol_runtime::host::{Manifest, PatternFile};
+
+    #[test]
+    fn hud_labels() {
+        assert_eq!(hud_label("item_sling"), "Sl");
+        assert_eq!(hud_label("item_short_bow"), "SB");
+        assert_eq!(hud_label("item_heavy_long_bow"), "LB");
+        assert_eq!(hud_label("item_"), "?");
+        let slot = egui::Rect::from_min_size(egui::pos2(500.0, 200.0), egui::vec2(29.0, 29.0));
+        assert!(slot.contains_rect(hud_button_rect(slot)));
+    }
 
     #[test]
     fn manifest_and_patterns_parse() {

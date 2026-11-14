@@ -235,9 +235,9 @@ How it works now (0.1.0; tested in game 1.0.5 with a gamepad):
   character sheet: per hero, **Put the bow in hand in the slot**, **Put
   *item* in the slot** (for each bow or sling in the inventory), **Swap now**
   and **Move to inventory**. The slot can always be emptied back into the
-  inventory there. A hero with a filled slot also gets a small **R** button
-  on their weapon hand slot on the HUD; clicking it swaps (setting
-  `hud_button`).
+  inventory there. A hero with a filled slot also gets a small button on
+  their weapon hand slot on the HUD, showing the stored weapon's initials;
+  clicking it swaps (setting `hud_button`).
 - A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
   next swap brings it back. One of the two is always a bow or sling; items
   that stack and quest items never go in.
