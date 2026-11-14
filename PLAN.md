@@ -140,6 +140,9 @@ Check items off as they land; add findings under the item they belong to.
     deleting it in game removed it; "Autosave and Quit" wrote
     `save_auto.qol.toml`; Quick Start logged `new-game hook: new party; mod
     state reset`. The account id matched Steam's `userdata/4229148`.
+  - A sidecar that can't be read (tested with `format = 99`) is logged on
+    load and left as it is when the game saves over that slot (merged build
+    with the overlay, same day).
 - [ ] Note in the log which mods were active, for crash triage (the game's
       BugSplat reporter will also see our crashes).
 
@@ -157,6 +160,8 @@ Check items off as they land; add findings under the item they belong to.
   - Names the loader passes are `<folder>/<name>.txt` (`def/def_skill.txt`,
     `text/text_common_en.txt`, `menu/def_menu.txt`), as `dft::patch`
     assumed; `log_defs = true` under `[runtime]` in config.toml lists them.
+    Saves arrive as `save_1` / `save_auto`, the profile as `player_profile`,
+    levels as `level/<Name>.level`.
   - In game (2026-11-14): a user patch setting
     `text_common_en.menu_new_game` showed "QOL PATCHED" on the main menu.
   - Timing: core hooks installed at .519, the startup gate released the game
