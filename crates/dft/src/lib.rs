@@ -19,6 +19,8 @@
 //! Everything is kept in a form that re-serializes byte-for-byte, so an
 //! unmodified document writes back identical to what was read.
 
+pub mod patch;
+
 use std::fmt;
 
 pub const MAGIC: [u8; 4] = [0xFF, b'D', b'f', b'T'];

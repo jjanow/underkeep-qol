@@ -8,3 +8,7 @@ repository.workspace = true
 
 [lib]
 name = "dft"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.2.1"

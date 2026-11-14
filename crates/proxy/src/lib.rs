@@ -141,7 +141,7 @@ extern "system" fn DllMain(
         // SAFETY: `module` is this DLL's handle, passed in by the loader.
         unsafe { DisableThreadLibraryCalls(module) };
         // Only spawns a thread, which runs after the loader lock is released.
-        let _ = std::panic::catch_unwind(uk_qol_runtime::start);
+        let _ = std::panic::catch_unwind(|| uk_qol_runtime::start(&[]));
     }
     TRUE
 }

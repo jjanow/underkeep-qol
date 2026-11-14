@@ -6,8 +6,16 @@
 //! for hooks; hooks and mods come next (PLAN.md).
 
 pub mod build;
+pub mod config;
+pub mod guard;
+pub mod hook;
+pub mod host;
+pub mod input;
+pub mod overlay;
 pub mod pattern;
 pub mod pe;
+pub mod safe;
+pub mod save;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -22,7 +30,8 @@ static LOG: Mutex<Option<File>> = Mutex::new(None);
 
 /// Starts the runtime on its own thread. Safe to call from `DllMain`: it only
 /// spawns the thread, and does so once.
-pub fn start() {
+pub fn start(builtin: &'static [host::ModCtor]) {
+    let _ = builtin; // loaded by the mod host (pending)
     START.call_once(|| {
         let _ = std::thread::Builder::new().name("uk-qol".into()).spawn(|| {
             let _ = std::panic::catch_unwind(run);
