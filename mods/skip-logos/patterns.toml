@@ -1,3 +1,11 @@
-# Patterns for skip-logos. None yet: where the startup logo animation
-# (anim_startup_logo) starts and hands over to the main menu is still being
-# reverse engineered (PLAN §5). Format: CONTRIBUTING.md, "Adding a mod".
+# Patterns for skip-logos. Format: CONTRIBUTING.md, "Adding a mod".
+
+# The per-frame update's startup-logo state (game state 1): `cmp g_state, 1;
+# jne …; cmp [logo active], 0; jne <keep drawing the logo>`. The match + 20 is
+# that last `jne` (75 xx). While the logo effect is active it jumps to the code
+# that updates and draws it; when the effect ends, the fall-through enters the
+# main menu (or the first-run intro). Found from the "anim_startup_logo"
+# string's use in game init and the per-frame update that checks the state.
+[logo_wait]
+pattern = "83 3D ?? ?? ?? ?? 01 0F 85 ?? ?? ?? ?? 44 39 35 ?? ?? ?? ?? 75 ?? 48 63 1D ?? ?? ?? ?? 48 C1 E3 07 48 03 1D ?? ?? ?? ?? 44 39 73 70"
+offset = 20
