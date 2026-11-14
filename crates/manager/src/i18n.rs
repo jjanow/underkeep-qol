@@ -107,6 +107,8 @@ Commands:
                               write a text report to attach to a bug report
   update [--yes] [--check]    update uk-qol, the loader and mod patterns from
                               GitHub releases (asks first)
+  reset-safe-mode             start the game with mods again after safe mode
+                              turned them off (two crashes in a row)
   gui                         open the app
 
 Options:
@@ -234,6 +236,17 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ("compat_unknown", "not checked ({})"),
     ("label_mods", "Mods"),
     ("no_mods", "No mods are built into this version yet."),
+    (
+        "note_safe_mode",
+        "The game exited abnormally {} times in a row, so it starts in safe mode (all mods off). `uk-qol reset-safe-mode` or the in-game menu turns the mods back on.",
+    ),
+    (
+        "done_safe_mode_reset",
+        "Safe mode is off; mods load again on the next start.",
+    ),
+    ("note_untested", "(not tested on this game build yet)"),
+    ("note_manifest_error", "manifest problem: {}"),
+    ("gui_reset_safe_mode", "Leave safe mode"),
     ("on", "on"),
     ("off", "off"),
     ("patterns_downloaded", " (downloaded patterns)"),
@@ -325,6 +338,7 @@ Before uninstalling, move every ranged-slot weapon back to your inventory.",
     ),
     ("err_out_of_range", "{} is out of range ({} to {})"),
     ("err_bad_choice", "`{}` isn't one of: {}"),
+    ("err_bad_setting", "{}: {}"),
     ("kind_int", "whole number"),
     ("kind_float", "number"),
     ("kind_text", "text"),

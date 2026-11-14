@@ -127,8 +127,27 @@ impl ConfigFile {
     }
 }
 
-/// Turns command-line text into a value of the setting's type.
+/// Turns command-line text into a value of the setting's type, checked by
+/// the runtime's rules (`SettingDef::check`) when the manifest has them.
 pub fn coerce(s: &SettingInfo, raw: &str) -> Result<Value, String> {
+    let v = coerce_kind(s, raw)?;
+    let Some(def) = &s.def else { return Ok(v) };
+    let tv: toml::Table = format!("v = {v}")
+        .parse()
+        .map_err(|e: toml::de::Error| e.to_string())?;
+    let checked = def
+        .check(&tv["v"])
+        .map_err(|e| tr!("err_bad_setting", s.key, e))?;
+    let mut t = toml::Table::new();
+    t.insert("v".into(), checked);
+    let doc: toml_edit::DocumentMut = toml::to_string(&t)
+        .map_err(|e| e.to_string())?
+        .parse()
+        .map_err(|e: toml_edit::TomlError| e.to_string())?;
+    doc["v"].as_value().cloned().ok_or_else(|| "?".into())
+}
+
+fn coerce_kind(s: &SettingInfo, raw: &str) -> Result<Value, String> {
     let bad = || tr!("err_bad_value", raw, s.key, kind_name(&s.kind));
     let in_range = |x: f64| s.min.is_none_or(|m| x >= m) && s.max.is_none_or(|m| x <= m);
     let range_err = || {
@@ -257,6 +276,41 @@ x = 1
         c.set_enabled("a", false).unwrap();
         c.save().unwrap();
         assert_eq!(ConfigFile::load(&p).unwrap().enabled("a"), Some(false));
+    }
+
+    #[test]
+    fn coerces_with_runtime_rules() {
+        let m = parse_manifest(
+            r#"
+id = "m"
+name = "M"
+version = "0.1.0"
+game_builds = "any"
+[[settings]]
+key = "hotkey"
+type = "key"
+default = "S"
+label = "Key"
+[[settings]]
+key = "speed"
+type = "float"
+default = 1.0
+min = 0.5
+max = 2.0
+label = "Speed"
+"#,
+            "m",
+        )
+        .unwrap();
+        assert!(m.manifest_error.is_none());
+        let s = |k| m.setting(k).unwrap();
+        assert_eq!(
+            coerce(s("hotkey"), "Shift+1").unwrap().as_str(),
+            Some("Shift+1")
+        );
+        assert!(coerce(s("hotkey"), "Hyper+S").is_err());
+        assert_eq!(coerce(s("speed"), "1.5").unwrap().as_float(), Some(1.5));
+        assert!(coerce(s("speed"), "3").is_err());
     }
 
     #[test]

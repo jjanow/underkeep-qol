@@ -75,6 +75,16 @@ pub fn build_report(st: &Status) -> String {
         DllState::Foreign => "present, not installed by uk-qol",
     };
     let _ = writeln!(r, "winmm.dll: {dll}");
+    let _ = writeln!(
+        r,
+        "abnormal exits in a row: {}{}",
+        st.abnormal_exits,
+        if st.safe_mode_next {
+            " (next start in safe mode)"
+        } else {
+            ""
+        }
+    );
     for a in &st.launch {
         let state = match &a.state {
             LaunchState::Set => "set".to_string(),

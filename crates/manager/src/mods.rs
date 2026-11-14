@@ -2,13 +2,16 @@
 //! by `build.rs`), and the compatibility check of their byte patterns against
 //! the installed game.
 //!
-//! Manifests are read leniently: unknown fields are ignored, missing ones get
-//! defaults, so the manager keeps working while the format evolves.
+//! Manifests and pattern files are read with the runtime's own parsers
+//! (`uk_qol_runtime::host`), so the manager and the game agree on them. A
+//! manifest the runtime rejects is still read leniently, so a mod shows up
+//! (with its settings) rather than vanishing from the list.
 
 use std::path::Path;
 
 use toml::{Table, Value};
-use uk_qol_runtime::pattern::{Image, Pattern};
+use uk_qol_runtime::host::{self, Builds, Manifest, PatternFile, SettingDef};
+use uk_qol_runtime::pattern::Image;
 
 /// One built-in mod's files as embedded by `build.rs`.
 pub struct Embedded {
@@ -40,6 +43,9 @@ pub struct SettingInfo {
     pub description: String,
     pub min: Option<f64>,
     pub max: Option<f64>,
+    /// The runtime's definition, when the manifest passed its parser; used
+    /// for the final check of a new value.
+    pub def: Option<SettingDef>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,6 +58,11 @@ pub struct ModInfo {
     pub settings: Vec<SettingInfo>,
     /// The mod's built-in `patterns.toml` text ("" if none).
     pub patterns: String,
+    /// `game_builds` from the manifest; `None` if the runtime's parser
+    /// rejected the manifest.
+    pub game_builds: Option<Builds>,
+    /// Why the runtime's parser rejected the manifest.
+    pub manifest_error: Option<String>,
 }
 
 impl ModInfo {
@@ -110,12 +121,58 @@ fn setting_from(key: &str, t: &Table) -> SettingInfo {
         min: num_of(t, "min"),
         max: num_of(t, "max"),
         default,
+        def: None,
     }
 }
 
-/// Parses a `mod.toml`. `fallback_id` (the folder name) is used if the
-/// manifest has no `id`. Returns `None` only if the text isn't TOML.
+fn setting_from_def(d: &SettingDef) -> SettingInfo {
+    use host::SettingKind as K;
+    let (kind, min, max) = match &d.kind {
+        K::Bool => (SettingKind::Bool, None, None),
+        K::Int { min, max } => (
+            SettingKind::Int,
+            min.map(|m| m as f64),
+            max.map(|m| m as f64),
+        ),
+        K::Float { min, max } => (SettingKind::Float, *min, *max),
+        K::String => (SettingKind::Text, None, None),
+        K::Enum { choices } => (SettingKind::Choice(choices.clone()), None, None),
+        K::Key => (SettingKind::Key, None, None),
+    };
+    SettingInfo {
+        key: d.key.clone(),
+        kind,
+        default: Some(d.default.clone()),
+        label: d.label.clone(),
+        description: d.description.clone(),
+        min,
+        max,
+        def: Some(d.clone()),
+    }
+}
+
+fn from_manifest(m: &Manifest) -> ModInfo {
+    ModInfo {
+        id: m.id.clone(),
+        name: m.name.clone(),
+        version: m.version.clone(),
+        description: m.description.clone(),
+        enabled_default: m.enabled,
+        settings: m.settings.iter().map(setting_from_def).collect(),
+        patterns: String::new(),
+        game_builds: Some(m.game_builds.clone()),
+        manifest_error: None,
+    }
+}
+
+/// Parses a `mod.toml` with the runtime's parser, falling back to a lenient
+/// read. `fallback_id` (the folder name) is used if the manifest has no
+/// `id`. Returns `None` only if the text isn't TOML.
 pub fn parse_manifest(text: &str, fallback_id: &str) -> Option<ModInfo> {
+    let strict_err = match Manifest::parse(text) {
+        Ok(m) => return Some(from_manifest(&m)),
+        Err(e) => e,
+    };
     let root: Table = text.parse().ok()?;
     // Accept the fields at the top level or under `[mod]`.
     let m = root.get("mod").and_then(Value::as_table).unwrap_or(&root);
@@ -150,7 +207,19 @@ pub fn parse_manifest(text: &str, fallback_id: &str) -> Option<ModInfo> {
         enabled_default,
         settings,
         patterns: String::new(),
+        game_builds: None,
+        manifest_error: Some(strict_err),
     })
+}
+
+impl ModInfo {
+    /// Whether the manifest lists this build as tested (`None`: unknown).
+    pub fn tested_on(&self, sha256: Option<&str>) -> Option<bool> {
+        match self.game_builds.as_ref()? {
+            Builds::Any => Some(true),
+            Builds::Tested(list) => Some(sha256.is_some_and(|h| list.iter().any(|t| t == h))),
+        }
+    }
 }
 
 /// All built-in mods, sorted by id.
@@ -172,56 +241,6 @@ pub fn find<'a>(mods: &'a [ModInfo], id: &str) -> Option<&'a ModInfo> {
         .find(|m| m.id == id || m.id.eq_ignore_ascii_case(id))
 }
 
-/// A named pattern from a `patterns.toml`.
-#[derive(Debug, Clone, PartialEq)]
-pub struct NamedPattern {
-    pub name: String,
-    pub pattern: String,
-    /// Restrict the search to this section (default: all executable ones).
-    pub section: Option<String>,
-}
-
-/// Reads a `patterns.toml` leniently: `name = "48 8B ..."` at the top level,
-/// or `[name]` / `[patterns.name]` tables with a `pattern` key (and optional
-/// `section`). Tables keyed by build are searched the same way.
-pub fn parse_patterns(text: &str) -> Result<Vec<NamedPattern>, String> {
-    let root: Table = text.parse().map_err(|e: toml::de::Error| e.to_string())?;
-    let mut out = Vec::new();
-    collect_patterns(&root, "", &mut out);
-    Ok(out)
-}
-
-fn collect_patterns(t: &Table, prefix: &str, out: &mut Vec<NamedPattern>) {
-    let join = |k: &str| {
-        if prefix.is_empty() || prefix == "patterns" {
-            k.to_string()
-        } else {
-            format!("{prefix}.{k}")
-        }
-    };
-    for (k, v) in t {
-        match v {
-            Value::String(s) if k != "section" && k != "description" => out.push(NamedPattern {
-                name: join(k),
-                pattern: s.clone(),
-                section: None,
-            }),
-            Value::Table(sub) => {
-                if let Some(p) = sub.get("pattern").and_then(Value::as_str) {
-                    out.push(NamedPattern {
-                        name: join(k),
-                        pattern: p.to_string(),
-                        section: sub.get("section").and_then(Value::as_str).map(String::from),
-                    });
-                } else {
-                    collect_patterns(sub, &join(k), out);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
 /// Whether a mod's patterns all match exactly once in the game exe.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Compat {
@@ -233,32 +252,25 @@ pub enum Compat {
     Unknown(String),
 }
 
-/// Checks `patterns_text` against a mapped game image.
-pub fn check_patterns(image: &Image, patterns_text: &str) -> Compat {
-    if patterns_text.trim().is_empty() {
-        return Compat::Works;
-    }
-    let pats = match parse_patterns(patterns_text) {
+/// Checks `patterns_text` (a `patterns.toml`) against a mapped game image,
+/// the way the runtime resolves it at start: every required pattern must
+/// resolve; optional ones may miss. `build` is the exe's SHA-256 (hex), for
+/// per-build candidates.
+pub fn check_patterns(image: &Image, patterns_text: &str, build: Option<&str>) -> Compat {
+    let pf = match PatternFile::parse(patterns_text) {
         Ok(p) => p,
         Err(e) => return Compat::Unknown(e),
     };
-    let mut failed = Vec::new();
-    for np in pats {
-        let pat: Pattern = match np.pattern.parse() {
-            Ok(p) => p,
-            Err(e) => {
-                failed.push((np.name, format!("{e}")));
-                continue;
-            }
-        };
-        let res = match &np.section {
-            Some(s) => image.scan_section(s, &pat),
-            None => image.scan(&pat),
-        };
-        if let Err(e) = res {
-            failed.push((np.name, e.to_string()));
-        }
-    }
+    let failed: Vec<(String, String)> = pf
+        .patterns
+        .iter()
+        .filter(|d| !d.optional)
+        .filter_map(|d| {
+            host::resolve_pattern(image, d, build)
+                .err()
+                .map(|e| (d.name.clone(), e))
+        })
+        .collect();
     if failed.is_empty() {
         Compat::Works
     } else {
@@ -274,14 +286,13 @@ pub fn load_image(exe: &Path) -> Result<Vec<u8>, String> {
 
 /// The patterns text in effect for `m` in `game_dir`: a downloaded
 /// `uk_qol/patterns/<id>.toml` overrides the built-in one.
+/// Like the runtime, an override that doesn't parse is ignored.
 pub fn effective_patterns(m: &ModInfo, game_dir: &Path) -> String {
-    std::fs::read_to_string(
-        game_dir
-            .join(crate::install::DATA_DIR)
-            .join("patterns")
-            .join(format!("{}.toml", m.id)),
-    )
-    .unwrap_or_else(|_| m.patterns.clone())
+    let dir = game_dir.join(crate::install::DATA_DIR).join("patterns");
+    match host::read_override(&dir, &m.id) {
+        Some(Ok(text)) if PatternFile::parse(&text).is_ok() => text,
+        _ => m.patterns.clone(),
+    }
 }
 
 #[cfg(test)]
@@ -363,21 +374,66 @@ default = "Shift+1"
     }
 
     #[test]
-    fn parses_pattern_files() {
+    fn strict_manifest_uses_runtime_parser() {
         let text = r#"
-top = "48 8B 05 ?? ?? ?? ??"
-[draw_logo]
-pattern = "E8 ?? ?? ?? ?? 90"
-section = ".text"
-[patterns.other]
-pattern = "C3"
+id = "weapon-swap"
+name = "Weapon swap"
+version = "0.1.0"
+game_builds = "any"
+enabled = false
+
+[[settings]]
+key = "slots"
+type = "int"
+default = 3
+min = 1
+max = 5
+label = "Extra slots"
+
+[[settings]]
+key = "cost"
+type = "enum"
+choices = ["bones", "health"]
+default = "bones"
+label = "Spell cost"
 "#;
-        let p = parse_patterns(text).unwrap();
-        let names: Vec<_> = p.iter().map(|n| n.name.as_str()).collect();
-        assert!(names.contains(&"top"));
-        assert!(names.contains(&"draw_logo"));
-        assert!(names.contains(&"other"));
-        let d = p.iter().find(|n| n.name == "draw_logo").unwrap();
-        assert_eq!(d.section.as_deref(), Some(".text"));
+        let m = parse_manifest(text, "x").unwrap();
+        assert!(m.manifest_error.is_none());
+        assert!(!m.enabled_default);
+        assert_eq!(m.tested_on(None), Some(true));
+        let slots = m.setting("slots").unwrap();
+        assert_eq!(
+            (slots.kind.clone(), slots.min, slots.max),
+            (SettingKind::Int, Some(1.0), Some(5.0))
+        );
+        assert!(slots.def.is_some());
+        assert_eq!(
+            m.setting("cost").unwrap().kind,
+            SettingKind::Choice(vec!["bones".into(), "health".into()])
+        );
+    }
+
+    #[test]
+    fn checks_patterns_like_the_runtime() {
+        // A PE with one executable section holding a few known bytes.
+        let dll = crate::install::tests::fake_dll(0xC3);
+        let img = uk_qol_runtime::pe::map_file(&dll).unwrap();
+        let image = Image::new(&img).unwrap();
+        assert_eq!(
+            check_patterns(&image, "# comments only\n", None),
+            Compat::Works
+        );
+        let ok = "[ret]\npattern = \"C3\"\n";
+        assert_eq!(check_patterns(&image, ok, None), Compat::Works);
+        let missing =
+            "[nope]\npattern = \"DE AD BE EF\"\n[opt]\npattern = \"AA BB\"\noptional = true\n";
+        match check_patterns(&image, missing, None) {
+            Compat::Broken(f) => assert_eq!(f.len(), 1),
+            other => panic!("{other:?}"),
+        }
+        assert!(matches!(
+            check_patterns(&image, "[x]\nbogus = 1\n", None),
+            Compat::Unknown(_)
+        ));
     }
 }

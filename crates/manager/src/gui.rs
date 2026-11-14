@@ -818,6 +818,7 @@ impl App {
             return;
         };
         let mut changed: Option<ConfigFile> = None;
+        let mut reset_safe = false;
         let config_err = st.config.as_ref().err().cloned();
         let locked = self.game_running;
         egui::ScrollArea::vertical().show(ui, |ui| {
@@ -838,6 +839,20 @@ impl App {
                                 .small()
                                 .weak(),
                         );
+                    }
+                    if st.safe_mode_next {
+                        ui.horizontal_wrapped(|ui| {
+                            ui.label(
+                                RichText::new(tr!("note_safe_mode", st.abnormal_exits))
+                                    .color(WARN_AMBER),
+                            );
+                            if ui
+                                .add_enabled(!locked, egui::Button::new(tr!("gui_reset_safe_mode")))
+                                .clicked()
+                            {
+                                reset_safe = true;
+                            }
+                        });
                     }
                     if l.other_build {
                         ui.label(
@@ -861,6 +876,13 @@ impl App {
                         ui.label(RichText::new(crate::cli::compat_text(&m.compat)).color(color));
                         if m.pattern_override {
                             ui.label(RichText::new(tr!("patterns_downloaded")).small().weak());
+                        }
+                        if m.untested {
+                            ui.label(
+                                RichText::new(tr!("note_untested"))
+                                    .small()
+                                    .color(WARN_AMBER),
+                            );
                         }
                     });
                     if let Some(l) = &m.last_log {
@@ -945,6 +967,15 @@ impl App {
         });
         if let Some(c) = changed {
             self.save_config(&c);
+        }
+        if reset_safe && let Some(g) = &self.game {
+            if process::game_running() {
+                self.set_msg(tr!("err_game_running"), true);
+            } else {
+                uk_qol_runtime::safe::reset(&g.dir.join(install::DATA_DIR));
+                self.set_msg(tr!("done_safe_mode_reset"), false);
+            }
+            self.refresh();
         }
     }
 
@@ -1054,7 +1085,7 @@ fn setting_widget(
             if commit {
                 let v = buf.clone();
                 edits.remove(&key);
-                Some(v.into())
+                config::coerce(s, &v).ok()
             } else {
                 None
             }

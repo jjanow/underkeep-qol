@@ -26,6 +26,7 @@ pub const COMMANDS: &[(&str, &[&str])] = &[
     ("uninstall", &["--game", "--yes", "--force", "--purge"]),
     ("report", &["--game", "--output", "--stdout"]),
     ("update", &["--game", "--yes", "--check"]),
+    ("reset-safe-mode", &["--game"]),
     ("gui", &["--game"]),
 ];
 
@@ -165,6 +166,7 @@ pub fn run(a: Args) -> ExitCode {
         "uninstall" => cmd_uninstall(&a),
         "report" => cmd_report(&a),
         "update" => cmd_update(&a),
+        "reset-safe-mode" => cmd_reset_safe_mode(&a),
         other => {
             eprint!("{}\n\n{}", tr!("err_unknown_command", other), usage());
             return ExitCode::from(2);
@@ -362,6 +364,9 @@ fn cmd_status(a: &Args) -> Result<(), String> {
     if process::game_running() {
         println!("{}", tr!("note_game_running"));
     }
+    if st.safe_mode_next {
+        println!("{}", tr!("note_safe_mode", st.abnormal_exits));
+    }
     if let Err(e) = &st.config {
         println!("{e}");
     }
@@ -389,6 +394,12 @@ fn cmd_status(a: &Args) -> Result<(), String> {
                 String::new()
             }
         );
+        if m.untested {
+            println!("{:<20} {}", "", tr!("note_untested"));
+        }
+        if let Some(e) = &m.info.manifest_error {
+            println!("{:<20} {}", "", tr!("note_manifest_error", e));
+        }
         if let Some(l) = &m.last_log {
             println!("{:<20} {}: {l}", "", tr!("label_log"));
         }
@@ -552,6 +563,14 @@ fn cmd_uninstall(a: &Args) -> Result<(), String> {
     if launch::needed() {
         println!("{}", tr!("launch_after_uninstall"));
     }
+    Ok(())
+}
+
+fn cmd_reset_safe_mode(a: &Args) -> Result<(), String> {
+    let g = pick_game(a)?;
+    refuse_if_running()?;
+    uk_qol_runtime::safe::reset(&g.dir.join(install::DATA_DIR));
+    println!("{}", tr!("done_safe_mode_reset"));
     Ok(())
 }
 

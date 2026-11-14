@@ -17,6 +17,9 @@ pub struct ModStatus {
     pub info: ModInfo,
     pub enabled: bool,
     pub compat: Compat,
+    /// The manifest's `game_builds` doesn't list this build (the mod still
+    /// runs if its patterns resolve).
+    pub untested: bool,
     /// Uses a downloaded pattern file instead of the built-in one.
     pub pattern_override: bool,
     /// The mod's last line in `uk_qol.log`, if any.
@@ -33,6 +36,9 @@ pub struct Status {
     pub launch: Vec<AccountLaunch>,
     pub mods: Vec<ModStatus>,
     pub log: Option<LogSummary>,
+    /// `uk_qol/session.toml`: the game will start in safe mode next time.
+    pub safe_mode_next: bool,
+    pub abnormal_exits: u32,
 }
 
 pub struct LogSummary {
@@ -58,10 +64,14 @@ pub fn read_log(game_dir: &Path, build: Option<&BuildInfo>) -> Option<LogSummary
     })
 }
 
-/// The last log line about mod `id`: `mod <id>: ...`, `[<id>] ...` or
-/// `<id>: ...`.
+/// The last log line about mod `id`: `mod <id>: ...` or
+/// `mod <id> <version>: <status>` (the runtime's summary), or `[<id>] ...`.
 pub fn last_mod_line(lines: &[String], id: &str) -> Option<String> {
-    let needles = [format!("mod {id}:"), format!("[{id}]"), format!("{id}:")];
+    let needles = [
+        format!("mod {id}:"),
+        format!("mod {id} "),
+        format!("[{id}]"),
+    ];
     lines
         .iter()
         .rev()
@@ -93,7 +103,9 @@ pub fn gather(g: &GameInstall) -> Status {
         _ => Vec::new(),
     };
     let log = read_log(dir, build.as_ref().ok());
+    let session = uk_qol_runtime::safe::read(&dir.join(install::DATA_DIR));
     let image = mods::load_image(&exe);
+    let build_hex = build.as_ref().ok().map(|b| b.sha256_hex());
     let mods = mods::builtin()
         .into_iter()
         .map(|info| {
@@ -101,9 +113,11 @@ pub fn gather(g: &GameInstall) -> Status {
             let pattern_override = override_path.is_file();
             let compat = match &image {
                 Ok(img) => match Image::new(img) {
-                    Ok(image) => {
-                        mods::check_patterns(&image, &mods::effective_patterns(&info, dir))
-                    }
+                    Ok(image) => mods::check_patterns(
+                        &image,
+                        &mods::effective_patterns(&info, dir),
+                        build_hex.as_deref(),
+                    ),
                     Err(e) => Compat::Unknown(e.to_string()),
                 },
                 Err(e) => Compat::Unknown(e.clone()),
@@ -112,7 +126,9 @@ pub fn gather(g: &GameInstall) -> Status {
                 .as_ref()
                 .map_or(info.enabled_default, |c| c.is_enabled(&info));
             let last_log = log.as_ref().and_then(|l| last_mod_line(&l.lines, &info.id));
+            let untested = info.tested_on(build_hex.as_deref()) == Some(false);
             ModStatus {
+                untested,
                 info,
                 enabled,
                 compat,
@@ -130,6 +146,10 @@ pub fn gather(g: &GameInstall) -> Status {
         launch,
         mods,
         log,
+        safe_mode_next: session
+            .as_ref()
+            .is_some_and(|s| s.abnormal_exits >= uk_qol_runtime::safe::CRASH_THRESHOLD),
+        abnormal_exits: session.map_or(0, |s| s.abnormal_exits),
     }
 }
 

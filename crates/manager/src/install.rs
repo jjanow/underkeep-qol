@@ -27,14 +27,14 @@ pub const DLL: &str = "winmm.dll";
 pub const MANIFEST: &str = "uk_qol/install.toml";
 /// Where a `winmm.dll` that wasn't ours is kept while we're installed.
 pub const BACKUP_DLL: &str = "uk_qol/backup/winmm.dll";
-/// Save sidecars: never removed by the manager.
+/// Save sidecars (`saves/<account|default>/<save>.qol.toml`): never removed
+/// by the manager.
 pub const SAVES_DIR: &str = "uk_qol/saves";
 /// Files the runtime writes that are safe to remove on uninstall.
 pub const RUNTIME_FILES: &[&str] = &[
     "uk_qol/uk_qol.log",
     "uk_qol/uk_qol.log.prev",
-    "uk_qol/session.lock",
-    "uk_qol/crashes.toml",
+    "uk_qol/session.toml",
 ];
 
 /// `uk_qol/install.toml`.
@@ -440,8 +440,8 @@ pub mod tests {
         install_pattern(g, "skip-logos", b"x = \"C3\"").unwrap();
         std::fs::write(g.join("uk_qol/uk_qol.log"), "log").unwrap();
         std::fs::write(g.join("uk_qol/config.toml"), "[mods.a]\nenabled = true\n").unwrap();
-        std::fs::create_dir_all(g.join(SAVES_DIR)).unwrap();
-        std::fs::write(g.join(SAVES_DIR).join("save_1.qol.toml"), "x").unwrap();
+        std::fs::create_dir_all(g.join(SAVES_DIR).join("12345")).unwrap();
+        std::fs::write(g.join(SAVES_DIR).join("12345/save_1.qol.toml"), "x").unwrap();
 
         let out = uninstall(
             g,
@@ -458,7 +458,7 @@ pub mod tests {
         assert!(!g.join(DLL).exists());
         assert!(!g.join("uk_qol/patterns").exists());
         assert!(g.join("uk_qol/config.toml").exists());
-        assert!(g.join(SAVES_DIR).join("save_1.qol.toml").exists());
+        assert!(g.join(SAVES_DIR).join("12345/save_1.qol.toml").exists());
         assert!(g.join(crate::paths::GAME_EXE).exists());
 
         // Nothing installed any more.
