@@ -30,19 +30,13 @@ use uk_qol_runtime::guard;
 use uk_qol_runtime::host::{LoadCtx, Mod, ModSaveState};
 use uk_qol_runtime::hotkey;
 use uk_qol_runtime::input::InputEvent;
+use uk_qol_runtime::savehook::{self, PartyHero};
 use uk_qol_runtime::toast;
 
 const ID: &str = "bloodmage-cost";
 const TOGGLE_KEY: &str = "toggle_key";
 
-// Hero struct (0x2b8 bytes, 4 in the party), 1.0.5.
-const HERO_SIZE: usize = 0x2b8;
-const PARTY_SIZE: usize = 4;
-const HERO_VALID: usize = 0x00; // byte
-const HERO_ID: usize = 0x08; // i32
-const HERO_NAME_DATA: usize = 0x18; // String {buf, data, len}: data
-const HERO_NAME_LEN: usize = 0x20; // i32
-const HERO_CLASS: usize = 0x94; // i32
+// Hero struct fields (1.0.5); the rest are in `savehook`.
 const HERO_HP: usize = 0xfc; // i32
 const CLASS_BLOODMAGE: i32 = 6;
 
@@ -109,6 +103,7 @@ impl Modes {
     }
 
     fn save(&self, state: &mut ModSaveState) {
+        state.heroes.clear();
         for (k, m) in &self.by_hero {
             let mut t = toml::Table::new();
             t.insert("mode".into(), toml::Value::String(m.name().into()));
@@ -151,7 +146,6 @@ fn default_mode(settings: &toml::Table) -> PayMode {
 /// Addresses resolved in `on_load` (0 = not loaded).
 static INV_COUNT: AtomicUsize = AtomicUsize::new(0);
 static SELECTED: AtomicUsize = AtomicUsize::new(0);
-static HEROES: AtomicUsize = AtomicUsize::new(0);
 static ORIG_PAY: AtomicUsize = AtomicUsize::new(0);
 static ORIG_CAN: AtomicUsize = AtomicUsize::new(0);
 static ORIG_LOSE: AtomicUsize = AtomicUsize::new(0);
@@ -163,31 +157,11 @@ unsafe fn rd<T: Copy>(p: usize, off: usize) -> T {
     unsafe { std::ptr::read_unaligned((p + off) as *const T) }
 }
 
-/// A hero's sidecar key, `<hero_id>:<name>`.
-///
-/// # Safety
-/// `h` must point to a live Hero.
-unsafe fn hero_key(h: usize) -> String {
-    // SAFETY: forwarded; the name String's data is valid for its length.
-    unsafe {
-        let id: i32 = rd(h, HERO_ID);
-        let data: usize = rd(h, HERO_NAME_DATA);
-        let len: i32 = rd(h, HERO_NAME_LEN);
-        let name = if data == 0 || !(0..=256).contains(&len) {
-            String::new()
-        } else {
-            String::from_utf8_lossy(std::slice::from_raw_parts(data as *const u8, len as usize))
-                .into_owned()
-        };
-        format!("{id}:{name}")
-    }
-}
-
 /// # Safety
 /// `h` must point to a live Hero.
 unsafe fn is_bloodmage(h: usize) -> bool {
     // SAFETY: forwarded.
-    unsafe { rd::<i32>(h, HERO_CLASS) == CLASS_BLOODMAGE }
+    unsafe { rd::<i32>(h, savehook::HERO_CLASS) == CLASS_BLOODMAGE }
 }
 
 /// Whether hero `h` pays with health instead of bones.
@@ -196,7 +170,11 @@ unsafe fn is_bloodmage(h: usize) -> bool {
 /// `h` must point to a live Hero.
 unsafe fn pays_with_health(h: usize) -> bool {
     // SAFETY: forwarded.
-    unsafe { h != 0 && is_bloodmage(h) && modes().get(&hero_key(h)) == PayMode::Health }
+    unsafe {
+        h != 0
+            && is_bloodmage(h)
+            && savehook::hero_key(h).is_some_and(|k| modes().get(&k) == PayMode::Health)
+    }
 }
 
 /// Total bones in the party inventory (for the log).
@@ -221,31 +199,16 @@ fn bones() -> i32 {
     }
 }
 
-/// The selected hero, if any (party index and pointer).
-fn selected_hero() -> Option<(usize, usize)> {
-    let (sel, heroes) = (
-        SELECTED.load(Ordering::Relaxed),
-        HEROES.load(Ordering::Relaxed),
-    );
-    if sel == 0 || heroes == 0 {
+/// The selected hero, if it's one of the party's.
+fn selected_hero(party: &[PartyHero]) -> Option<&PartyHero> {
+    let sel = SELECTED.load(Ordering::Relaxed);
+    if sel == 0 {
         return None;
     }
-    // SAFETY: statics of the exe.
+    // SAFETY: a dword static of the exe.
     let i: i32 = unsafe { rd(sel, 0) };
-    let i = usize::try_from(i).ok().filter(|&i| i < PARTY_SIZE)?;
-    let h = heroes + i * HERO_SIZE;
-    // SAFETY: inside the party's hero array.
-    (unsafe { rd::<u8>(h, HERO_VALID) } != 0).then_some((i, h))
-}
-
-fn party_has_bloodmage() -> bool {
-    let heroes = HEROES.load(Ordering::Relaxed);
-    heroes != 0
-        && (0..PARTY_SIZE).any(|i| {
-            let h = heroes + i * HERO_SIZE;
-            // SAFETY: inside the party's hero array.
-            unsafe { rd::<u8>(h, HERO_VALID) != 0 && is_bloodmage(h) }
-        })
+    let i = usize::try_from(i).ok()?;
+    party.iter().find(|h| h.index == i)
 }
 
 // ---------------------------------------------------------------------------
@@ -322,7 +285,7 @@ unsafe extern "system" fn pay_skill_cost(h: usize, skill: usize, cost: i32) {
     let bones_after = bones();
     let _ = guard::call(ID, || {
         // SAFETY: as above.
-        let key = unsafe { hero_key(h) };
+        let key = unsafe { savehook::hero_key(h) }.unwrap_or_default();
         uk_qol_runtime::log(&format!(
             "{ID}: {key} paid with health: hp {hp_before} -> {hp_after}, \
              bones {bones_before} -> {bones_after} (cost {cost})"
@@ -388,7 +351,6 @@ impl Mod for BloodmageCost {
         let (pay, can, lose) = (at("pay_skill_cost")?, at("can_cast_skill")?, at("lose_hp")?);
         INV_COUNT.store(at("party_inventory_count")?, Ordering::Relaxed);
         SELECTED.store(at("selected_hero")?, Ordering::Relaxed);
-        HEROES.store(at("heroes")?, Ordering::Relaxed);
         modes().default = Some(default_mode(cx.settings));
         let e = |e: uk_qol_runtime::hook::HookError| e.to_string();
         // SAFETY: each target is the start of the named function (verified
@@ -425,26 +387,26 @@ impl Mod for BloodmageCost {
         if !hotkey::pressed(ID, TOGGLE_KEY, ev) {
             return false;
         }
-        let Some((i, h)) = selected_hero() else {
+        let party = savehook::party_heroes();
+        let Some(h) = selected_hero(&party) else {
             return false;
         };
-        // SAFETY: a valid hero of the party.
-        if !unsafe { is_bloodmage(h) } {
-            if party_has_bloodmage() {
+        if h.class != CLASS_BLOODMAGE {
+            if party.iter().any(|h| h.class == CLASS_BLOODMAGE) {
                 toast::show("Select a Blood Mage to switch how they pay");
             }
             return false;
         }
-        // SAFETY: as above.
-        let key = unsafe { hero_key(h) };
-        let m = modes().toggle(&key);
-        let name = key.split_once(':').map_or(key.as_str(), |(_, n)| n);
+        let m = modes().toggle(&h.key);
+        let name = h.key.split_once(':').map_or(h.key.as_str(), |(_, n)| n);
         toast::show(match m {
             PayMode::Bones => format!("{name} pays with bones (health when out of bones)"),
             PayMode::Health => format!("{name} pays with health, keeping the bones"),
         });
         uk_qol_runtime::log(&format!(
-            "{ID}: hero {i} ({key}) now pays with {}; bones {}",
+            "{ID}: hero {} ({}) now pays with {}; bones {}",
+            h.index,
+            h.key,
             m.name(),
             bones()
         ));
@@ -478,7 +440,7 @@ mod tests {
         assert_eq!(manifest.settings.len(), 2);
         assert_eq!(default_mode(&manifest.defaults()), PayMode::Bones);
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 6);
+        assert_eq!(pats.patterns.len(), 5);
     }
 
     #[test]

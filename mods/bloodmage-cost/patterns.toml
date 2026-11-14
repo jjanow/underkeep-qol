@@ -44,10 +44,3 @@ rip = { disp = 3, len = 7 }
 [selected_hero]
 pattern = "8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
 rip = { disp = 2, len = 6 }
-
-# The party's hero array (4 x Hero, 0x2b8 bytes each), 0x14043f630
-# (= Party+0x10). The `lea rbx, [heroes]` of the same code.
-[heroes]
-pattern = "8B 15 ?? ?? ?? ?? 85 C9 44 0F 48 FA 49 63 C7 4C 69 F0 B8 02 00 00 48 8D 1D"
-offset = 22
-rip = { disp = 3, len = 7 }

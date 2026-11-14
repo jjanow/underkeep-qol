@@ -3,8 +3,9 @@
 //!
 //! ```toml
 //! # Which document the patch applies to: the game's own name for it, as in
-//! # `def/def.txt`'s include list (`base/def_def_skill.txt.rfile` is
-//! # `def/def_skill.txt`).
+//! # `def/def.txt`'s include list and as the loader passes it
+//! # (`base/def_def_skill.txt.rfile` is `def/def_skill.txt`,
+//! # `base/text_text_common_en.txt.rfile` is `text/text_common_en.txt`).
 //! file = "def/def_skill.txt"
 //!
 //! [[op]]

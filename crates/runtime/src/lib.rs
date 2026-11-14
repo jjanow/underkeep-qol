@@ -2,12 +2,16 @@
 //! `winmm.dll` proxy.
 //!
 //! It writes `uk_qol/uk_qol.log` in the game folder, logs which build of the
-//! game it loaded into, and starts the mod host (`host`). Hooks, the overlay
-//! and the save hooks are in progress (PLAN.md).
+//! game it loaded into, starts the mod host (`host`) and installs its own
+//! hooks (`corehooks`): save sidecars (`savehook`) and in-memory data
+//! patches (`datapatch`), and connects the host to the overlay (`bridge`).
 
 pub mod bridge;
 pub mod build;
 pub mod config;
+pub mod corehooks;
+pub mod datapatch;
+pub mod game;
 pub mod guard;
 pub mod hook;
 pub mod host;
@@ -20,6 +24,7 @@ pub mod pattern;
 pub mod pe;
 pub mod safe;
 pub mod save;
+pub mod savehook;
 pub mod toast;
 
 use std::fs::{self, File, OpenOptions};
@@ -96,11 +101,21 @@ fn run(builtin: &'static [host::ModCtor]) {
             (None, 0)
         }
     };
+    let patterns_dir = dir.as_ref().map(|d| d.join("patterns"));
+    // The runtime's own patterns, resolved before any mod's hooks go in.
+    let core = match &image {
+        Some(img) if !safe.is_on() => Some(corehooks::resolve(
+            img,
+            build.as_deref(),
+            patterns_dir.as_deref(),
+        )),
+        _ => None,
+    };
     let env = host::HostEnv {
         image,
         base,
         build,
-        patterns_dir: dir.map(|d| d.join("patterns")),
+        patterns_dir,
         log,
         note_active: log_active_mods,
     };
@@ -108,7 +123,23 @@ fn run(builtin: &'static [host::ModCtor]) {
     for line in h.summary() {
         log(&line);
     }
+    let mod_patches = h.active_patches();
     host::install(h);
+    // Save and data-patch hooks, before the startup gate opens.
+    if let Some(core) = core {
+        let patches = datapatch::PatchSet::collect(
+            &mod_patches,
+            dir.as_ref().map(|d| d.join("patches")).as_deref(),
+            log,
+        );
+        let log_defs = config
+            .extra
+            .get("runtime")
+            .and_then(|r| r.get("log_defs"))
+            .and_then(toml::Value::as_bool)
+            .unwrap_or(false);
+        corehooks::install(&core, base, patches, log_defs);
+    }
     bridge::install();
 }
 
