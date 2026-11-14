@@ -398,6 +398,9 @@ unsafe extern "C" fn axis_hook(pad: *mut c_void, axis: c_int) -> i16 {
 unsafe extern "C" fn swap_hook(window: Window) -> bool {
     // SAFETY: set before the slot was swapped.
     let orig: SwapFn = unsafe { std::mem::transmute(ORIG_SWAP.load(Ordering::Relaxed)) };
+    if let Some(f) = super::frame_sink() {
+        guard::call_or(GUARD_ID, f, || {});
+    }
     // Draw under the guard; present exactly once, outside it.
     guard::call_or(GUARD_ID, || frame(window), force_close);
     unsafe { orig(window) }

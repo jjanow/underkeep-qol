@@ -5,6 +5,7 @@
 //! game it loaded into, and starts the mod host (`host`). Hooks, the overlay
 //! and the save hooks are in progress (PLAN.md).
 
+pub mod bridge;
 pub mod build;
 pub mod config;
 pub mod guard;
@@ -107,6 +108,7 @@ fn run(builtin: &'static [host::ModCtor]) {
         log(&line);
     }
     host::install(h);
+    bridge::install();
 }
 
 // Startup gate. The game's code must not run ahead of the mod hooks: defs

@@ -202,6 +202,22 @@ pub(crate) fn sink() -> Option<InputSink> {
     (p != 0).then(|| unsafe { std::mem::transmute::<usize, InputSink>(p) })
 }
 
+static FRAME_SINK: AtomicUsize = AtomicUsize::new(0);
+
+/// Registers a function called once per game frame on the render thread,
+/// before the overlay draws (the host's `on_frame` dispatch). Runs inside
+/// the overlay's panic guard, so it must guard each mod call itself.
+pub fn set_frame_sink(sink: fn()) {
+    FRAME_SINK.store(sink as usize, Ordering::Release);
+}
+
+#[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
+pub(crate) fn frame_sink() -> Option<fn()> {
+    let p = FRAME_SINK.load(Ordering::Acquire);
+    // SAFETY: only ever stored from a valid `fn()` pointer.
+    (p != 0).then(|| unsafe { std::mem::transmute::<usize, fn()>(p) })
+}
+
 /// Whether the mod menu is open.
 pub fn is_open() -> bool {
     OPEN.load(Ordering::Relaxed)
