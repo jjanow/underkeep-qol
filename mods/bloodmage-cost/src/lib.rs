@@ -164,17 +164,27 @@ unsafe fn is_bloodmage(h: usize) -> bool {
     unsafe { rd::<i32>(h, savehook::HERO_CLASS) == CLASS_BLOODMAGE }
 }
 
+/// Hero `h`'s mode if it's a Blood Mage.
+///
+/// # Safety
+/// `h` must point to a live Hero.
+unsafe fn blood_mode(h: usize) -> Option<PayMode> {
+    // SAFETY: forwarded.
+    unsafe {
+        if h == 0 || !is_bloodmage(h) {
+            return None;
+        }
+        savehook::hero_key(h).map(|k| modes().get(&k))
+    }
+}
+
 /// Whether hero `h` pays with health instead of bones.
 ///
 /// # Safety
 /// `h` must point to a live Hero.
 unsafe fn pays_with_health(h: usize) -> bool {
     // SAFETY: forwarded.
-    unsafe {
-        h != 0
-            && is_bloodmage(h)
-            && savehook::hero_key(h).is_some_and(|k| modes().get(&k) == PayMode::Health)
-    }
+    unsafe { blood_mode(h) == Some(PayMode::Health) }
 }
 
 /// Total bones in the party inventory (for the log).
@@ -266,15 +276,15 @@ unsafe extern "system" fn pay_skill_cost(h: usize, skill: usize, cost: i32) {
     // Only the decision runs in the guard: if it panics, the game pays as
     // usual. The call itself is outside, so it never runs twice.
     // SAFETY: the game passes a live Hero.
-    let health = guard::call(ID, || unsafe { pays_with_health(h) }).unwrap_or(false);
-    if !health {
+    let mode = guard::call(ID, || unsafe { blood_mode(h) }).flatten();
+    let Some(mode) = mode else {
         // SAFETY: the original with the game's arguments.
         return unsafe { orig(h, skill, cost) };
-    }
+    };
     // SAFETY: as above.
     let hp_before: i32 = unsafe { rd(h, HERO_HP) };
     let bones_before = bones();
-    let hidden = hide_bones();
+    let hidden = mode == PayMode::Health && hide_bones();
     // SAFETY: the original with the game's arguments.
     unsafe { orig(h, skill, cost) };
     if hidden {
@@ -287,8 +297,9 @@ unsafe extern "system" fn pay_skill_cost(h: usize, skill: usize, cost: i32) {
         // SAFETY: as above.
         let key = unsafe { savehook::hero_key(h) }.unwrap_or_default();
         uk_qol_runtime::log(&format!(
-            "{ID}: {key} paid with health: hp {hp_before} -> {hp_after}, \
-             bones {bones_before} -> {bones_after} (cost {cost})"
+            "{ID}: {key} cast ({} mode, cost {cost}): hp {hp_before} -> {hp_after}, \
+             bones {bones_before} -> {bones_after}",
+            mode.name()
         ));
     });
 }

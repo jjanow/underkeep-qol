@@ -84,7 +84,7 @@ pub(crate) fn draw(ctx: &egui::Context) {
                     let frame = egui::Frame::popup(ui.style()).multiply_with_opacity(*alpha);
                     frame.show(ui, |ui| {
                         ui.set_opacity(*alpha);
-                        ui.label(egui::RichText::new(text).size(18.0));
+                        ui.label(egui::RichText::new(text).size(22.0));
                     });
                 }
             });
