@@ -4,7 +4,7 @@
 //! It writes `uk_qol/uk_qol.log` in the game folder, logs which build of the
 //! game it loaded into, starts the mod host (`host`) and installs its own
 //! hooks (`corehooks`): save sidecars (`savehook`) and in-memory data
-//! patches (`datapatch`). The overlay is in progress (PLAN.md).
+//! patches (`datapatch`), and connects the host to the overlay (`bridge`).
 
 pub mod bridge;
 pub mod build;

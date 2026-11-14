@@ -12,7 +12,9 @@
 //!   the state of the game in play, and writes the sidecar for that file name.
 //! - **Game_LoadFromSlot**: if it succeeded, reads the save's sidecar (none =
 //!   empty) and hands it to the mods ([`Host::load_save`]); a mod with no
-//!   entry gets an empty state, so it resets.
+//!   entry gets an empty state, so it resets. A sidecar that exists but
+//!   can't be read (newer format, broken) is never overwritten by a save to
+//!   the same name.
 //! - **Save_DeleteFile**: deletes that save's sidecar, if there is one.
 //! - **Party_InitFromPartySetup** (a new game): mods get an empty state.
 //!
@@ -243,6 +245,16 @@ fn current() -> std::sync::MutexGuard<'static, Option<Sidecar>> {
     CURRENT.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// The sidecar of the game in play, if it existed but couldn't be read (a
+/// newer format, a broken file). Saving to that name doesn't overwrite it, so
+/// the player's file survives until they fix or remove it. Cleared by the
+/// next load or new game.
+static UNREADABLE: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+
+fn set_unreadable(p: Option<std::path::PathBuf>) {
+    *UNREADABLE.lock().unwrap_or_else(|e| e.into_inner()) = p;
+}
+
 /// Where the sidecar of `save_name` goes; `None` without a data folder.
 fn path_for(save_name: &str) -> Option<std::path::PathBuf> {
     Some(sidecar_path(
@@ -269,6 +281,18 @@ extern "system" fn save_write(state: usize, file: usize, custom: usize) -> u8 {
 
 fn after_save(name: &str) {
     let Some(path) = path_for(name) else { return };
+    if UNREADABLE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .as_ref()
+        == Some(&path)
+    {
+        crate::log(&format!(
+            "save hook: {name} saved; {} couldn't be read when loading, so it is left as it is",
+            path.display()
+        ));
+        return;
+    }
     let mut cur = current();
     let sc = cur.get_or_insert_with(Sidecar::default);
     if host::with(|h: &mut Host| h.save(&mut sc.mods)).is_none() {
@@ -304,6 +328,7 @@ extern "system" fn load_from_slot(info: usize, silent: u8) -> u8 {
 }
 
 fn after_load(name: Option<&str>) {
+    set_unreadable(None);
     let sc = match name.and_then(|n| path_for(n).map(|p| (n, p))) {
         None => {
             crate::log("load hook: can't read the save's file name; mods start empty");
@@ -325,8 +350,10 @@ fn after_load(name: Option<&str>) {
             }
             Err(e) => {
                 crate::log(&format!(
-                    "load hook: {name} loaded, but {e}; mods start empty"
+                    "load hook: {name} loaded, but {e}; mods start empty, and saving \
+                     to {name} won't overwrite that file"
                 ));
+                set_unreadable(Some(path));
                 Sidecar::default()
             }
         },
@@ -377,6 +404,7 @@ extern "system" fn new_game(setup: usize) {
     let orig: NewGameFn = unsafe { std::mem::transmute(ORIG_NEW_GAME.load(Ordering::Acquire)) };
     orig(setup);
     guard::call(GUARD_ID, || {
+        set_unreadable(None);
         let mut cur = current();
         let sc = cur.insert(Sidecar::default());
         if host::with(|h: &mut Host| h.load_save(&sc.mods)).is_none() {
