@@ -109,7 +109,26 @@ pub struct Game {
     pub selected_hero: usize,
     pub heroes: usize,
     pub text_get: Option<usize>,
+    /// The skill picker panel: (interaction mode global, UI event init,
+    /// post, free).
+    pub panel: Option<Panel>,
 }
+
+#[derive(Debug, Clone, Copy)]
+pub struct Panel {
+    pub interaction_mode: usize,
+    pub event_init: usize,
+    pub event_post: usize,
+    pub event_free: usize,
+}
+
+/// Interaction mode while a skill picker panel is open.
+pub const MODE_SKILL_PANEL: i32 = 4;
+/// UI event that opens a hero's skill picker panel (hero index at +0x10).
+const EV_OPEN_SKILL_PANEL: i32 = 0x1a;
+const EV_HERO: usize = 0x10;
+/// Bigger than the game's UI event (about 0x2c0 bytes).
+const EVENT_BUF: usize = 0x400;
 
 impl Game {
     pub fn hero(&self, i: usize) -> usize {
@@ -158,6 +177,46 @@ impl Game {
             wr::<i32>(act + ACT_USE_SKILL, 1);
             Some(rd::<i32>(act + ACT_SEQ))
         }
+    }
+
+    /// The current interaction mode ([`MODE_SKILL_PANEL`], ...).
+    ///
+    /// # Safety
+    /// Game thread only.
+    pub unsafe fn interaction_mode(&self) -> Option<i32> {
+        // SAFETY: a global int.
+        self.panel.map(|p| unsafe { rd::<i32>(p.interaction_mode) })
+    }
+
+    /// Opens hero `hero`'s skill picker panel, as right-clicking the HUD
+    /// skill slot does. A pick there writes the hero's selected skill.
+    ///
+    /// # Safety
+    /// Game thread only, in game.
+    pub unsafe fn open_skill_panel(&self, hero: usize) -> bool {
+        let Some(p) = self.panel else { return false };
+        type EvFn = extern "win64" fn(*mut u8) -> *mut u8;
+        // SAFETY: the resolved functions, each `(UiEvent*)`.
+        let (init, post, free): (EvFn, EvFn, EvFn) = unsafe {
+            (
+                std::mem::transmute::<usize, EvFn>(p.event_init),
+                std::mem::transmute::<usize, EvFn>(p.event_post),
+                std::mem::transmute::<usize, EvFn>(p.event_free),
+            )
+        };
+        #[repr(C, align(16))]
+        struct Buf([u8; EVENT_BUF]);
+        let mut ev = Buf([0; EVENT_BUF]);
+        let e = ev.0.as_mut_ptr();
+        init(e);
+        // SAFETY: inside the initialized event.
+        unsafe {
+            wr::<i32>(e as usize, EV_OPEN_SKILL_PANEL);
+            wr::<i32>(e as usize + EV_HERO, hero as i32);
+        }
+        post(e);
+        free(e);
+        true
     }
 
     /// The text for `key` in the game's language (None if the game doesn't
@@ -294,6 +353,32 @@ pub unsafe fn resolve(h: usize, skill: &Skill) -> Option<u64> {
             })
             .map(|i| pair(i as i32, -1))
     }
+}
+
+/// The skill a selected-skill pair stands for (what the game's picker
+/// wrote), if the hero has it.
+///
+/// # Safety
+/// `h` must point at a valid hero; game thread only.
+pub unsafe fn skill_of(h: usize, p: u64) -> Option<Skill> {
+    let (index, equip_slot) = (p as u32 as i32, (p >> 32) as u32 as i32);
+    // SAFETY: as in `assignable_skills`.
+    unsafe {
+        let (arr, n) = skill_states(h);
+        if (0..n).contains(&index) {
+            let def = rd::<usize>(arr + index as usize * SKILL_STATE_SIZE);
+            return (def != 0).then(|| Skill {
+                name: gstr(def),
+                equip_slot: -1,
+            });
+        }
+        let item = skill_item(h, equip_slot)?;
+        Some(Skill {
+            name: gstr(item + ITEM_SKILL),
+            equip_slot,
+        })
+    }
+    .filter(|s| !s.name.is_empty())
 }
 
 /// "skill_fire_spark" -> "Fire spark": a readable name when the game's text

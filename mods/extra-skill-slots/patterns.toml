@@ -48,3 +48,34 @@ rip = { disp = 3, len = 7 }
 [text_get]
 pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC D0 00 00 00 83 7A 10 00 48 8B FA 48 8B F1 75"
 optional = true
+
+# The game's interaction mode (0 = none, 1 = picking a skill target, 4 = the
+# skill picker panel is open, ...), read by the input gate above right after
+# its other checks: `cmp [..], 0; jne ...; mov eax, [interaction_mode]`.
+[g_interaction_mode]
+pattern = "48 89 5C 24 08 55 48 8B EC 48 83 EC 50 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 F0 8B D9 E8 ?? ?? ?? ?? 84 C0 0F 85 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 03 0F 84 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 00 0F 85 ?? ?? ?? ?? 8B 05"
+offset = 68
+rip = { disp = 2, len = 6 }
+optional = true
+
+# UI events: init(event), post(event), free(event). The HUD opens a hero's
+# skill picker panel (what right-clicking the skill slot does) by posting
+# event 0x1a with the hero index at +0x10: `lea rcx, [rbp-0x10]; call init;
+# ...; mov dword [rbp-0x10], 0x1a; mov [rbp], esi; call post; ...; call free`.
+[ui_event_init]
+pattern = "48 8D 4D F0 E8 ?? ?? ?? ?? 48 8D 4D F0 C7 45 F0 1A 00 00 00 89 75 00 E8 ?? ?? ?? ?? 48 8D 4D F0 E8"
+offset = 4
+call = true
+optional = true
+
+[ui_event_post]
+pattern = "48 8D 4D F0 E8 ?? ?? ?? ?? 48 8D 4D F0 C7 45 F0 1A 00 00 00 89 75 00 E8 ?? ?? ?? ?? 48 8D 4D F0 E8"
+offset = 23
+call = true
+optional = true
+
+[ui_event_free]
+pattern = "48 8D 4D F0 E8 ?? ?? ?? ?? 48 8D 4D F0 C7 45 F0 1A 00 00 00 89 75 00 E8 ?? ?? ?? ?? 48 8D 4D F0 E8"
+offset = 32
+call = true
+optional = true
