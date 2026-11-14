@@ -505,11 +505,23 @@ In order of difficulty; each ships when done, with settings and tests.
 
 - [ ] Tagged release via CI: Windows, Linux, macOS manager builds +
       runtime zip + checksums.
+  - Manual run (`workflow_dispatch`, 2026-11-14, run 43648018936): check
+    (fmt, both clippys, tests), runtime, Windows and Linux managers passed;
+    the DLL's imports are system DLLs only, the CI-built Linux manager runs
+    (`update --check`: no release yet). The macOS job failed at once:
+    `macos-14` images are retired; now `macos-15`. The `release` job (tags
+    only) hasn't run yet.
 - [ ] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
 - [ ] README: replace "planned" with real install steps and screenshots.
-- [ ] Process for game patches: pattern update turnaround, a pinned issue
+  - 2026-11-14: *Installing* section (Windows, Linux, Deck, macOS, by hand,
+    update, uninstall, safe mode), checked against the manager's labels.
+    Screenshots still to do; drop "(none published yet)" at the release.
+- [x] Process for game patches: pattern update turnaround, a pinned issue
       for "game updated, mod X off".
+  - CONTRIBUTING, "When the game updates (maintainers)": a day or two,
+    steps, and the pinned-issue text; the issue is opened at the first
+    game update.
 - [ ] macOS: no native runtime (decided 2026-11-14). The game runs in a
       CrossOver/Whisky/Wine bottle, which loads the Windows `winmm.dll`; ship
       that plus the existing arm64 manager. Document the bottle's

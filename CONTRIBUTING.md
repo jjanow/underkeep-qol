@@ -310,6 +310,50 @@ remove = "old_record.unused"      # in a list, later items move up
 4. In the pull request, give the build (exe SHA-256 from `uk-qol report`) you
    tested on.
 
+## When the game updates (maintainers)
+
+The goal is a pattern update within a day or two of a game patch, so
+players aren't left with a mod turned off for long. Most updates move code
+around without changing it, and need only new patterns: the manager offers
+these without a new loader.
+
+1. **Open a pinned issue** as soon as the update is out (or the first
+   game-update report arrives), titled `Game <version> (<date>): <mods>
+   off`, label `game-update`, with the text below. Close new game-update
+   reports as duplicates of it.
+2. **Check the new build**: `uk-qol status` on the updated install lists
+   each mod and every pattern that no longer resolves; the runtime log
+   gives the exe SHA-256 and version.
+3. **Fix the patterns** as in [Updating patterns](#updating-patterns-after-a-game-patch),
+   keeping the old build's entries. If the code itself changed (a struct
+   offset, a function's arguments), the mod needs a code fix and a new
+   loader instead.
+4. **Test in game** what each changed pattern does (the mod's own in-game
+   checks in PLAN.md), on the new build.
+5. **Release**: bump the version in `Cargo.toml`, tag `v<version>`. CI
+   builds and publishes the loader, the managers and `uk-qol-patterns.zip`.
+   Pattern-only releases change only the patterns zip's contents; installed
+   managers offer just those.
+6. **Update the pinned issue** with the release and close it after a few
+   days.
+
+Pinned issue text:
+
+```markdown
+Underkeep <version> came out on <date>. These mods turn themselves off on it
+until their patterns are updated: <mods>. The other mods and the game work
+normally.
+
+Nothing is lost: settings and the mods' save data are kept, and the mods
+come back on by themselves after the update.
+
+When it's ready, the manager offers the update when it starts (or run
+`uk-qol update`). This issue will say when.
+
+Please don't open a new issue for this update; add a comment here if
+something else broke.
+```
+
 ## Pull requests
 
 - Keep each PR to one change; run fmt, clippy and the tests first.

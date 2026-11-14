@@ -20,7 +20,7 @@ Underkeep has no official mod support. This project adds it in a way that:
 > It's built for a public release, so installing, updating and recovering
 > from a game patch must work without any technical knowledge.
 
-## Planned mods
+## Mods
 
 | Mod | What it does |
 |---|---|
@@ -31,6 +31,64 @@ Underkeep has no official mod support. This project adds it in a way that:
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 
 Details for each are in [Mod designs](#mod-designs).
+
+## Installing
+
+Downloads are on the [releases page](https://github.com/jjanow/underkeep-qol/releases)
+(none published yet). Each release has the manager for Windows, Linux and
+macOS, the loader (`uk-qol-runtime-windows-x64.zip`, one `winmm.dll`) and
+`SHA256SUMS`. You only need the manager: it downloads the matching loader
+itself, or uses a `winmm.dll` placed next to it.
+
+Close the game first; the manager won't change files while it runs.
+
+**Windows**
+
+1. Download `uk-qol-windows-x64.exe` and run it.
+2. It finds the game (or click **Browse…** and pick the folder with
+   `underkeep.exe`). Click **Install**.
+3. Start the game from Steam. **F10** opens the mod menu.
+
+**Linux (Proton)**
+
+1. Download `uk-qol-linux-x64.tar.gz`, unpack it and run `uk-qol`
+   (`./uk-qol gui` from a terminal).
+2. Click **Install**.
+3. The game needs one Steam launch option, so Proton loads the mod loader:
+   `WINEDLLOVERRIDES="winmm=n,b" %command%`. With Steam closed the manager
+   can set it for you (**Set it in Steam for me**); otherwise click **Copy**
+   and paste it in
+   Steam, under the game's *Properties → General → Launch Options*.
+4. Start the game. **F10** (or **L3+R3** on a gamepad) opens the mod menu.
+
+**Steam Deck**: switch to Desktop Mode and follow the Linux steps, then go
+back to Gaming Mode and play. Open the mod menu with **L3+R3**.
+
+**macOS (CrossOver, Whisky, Wine)**: download `uk-qol-macos-arm64.tar.gz`,
+run `uk-qol`, choose the game folder inside the bottle and click
+**Install**. Then set a DLL override in the bottle (`winmm` = *native, then
+builtin*). Not tested yet.
+
+**By hand**: unzip `winmm.dll` from the runtime zip into the game folder
+(next to `underkeep.exe`), plus the launch option above on Linux. To remove
+it, delete that `winmm.dll` and the `uk_qol` folder.
+
+From the command line the same is `uk-qol install` (add
+`--set-launch-option` on Linux); `uk-qol help` lists every command.
+
+**Updating**: the manager checks for a new release when it starts and asks
+before updating itself, the loader and the mod patterns (`uk-qol update`
+from a terminal).
+
+**Uninstalling**: move every weapon out of a second weapon slot into your
+inventory in game first (see [`weapon-swap`](#weapon-swap)), close the game,
+then **Uninstall** in the manager (`uk-qol uninstall`). On Linux remove the
+launch option too. The files next to your saves are kept, so reinstalling
+later brings the mods' state back.
+
+**If the game misbehaves**: hold **Shift** while it starts to run it with
+every mod off. After a game update a mod may turn itself off until its
+patterns are updated; the mod menu says which one and why.
 
 ## How it works
 
@@ -354,8 +412,6 @@ main menu. This mod skips them, so the game starts on the main menu.
 
 ## Repository layout
 
-`crates/` and `mods/` exist; `tools/` is planned.
-
 ```
 crates/
   proxy/        winmm.dll: export forwarding + runtime bootstrap
@@ -364,7 +420,6 @@ crates/
   manager/      Manager app and uk-qol CLI
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
-tools/          pattern extraction and build-diffing helpers
 ```
 
 ## Building
@@ -410,10 +465,14 @@ from the Actions tab, not on pushes or pull requests.
 When the game updates:
 
 1. `uk-qol status` lists every pattern that no longer resolves.
-2. Find the moved function in the new exe (the `tools/` scripts diff the old
-   and new builds around the old match) and update `patterns.toml`.
+2. Find the moved function in the new exe (start from the old match) and
+   update `patterns.toml`.
 3. Patterns are kept per build, so players still on an older build keep working.
-4. Publish the new pattern files; installed managers pick them up.
+4. Publish a release with the new pattern files; installed managers offer
+   them on their next start (`uk-qol update`), without a new loader.
+
+Players follow a pinned "game updated" issue; the full process is in
+[CONTRIBUTING](CONTRIBUTING.md#when-the-game-updates-maintainers).
 
 ## What this repository contains
 

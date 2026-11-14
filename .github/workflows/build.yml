@@ -68,7 +68,7 @@ jobs:
           - os: ubuntu-22.04 # older glibc = runs on more distros
             name: linux-x64
             bin: uk-qol
-          - os: macos-14 # Apple silicon; the game runs in CrossOver / Whisky
+          - os: macos-15 # Apple silicon; the game runs in CrossOver / Whisky
             name: macos-arm64
             bin: uk-qol
     runs-on: ${{ matrix.os }}
