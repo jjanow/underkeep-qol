@@ -17,3 +17,21 @@ steam_settings/
 *.rep/
 *.sav
 save_*
+
+# AI assistant config and memory stays local, never committed.
+.claude/
+.agents/
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.gemini/
+.cursor/
+.cursorrules
+.github/copilot-instructions.md
+.aider*
+.codex/
+.windsurf/
+.windsurfrules
+.clinerules
+.continue/
