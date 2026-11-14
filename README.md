@@ -194,8 +194,9 @@ cost the Blood Mage's own health. This mod adds a setting per Blood Mage:
 | `bones` (game default) | Use bones; health only when out of bones. |
 | `health` | Always pay with health, keep your bones. |
 
-Toggled in the overlay or with a hotkey while the hero is selected, shown as a
-small icon on the hero's skill button. Implementation: hook the bone check in
+Toggled with a hotkey while the hero is selected, or by clicking the badge on
+the Blood Mage's skill slot (**B** for bones, **HP** for health; setting
+`hud_badge`). Implementation: hook the bone check in
 the spell-cost path (the opcode handlers for Blood Mage skills feed into it)
 and report "no bones" in `health` mode, so the game's own health payment runs.
 
@@ -207,10 +208,9 @@ Sorts the open inventory (party stash or a hero's bag).
   quest items), then rarity / value high to low, then name.
 - Stackable items are merged into full stacks first.
 - Equipped items and hotbar / quick slots are never moved.
-- Phase 1: a hotkey (default **S** while an inventory is open).
-  Phase 2: a **Sort** button drawn next to the inventory panel. Placing a
-  button inside the game's own GUI needs GUI injection, so it starts as an
-  overlay button anchored to the panel.
+- A hotkey (default **Z**: the game uses S), and a small **Sort** button
+  drawn by the overlay in the inventory panel's top-right corner while a sort
+  is possible (setting `hud_button`).
 - Runs only when nothing is being dragged and no trade window is mid-transaction.
 
 ### `weapon-swap`
@@ -235,7 +235,9 @@ How it works now (0.1.0; tested in game 1.0.5 except combat):
   character sheet: per hero, **Put the bow in hand in the slot**, **Put
   *item* in the slot** (for each bow or sling in the inventory), **Swap now**
   and **Move to inventory**. The slot can always be emptied back into the
-  inventory there.
+  inventory there. A hero with a filled slot also gets a small **R** button
+  on their weapon hand slot on the HUD; clicking it swaps (setting
+  `hud_button`).
 - A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
   next swap brings it back. One of the two is always a bow or sling; items
   that stack and quest items never go in.
@@ -273,12 +275,14 @@ reopened from the overlay.
 Today each hero has one active-skill slot next to the basic attack. This mod
 adds 3 more (configurable 1–5).
 
-- New slots appear beside the existing one on the hero's HUD panel. HUD
-  positions come from the game's GUI definitions, so the layout is moved with a
-  data patch rather than code.
+- New slots appear as small buttons in a column right of the hero's skill
+  slot on the HUD, drawn by the overlay at the game's own layout positions
+  and labelled with the skill's initials (the full name on hover). The
+  game's layout can't take new slots (its code reads a fixed set of rects).
 - Each new slot gets its own key binding (unbound by default, set in the
-  overlay) and can be clicked like the original. Assigning a skill works
-  like the original slot (right-click).
+  overlay) for the selected hero, and its button casts it for that hero on a
+  left click. Right-click (or a click on an empty slot) assigns a skill with
+  the game's own skill panel; the mod's menu section has a list too.
 - Assignments are stored in the save's sidecar file. Without the mod the hero
   just has their original slot.
 - To investigate: how the combat code reads the selected skill slot

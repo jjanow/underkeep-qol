@@ -191,6 +191,47 @@ widgets in rows of one (the gamepad's d-pad moves between rows, not along
 one), and when a click changes which buttons exist, `request_focus` a
 button that's still there, or gamepad focus is lost.
 
+### HUD widgets
+
+A mod can also draw on the game's HUD while the menu is closed (a badge on
+a skill slot, a button on the inventory panel). Implement two methods:
+
+- `Mod::has_hud(&self) -> bool`: whether there is anything to draw now
+  (default false). Checked every frame; the overlay runs its HUD pass only
+  while some active mod says yes, so a setting that hides the widgets should
+  make it return false.
+- `Mod::hud(&mut self, ui: &mut egui::Ui)`: called every frame while the menu
+  is closed, the mod's `has_hud` is true and the game's plain HUD is up
+  (`hud::shown()`: playing, no menu, dialog, shop, skill panel or target
+  selection over it), on the game's render thread inside the mod's panic
+  guard. `ui` covers the window; place widgets with `ui.put(rect, ...)` or
+  `hud::button(ui, rect, text, fill)` (a small label-button in the HUD's
+  style).
+
+Positions come from `uk_qol_runtime::hud`, in overlay points:
+
+- `hud::rect(name)`: a rect of the game's HUD layout by its `def_def` name
+  (`hud::LAYOUT` lists them: `face_hand_slot_1..8`, `face_rect_1..4`,
+  `inventory_rect`, `minimap_rect`, ...); `hud::skill_slot_name(i)` and
+  `hud::weapon_slot_name(i)` name hero `i`'s hand slots. `hud::gui_rect(name)`
+  gives the same rect in the game's GUI space.
+- `hud::to_screen(p)` / `hud::rect_to_screen(r)` map GUI-space points and
+  rects (640 x 360, y down) to points; `hud::points_per_unit()` sizes text
+  and widgets like the HUD. The game fits that space into the window
+  keeping its aspect ratio, centred (black bars on the long side), so
+  widgets placed this way follow every window size.
+
+Input: a mouse press on a widget that senses clicks (a button, anything
+`allocate_rect`ed with `Sense::click()`) goes to the HUD and is swallowed
+together with its release; every other click, and all mouse motion, still
+reaches the game. Right clicks work (`secondary_clicked`). HUD widgets have
+no gamepad focus: give each action a hotkey too. As in the menu, queue game
+work for `on_frame` rather than doing it in `hud`.
+
+To check positions, create an empty file `uk_qol/hud-debug` in the game
+folder before starting the game: the overlay then outlines every layout
+rect with its name and logs the rects and the window transform once.
+
 ## Data patches
 
 A patch changes one of the game's definition documents (the DfT files in

@@ -249,6 +249,28 @@ Check items off as they land; add findings under the item they belong to.
   - `runtime::i18n`: ids with English text; empty tables for cs, de, es, fr,
     pl, ru fall back to English. The language comes from SDL's preferred
     locales unless `i18n::set_lang` was called.
+- [x] HUD widgets for mods (`runtime::hud`, `Mod::has_hud` / `Mod::hud`;
+      CONTRIBUTING, "HUD widgets").
+  - 2026-11-14, game 1.0.5: the game's GUI is a virtual 640x360 space
+    (y down), fitted into the window with `s = min(w/640, h/360)` and
+    centred, `pixel = ((w - 640s)/2, (h - 360s)/2) + gui * s`, unrounded
+    (the per-frame camera setup; the same values are its letterbox
+    viewport, and the mouse goes back through the inverse). The HUD's named
+    rects are f32 `{x, y, w, h}` in the `GuiLayout` global (`def_def`'s
+    `gui` table), read live. The plain HUD is up when game state is 4, the
+    HUD mode isn't 0 (the HUD returns at once on 0), and the menu state and
+    HUD interaction mode are 0. Five core patterns.
+  - The overlay runs a HUD pass only while an active mod's `has_hud` is true
+    and the HUD is up; a mouse press inside a clickable widget of the last
+    frame is swallowed with its release, everything else (and all motion)
+    reaches the game. No gamepad focus on HUD widgets.
+  - Checked in game with the `uk_qol/hud-debug` outlines: at 3440x1440
+    (scale 4, bars of 440 px) and in a 1280x800 window (scale 2, bars of
+    40 px) every layout rect sits on its HUD element. Clicks pushed as real
+    SDL events at both sizes (a temporary test build): widget clicks reached
+    the mods and were swallowed, a click on the dungeon view was delivered.
+  - Not followed: the GUI camera's screen-shake offset. The character sheet
+    (HUD mode 6) wasn't screenshotted.
 
 ## 5. Reverse engineering per mod
 
@@ -286,6 +308,11 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
 - [ ] **Skill slots:** how `selected_skill_slot` and the skill slot are
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
+  - 2026-11-14: `face_hand_slot_(2i+1)` / `(2i+2)` are hero i's weapon and
+    skill slots, 29x29 at (494|569, 93|216) in GUI space; `face_rect_1..4`
+    the portraits (60x70); `inventory_rect` (2, 2, 154, 258). The game's
+    code reads a fixed set of rects, so new slots are overlay widgets
+    (`runtime::hud`), not layout patches.
 
 - [ ] **Skip logos:** where `anim_startup_logo` (Rake in Grass and FMOD
       logos, ~3 s on every launch) is started and how it hands over to the
@@ -302,9 +329,15 @@ In order of difficulty; each ships when done, with settings and tests.
       on/off setting, nothing saved.
 - [ ] `bloodmage-cost`: per-hero `bones` / `health` toggle, hotkey, icon on
       the skill button, sidecar persistence.
+  - 2026-11-14: HUD badge (**B** / **HP**) in each Blood Mage's skill slot
+    corner, click toggles (`hud_badge`, default on); seen in game, the click
+    path tested with pushed SDL clicks.
 - [ ] `inventory-sort`: category → rarity/value → name, merge stacks,
       skip equipped and quick slots; hotkey **S** first, then the overlay
       button anchored to the inventory panel.
+  - 2026-11-14: **Sort** button in `inventory_rect`'s top-right corner,
+    shown while a sort is allowed (window focus not required for showing),
+    `hud_button` (default on); a pushed click sorted ("already sorted").
 - [ ] `weapon-swap`: ranged slot on the character sheet (ranged weapons
       only), drag in/out like other slots, swap via the game's equip function;
       Shift+1..4 and a selected-hero key; `swap_costs_turn` (default true);
@@ -322,6 +355,11 @@ In order of difficulty; each ships when done, with settings and tests.
     play (only pad bindings were used; the drag check never ran, the
     cursor object is null with a pad). New-game `g_state` 3 is static only.
   - Open: the slot on the character sheet with drag and drop (see §5).
+  - 2026-11-14: HUD **R** button on the weapon hand slot of heroes with a
+    filled slot, click swaps (`hud_button`, default on). Not seen in game:
+    the test save's slot was parked (sidecar mismatch). Also seen: after
+    "I understand" in the menu the gamepad focus is lost (the button
+    disappears; nothing gets `request_focus`).
 - [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
       the manager before uninstall. The player handles emptying slots.
@@ -330,6 +368,14 @@ In order of difficulty; each ships when done, with settings and tests.
     slot or swapping is refused until then.
 - [ ] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
+  - 2026-11-14: HUD buttons in a column right of each hero's skill slot
+    (9 GUI units, smaller for 4–5 slots), the skill's initials, full name
+    on hover; left-click casts for that hero (the same queue path as the
+    keys), right-click or a click on an empty slot opens the game's skill
+    panel for it (`hud_buttons`, default on). In game: a pushed left click
+    cast through the game's checks ("Cooldown not finished yet!"), a right
+    click opened the panel, closing it put the original skill back. Text
+    labels, not the game's skill icons (their textures weren't traced).
 
 ## 7. Manager
 
