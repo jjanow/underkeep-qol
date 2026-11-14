@@ -444,6 +444,15 @@ In order of difficulty; each ships when done, with settings and tests.
   - The notice is the mod section's first content until acknowledged
     (`uk_qol/weapon-swap.notice-acknowledged`); putting a weapon into a
     slot or swapping is refused until then.
+- [ ] `weapon-swap`: turn the ranged slot into a second weapon slot that
+      takes any weapon (decided 2026-11-14), so the swap covers sword and
+      shield ↔ two-hander and melee ↔ melee as well as melee ↔ ranged. Drop
+      the ranged-only check (item type 1, weapon type 5); rename "ranged
+      slot" in settings, overlay text, README, the loss warning and the
+      manager's pre-uninstall text; a weapon silhouette instead of the bow
+      (drawn in code, no game art). Keep the shield behaviour (a two-hander
+      puts it in the inventory, swapping back puts it on). Test in game:
+      one-hander ↔ one-hander with a shield, two-hander ↔ sword and shield.
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).
