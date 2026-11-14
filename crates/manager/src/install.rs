@@ -32,7 +32,7 @@ pub const SAVES_DIR: &str = "uk_qol/saves";
 /// Files the runtime writes that are safe to remove on uninstall.
 pub const RUNTIME_FILES: &[&str] = &[
     "uk_qol/uk_qol.log",
-    "uk_qol/uk_qol.log.old",
+    "uk_qol/uk_qol.log.prev",
     "uk_qol/session.lock",
     "uk_qol/crashes.toml",
 ];

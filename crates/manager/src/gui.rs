@@ -127,6 +127,7 @@ fn setup_style(ctx: &egui::Context) {
                 v.panel_fill = Color32::from_rgb(0xF4, 0xF2, 0xEF);
                 v.window_fill = Color32::from_rgb(0xFB, 0xFA, 0xF8);
                 v.faint_bg_color = Color32::from_rgb(0xEC, 0xE9, 0xE4);
+                v.extreme_bg_color = Color32::from_rgb(0xF0, 0xEE, 0xEA);
             }
         });
     }
@@ -227,6 +228,8 @@ pub struct App {
     last_proc_check: Instant,
     confirm_uninstall: bool,
     purge: bool,
+    /// Replace a winmm.dll uk-qol didn't install.
+    force: bool,
     update: Arc<Mutex<UpdateState>>,
     update_dismissed: bool,
     /// Text being typed into text/key settings, by (mod id, key).
@@ -263,6 +266,7 @@ impl App {
             last_proc_check: Instant::now() - Duration::from_secs(60),
             confirm_uninstall: false,
             purge: false,
+            force: false,
             update: Arc::new(Mutex::new(UpdateState::Idle)),
             update_dismissed: false,
             edits: HashMap::new(),
@@ -381,7 +385,7 @@ impl App {
                 &InstallOpts {
                     dll: &dll,
                     runtime_version: version,
-                    force: false,
+                    force: self.force,
                 },
             )
         });
@@ -402,7 +406,7 @@ impl App {
         match install::uninstall(
             &g.dir,
             &UninstallOpts {
-                force: false,
+                force: self.force,
                 purge: self.purge,
             },
         ) {
@@ -706,6 +710,9 @@ impl App {
             },
         };
         ui.label(RichText::new(dll_note).small().weak());
+        if matches!(st.dll, DllState::Foreign | DllState::Modified) {
+            ui.checkbox(&mut self.force, tr!("gui_force"));
+        }
         let running = self.game_running;
         ui.horizontal(|ui| {
             let label = if installed {
@@ -748,7 +755,7 @@ impl App {
     fn launch_card(&mut self, ui: &mut egui::Ui) {
         section_title(ui, &tr!("label_launch"));
         ui.label(RichText::new(tr!("gui_launch_help")).weak());
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             ui.code(launch::LAUNCH_OPTION);
             if ui.button(tr!("gui_copy")).clicked() {
                 ui.ctx().copy_text(launch::LAUNCH_OPTION.to_string());
@@ -843,33 +850,27 @@ impl App {
                 if st.mods.is_empty() {
                     ui.label(RichText::new(tr!("no_mods")).weak());
                 }
-                egui::Grid::new("compat")
-                    .num_columns(3)
-                    .spacing([14.0, 4.0])
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for m in &st.mods {
-                            ui.label(&m.info.name);
-                            let (icon, color) = match &m.compat {
-                                Compat::Works => ("✔", OK_GREEN),
-                                Compat::Broken(_) => ("✖", BAD_RED),
-                                Compat::Unknown(_) => ("?", WARN_AMBER),
-                            };
-                            ui.label(
-                                RichText::new(format!(
-                                    "{icon} {}",
-                                    crate::cli::compat_text(&m.compat)
-                                ))
-                                .color(color),
-                            );
-                            ui.label(
-                                RichText::new(m.last_log.clone().unwrap_or_default())
-                                    .small()
-                                    .weak(),
-                            );
-                            ui.end_row();
+                for m in &st.mods {
+                    let color = match &m.compat {
+                        Compat::Works => OK_GREEN,
+                        Compat::Broken(_) => BAD_RED,
+                        Compat::Unknown(_) => WARN_AMBER,
+                    };
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(&m.info.name).strong());
+                        ui.label(RichText::new(crate::cli::compat_text(&m.compat)).color(color));
+                        if m.pattern_override {
+                            ui.label(RichText::new(tr!("patterns_downloaded")).small().weak());
                         }
                     });
+                    if let Some(l) = &m.last_log {
+                        ui.label(
+                            RichText::new(format!("{}: {l}", tr!("label_log")))
+                                .small()
+                                .weak(),
+                        );
+                    }
+                }
             });
             ui.add_space(8.0);
             if let Some(e) = &config_err {

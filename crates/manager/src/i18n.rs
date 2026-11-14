@@ -258,9 +258,12 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ("default", "default"),
     (
         "done_enabled",
-        "{} is on. It takes effect the next time the game starts, or now if the game watches its config.",
+        "{} is on; it takes effect the next time the game starts.",
     ),
-    ("done_disabled", "{} is off."),
+    (
+        "done_disabled",
+        "{} is off; it takes effect the next time the game starts.",
+    ),
     ("done_set", "{}: {} = {}"),
     ("done_reset", "{}: {} is back to its default"),
     (
@@ -440,6 +443,10 @@ Before uninstalling, move every ranged-slot weapon back to your inventory.",
     (
         "gui_uninstall_disabled",
         "Not installed, or the game is running",
+    ),
+    (
+        "gui_force",
+        "Replace the winmm.dll that's there (it's kept and put back on uninstall)",
     ),
     ("gui_choose_dll", "Other winmm.dll…"),
     (

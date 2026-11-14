@@ -509,15 +509,19 @@ fn cmd_config(a: &Args) -> Result<(), String> {
     };
     let v = config::coerce(s, value)?;
     refuse_if_running()?;
-    c.set(&m.id, key, v)?;
+    c.set(&m.id, key, v.clone())?;
     c.save()?;
-    println!("{}", tr!("done_set", m.id, key, value));
+    println!("{}", tr!("done_set", m.id, key, config::show_value(&v)));
     Ok(())
 }
 
 fn cmd_uninstall(a: &Args) -> Result<(), String> {
     let g = pick_game(a)?;
     refuse_if_running()?;
+    let manifest = InstallManifest::read(&g.dir)?;
+    if manifest.is_none() && install::dll_state(&g.dir, None) == DllState::Missing {
+        return Err(tr!("err_not_installed"));
+    }
     println!("{}\n", tr!("weapon_warning"));
     if !a.has("--yes") && !confirm(&tr!("confirm_uninstall", g.dir.display())) {
         return Err(tr!("err_not_confirmed"));
