@@ -492,8 +492,12 @@ In order of difficulty; each ships when done, with settings and tests.
     emulated path (`mods/borderless-compat/patterns.toml`); the pattern
     matches once in 1.0.5. Leaving the mode uses the game's own state
     flag, so windowed and exclusive still work.
-  - [ ] Test in game: the log's "emulated borderless" line with Borderless
-    Mode on Performance (Proton), then HDR and Alt+Tab on Windows (§1).
+  - [ ] Test in game: HDR and Alt+Tab on Windows (§1).
+    - Proton, 2026-11-14, game 1.0.5: with `fullscreen 1` and
+      `borderless_fullscreen_mode 0` (Performance; both are the game's
+      defaults, so `game_config.txt` leaves them out), the game log says
+      `Changing display mode to emulated borderless fullscreen...`. Without
+      the mod the same settings log `...to borderless fullscreen...`.
 
 ## 7. Manager
 
@@ -529,7 +533,13 @@ In order of difficulty; each ships when done, with settings and tests.
 - [ ] README: replace "planned" with real install steps and screenshots.
   - 2026-11-14: *Installing* section (Windows, Linux, Deck, macOS, by hand,
     update, uninstall, safe mode), checked against the manager's labels.
-    Screenshots still to do; drop "(none published yet)" at the release.
+    Drop "(none published yet)" at the release.
+  - 2026-11-14: *Screenshots* section with `docs/screenshots/` (HUD widgets,
+    slot II on the character sheet, the F10 menu, the manager). In-game
+    shots are cropped and credited; the user decided they are the one
+    exception to "no game material" (README and CONTRIBUTING say so). The
+    manager shot is cropped to its right column (no home path or Steam
+    account ids).
 - [x] Process for game patches: pattern update turnaround, a pinned issue
       for "game updated, mod X off".
   - CONTRIBUTING, "When the game updates (maintainers)": a day or two,

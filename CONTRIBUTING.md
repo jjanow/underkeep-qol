@@ -15,6 +15,11 @@ small piece:
 - no extracted text, string tables, data tables or item lists;
 - no decompiled or disassembled code, and no Ghidra/IDA project files.
 
+The one exception is a few small, cropped screenshots of the game in
+`docs/screenshots/` that show what a mod looks like, with the credit line
+under README's *Screenshots*. Screenshots only: never the game's images,
+sprites or other files cut out on their own.
+
 What may go in: byte patterns (short instruction sequences with wildcards, used
 to *find* code), offsets relative to a match, field and record names a mod
 needs, and original code and documentation. Tests that need game data read it

@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 > Status: in development, nothing released yet. The loader, runtime, overlay
-> (F10 / L3+R3), manager and all five mods work in game 1.0.5 under Proton;
+> (F10 / L3+R3), manager and all six mods work in game 1.0.5 under Proton;
 > Windows and Steam Deck are untested. See PLAN.md for what's left.
 > It's built for a public release, so installing, updating and recovering
 > from a game patch must work without any technical knowledge.
@@ -32,6 +32,25 @@ Underkeep has no official mod support. This project adds it in a way that:
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
 
 Details for each are in [Mod designs](#mod-designs).
+
+## Screenshots
+
+In game: the **Sort** button on the inventory, the Blood Mage's **HP** badge
+and the extra skill slots (**BL**, **FI**, **+**) next to each hero's skill
+slot.
+
+![The game's HUD with the mods' buttons](docs/screenshots/hud.png)
+
+| The second weapon slot (**II**) on the character sheet | The mod menu (F10) |
+|---|---|
+| ![Character sheet with the second weapon slot](docs/screenshots/second-weapon-slot.png) | ![The in-game mod menu](docs/screenshots/mod-menu.png) |
+
+The manager: compatibility with your game build, and each mod's settings.
+
+![The manager](docs/screenshots/manager.png)
+
+The in-game screenshots show Underkeep's own art, © Rake in Grass and its
+publishers, used here only to show what the mods do.
 
 ## Installing
 
@@ -501,7 +520,9 @@ Players follow a pinned "game updated" issue; the full process is in
 
 Only original code and documentation. **No game files or anything taken from
 them** are committed: no executables or DLLs, no `base/` files or assets, no
-extracted text, data tables or decompiled code. Mods describe what to change
+extracted text, data tables or decompiled code. The one exception is a few
+screenshots of the game in `docs/screenshots/`, credited in
+[Screenshots](#screenshots), to show what the mods look like. Mods describe what to change
 (byte patterns, field names, new values); the runtime finds the game's own
 data on the player's computer at run time. `.gitignore` blocks game file
 types as a safety net.
