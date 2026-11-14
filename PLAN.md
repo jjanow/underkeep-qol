@@ -85,11 +85,25 @@ Check items off as they land; add findings under the item they belong to.
 
 ## 2. Runtime core
 
-- [ ] Build detection: exe SHA-256, game version string if the exe has one.
-  - The title screen shows `version 1.0.5`; saves record the version they
-    were made with (the log says "Game version: 1.0.3" when loading one).
-- [ ] Byte-pattern scanner with wildcards, unique-match rule, RIP-relative
+- [x] Build detection: exe SHA-256, game version string if the exe has one.
+  - `runtime::build`. The version comes from the `.rdata` literal
+    `version X.Y.Z` (the title screen's), falling back to a lone bare `X.Y.Z`
+    string. The exe has no VERSIONINFO resource. The runtime logs
+    `exe sha256 <hex>, game version <v>` at start.
+  - 1.0.5 (Steam, 2026-11-11): `d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4`.
+  - Saves record the version they were made with (the log says "Game
+    version: 1.0.3" when loading one).
+  - The log line hasn't been seen in game yet; tested against the exe on disk.
+- [x] Byte-pattern scanner with wildcards, unique-match rule, RIP-relative
       and call-target resolution helpers. Unit tests against the current exe.
+  - `runtime::pe` (minimal PE32+ reader; `map_file` lays a file out as
+    mapped, so offline tools and the game see the same RVAs) and
+    `runtime::pattern` (`Pattern`, `Image::scan`/`scan_section`,
+    `rip_target`, `call_target`). Patterns can't start with a wildcard;
+    code scans cover executable sections only.
+  - The real-exe test stores no game bytes: it finds the `lea` that loads a
+    known `.rdata` string, then cuts a pattern from that site and scans it
+    back. A full `.text` scan takes ~150 ms in a debug build.
 - [ ] Hook layer (detours + byte patches), applied and removed per mod.
 - [ ] Panic and SEH containment around every hook and callback; failing
       mod is disabled for the session.

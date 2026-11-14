@@ -8,3 +8,6 @@ repository.workspace = true
 
 [lib]
 name = "uk_qol_runtime"
+
+[dependencies]
+sha2 = "0.11.1"

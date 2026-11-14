@@ -14,8 +14,9 @@ Underkeep has no official mod support. This project adds it in a way that:
 - **keeps your saves loadable without the mods**: the save file format is never
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
-> Status: early development. The loader (`winmm.dll`) builds and forwards
-> calls under Wine; no mods yet and nothing is released. This README is the plan.
+> Status: early development. The loader (`winmm.dll`) loads in game under
+> Proton, and the runtime identifies the game build and has its pattern
+> scanner; no hooks or mods yet and nothing is released. This README is the plan.
 > It's built for a public release, so installing, updating and recovering
 > from a game patch must work without any technical knowledge.
 
@@ -73,8 +74,9 @@ The manager sets this up or prints the exact line to paste.
 Written in Rust, built as a Windows DLL (`x86_64-pc-windows-gnu`, cross-compiled
 from Linux too).
 
-- **Build detection.** Identifies the game build by the exe's hash, so each
-  build is treated as its own binary.
+- **Build detection.** Identifies the game build by the exe's SHA-256, so each
+  build is treated as its own binary, and reads the version string the title
+  screen shows (`version 1.0.5`). Both go into the log and bug reports.
 - **Byte-pattern scanning.** Each mod lists the functions it needs as patterns
   with wildcards (`48 8B ?? ?? 0F 85 ...`) plus how to get from the match to the
   target. Patterns are resolved once at startup. If a required pattern finds no
@@ -322,8 +324,10 @@ cargo test --workspace
 ```
 
 `.cargo/config.toml` sets the MinGW linker for the Windows target. Building
-the DLL on Windows itself hasn't been tried yet; use Linux or WSL. The `dft` tests also round-trip every data file of a local
-game install when `UNDERKEEP_DIR` points at the game folder.
+the DLL on Windows itself hasn't been tried yet; use Linux or WSL. With
+`UNDERKEEP_DIR` pointing at the game folder, the tests also use the local
+install: `dft` round-trips every data file, and the runtime tests run build
+detection and the pattern scanner against `underkeep.exe`.
 
 Release builds use `panic = "unwind"`, unlike Underkeeper: the runtime
 catches a panic in a mod and turns that mod off instead of ending the game.

@@ -1,8 +1,13 @@
 //! Underkeep QoL runtime: runs inside the game process, loaded by the
 //! `winmm.dll` proxy.
 //!
-//! For now this only proves the loader: it writes `uk_qol/uk_qol.log` in the
-//! game folder. Build detection, patterns, hooks and mods come next (PLAN.md).
+//! So far it writes `uk_qol/uk_qol.log` in the game folder and logs which
+//! build of the game it loaded into. The pattern scanner (`pattern`) is ready
+//! for hooks; hooks and mods come next (PLAN.md).
+
+pub mod build;
+pub mod pattern;
+pub mod pe;
 
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -26,13 +31,21 @@ pub fn start() {
 }
 
 fn run() {
-    let exe = std::env::current_exe()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "?".into());
+    let exe = std::env::current_exe();
+    let shown = exe
+        .as_ref()
+        .map_or_else(|_| "?".into(), |p| p.display().to_string());
     log(&format!(
-        "uk-qol {VERSION} loaded into {exe} (pid {})",
+        "uk-qol {VERSION} loaded into {shown} (pid {})",
         std::process::id()
     ));
+    match exe
+        .map_err(build::DetectError::Io)
+        .and_then(|p| build::detect_from_file(&p))
+    {
+        Ok(b) => log(&b.to_string()),
+        Err(e) => log(&format!("build detection failed: {e}")),
+    }
 }
 
 /// `<game folder>/uk_qol`, next to the exe.
