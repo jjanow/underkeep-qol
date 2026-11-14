@@ -140,7 +140,8 @@ extern "system" fn unavailable() -> usize {
 }
 
 /// The built-in mods (crates under `mods/`), in load order.
-static BUILTIN: &[uk_qol_runtime::host::ModCtor] = &[uk_qol_mod_skip_logos::new];
+static BUILTIN: &[uk_qol_runtime::host::ModCtor] =
+    &[uk_qol_mod_skip_logos::new, uk_qol_mod_weapon_swap::new];
 
 #[unsafe(no_mangle)]
 extern "system" fn DllMain(module: HMODULE, reason: u32, reserved: *mut core::ffi::c_void) -> BOOL {

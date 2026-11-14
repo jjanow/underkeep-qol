@@ -201,4 +201,8 @@ impl OverlayHost for Bridge {
         .ok_or("the mod host is busy")??;
         save(&cfg)
     }
+
+    fn mod_menu(&self, mod_id: &str, ui: &mut egui::Ui) {
+        host::with(|h| h.menu(mod_id, ui));
+    }
 }

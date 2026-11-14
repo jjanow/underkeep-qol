@@ -6,6 +6,7 @@ members = [
     "crates/dft",
     "crates/manager",
     "mods/skip-logos",
+    "mods/weapon-swap",
 ]
 
 [workspace.package]
@@ -18,6 +19,7 @@ repository = "https://github.com/jjanow/underkeep-qol"
 uk-qol-runtime = { path = "crates/runtime" }
 uk-qol-dft = { path = "crates/dft" }
 uk-qol-mod-skip-logos = { path = "mods/skip-logos" }
+uk-qol-mod-weapon-swap = { path = "mods/weapon-swap" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs

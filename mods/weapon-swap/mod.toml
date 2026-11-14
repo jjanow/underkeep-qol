@@ -1,0 +1,47 @@
+id = "weapon-swap"
+name = "Weapon swap"
+version = "0.1.0"
+author = "underkeep-qol"
+description = "A ranged slot per hero and a key that swaps it with the weapon in hand (sword and bow)."
+# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+enabled = true
+
+[[settings]]
+key = "swap_hero_1"
+type = "key"
+default = "Shift+1"
+label = "Swap hero 1"
+description = "Swaps hero 1's weapon in hand with the one in their ranged slot."
+
+[[settings]]
+key = "swap_hero_2"
+type = "key"
+default = "Shift+2"
+label = "Swap hero 2"
+
+[[settings]]
+key = "swap_hero_3"
+type = "key"
+default = "Shift+3"
+label = "Swap hero 3"
+
+[[settings]]
+key = "swap_hero_4"
+type = "key"
+default = "Shift+4"
+label = "Swap hero 4"
+
+[[settings]]
+key = "swap_selected"
+type = "key"
+default = ""
+label = "Swap selected hero"
+description = "Swaps the weapons of the hero selected in the game."
+
+[[settings]]
+key = "swap_costs_turn"
+type = "bool"
+default = true
+label = "In combat, a swap costs the hero's turn"
+description = "Outside combat a swap is always free."

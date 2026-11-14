@@ -1,0 +1,105 @@
+# Patterns for weapon-swap. Format: CONTRIBUTING.md, "Adding a mod".
+# Names in the comments (Hero::EquipItem, ...) come from the exe's own assert
+# strings where it has them, otherwise they describe what the code does.
+
+# --- Functions -------------------------------------------------------------
+
+# Hero::EquipItem(hero, item, slot, mode, notify): the equip path used by the
+# inventory, the character sheet and the HUD hand slot. Checks the slot and
+# class, takes the item out of the inventory, moves the old item (and the
+# shield, for a two-handed weapon) back to it, recalculates the stats and
+# runs the item's on_equip script. Found from the "on_equip" string.
+[hero_equip_item]
+pattern = "48 85 D2 0F 84 ?? ?? ?? ?? 48 8B C4 48 89 58 08 48 89 70 18 48 89 78 20 55 41 54 41 55 41 56 41 57 48 8D 68 A9 48 81 EC"
+
+# Hero::Unequip(hero, slot, mode, recalc): moves a slot's item to the party
+# inventory and runs on_unequip. Found from the "on_unequip" string.
+[hero_unequip]
+pattern = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8B EC 48 83 EC 70 0F 29 74 24 60 0F 29 7C 24 50 45 0F B6 E1 45 8B F0"
+
+# Item_Create(const String* def_name) -> Item*: builds an item from its def,
+# as Item::RestoreState does when a save is loaded (it then sets the count
+# and cooldown). Found as the call in Item::RestoreState ("def_name").
+[item_create]
+pattern = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B 1D ?? ?? ?? ?? 48 8B F1 48 8B C3 48 B9 2D 7F 95 4C 2D F4 51 58 48 0F AF C1 48 8B FB BA 03 00 00 00"
+
+# Item_Take(item, all, n): takes n from a stack, or with `all` the whole
+# item: removes it from the hero wearing it or from the party inventory,
+# marks the inventory changed and queues the item object for deletion. Used
+# by the game when an item is used up (Blood Mage bones, potions).
+[item_take]
+pattern = "48 89 5C 24 10 48 89 74 24 18 57 48 83 EC 20 44 29 81 D0 00 00 00 48 8B F1"
+
+# Inventory::Add(inventory, item, newly_picked) -> Item*: appends the item
+# (or merges a stackable one) and marks the inventory changed. Called by
+# Hero::Unequip.
+[inventory_add]
+pattern = "40 55 57 48 83 EC 38 48 89 5C 24 50 33 FF 48 8B EA 48 89 74 24 58 48 8B D9 4C 89 64 24 60 4C 89 6C 24 30 45 0F B6 E8"
+
+# Whether a fight is on: any living monster that is awake and aware of the
+# party. The game uses it to start the "battle started" tutorial.
+[in_battle]
+pattern = "4C 8B 1D ?? ?? ?? ?? 33 D2 45 8B 8B 40 01 00 00 45 85 C9 0F 8E ?? ?? ?? ?? 4D 8B 93 48 01 00 00 48 63 C2 4D 8B 04 C2 41 83 B8 20 78 00 00 00 74"
+
+# TurnManager: appends a round action of the given type and returns it
+# (0xe8 bytes; +8 = hero index for the hero actions). Type 3 ends one
+# hero's turn (marks them as having acted, then picks the next hero).
+# Found from TurnManager::_DoRoundAction's queue.
+[round_action_push]
+pattern = "40 55 56 57 41 54 41 55 41 56 41 57 48 83 EC 30 FF 81 04 01 00 00 48 8B F9"
+
+# --- Data ------------------------------------------------------------------
+
+# The TurnManager (+0 = phase, 1 while monsters act; +8 = queued actions).
+# Hero::EquipItem's tail: `mov edx, 0xf; lea rcx, [TurnManager]; call push`.
+[turn_manager]
+pattern = "BA 0F 00 00 00 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 4C 8D 9C 24 A0 00 00 00"
+offset = 5
+rip = { disp = 3, len = 7 }
+
+# The party (heroes at +0x10, 0x2b8 bytes each). The lea before
+# Party::SaveState in Game_SaveGameState.
+[party]
+pattern = "48 8D 55 70 48 8B CF E8 ?? ?? ?? ?? 48 8B D0 48 8D 0D ?? ?? ?? ?? E8"
+offset = 15
+rip = { disp = 3, len = 7 }
+
+# The party inventory (+8 count, +0x10 entries of 0x18 bytes, item first).
+# Hero::EquipItem: `mov rdx, rbx; lea rcx, [inventory]; call Inventory::Remove`.
+[party_inventory]
+pattern = "48 8B D3 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B F7 45 85 FF"
+offset = 3
+rip = { disp = 3, len = 7 }
+
+# The selected hero's index. Hero::Unequip: `cmp [selected_hero], eax`
+# after the character-sheet check.
+[selected_hero]
+pattern = "83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 8B 47 04 39 05 ?? ?? ?? ?? 0F 85"
+offset = 16
+rip = { disp = 2, len = 6 }
+
+# The game state (3 = playing). MainMenuEnter: `mov [g_state], 5`.
+[game_state]
+pattern = "48 83 EC 78 0F 57 C0 C7 05 ?? ?? ?? ?? 05 00 00 00 B1 01"
+offset = 7
+rip = { disp = 2, len = 10 }
+
+# The UI mode (6 = character sheet open) and the pointer to the cursor
+# state (+0x58: drag phase; nonzero while an item is held). Hero::EquipItem:
+# `cmp [ui_mode], 6; jne; mov rax, [cursor]`.
+[ui_mode]
+pattern = "0F 87 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? F3 0F 10 18 F3 0F 10 60 04"
+offset = 6
+rip = { disp = 2, len = 7 }
+
+[cursor]
+pattern = "0F 87 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? F3 0F 10 18 F3 0F 10 60 04"
+offset = 19
+rip = { disp = 3, len = 7 }
+
+# Target selection (nonzero while the game waits for a target, e.g. after
+# choosing a spell). Hero::UseSelectedSkill: `mov [target_mode], 1`.
+[target_mode]
+pattern = "0F 94 45 E7 48 89 45 DF E8 ?? ?? ?? ?? 48 8D 55 B7 C7 05 ?? ?? ?? ?? 01 00 00 00"
+offset = 17
+rip = { disp = 2, len = 10 }

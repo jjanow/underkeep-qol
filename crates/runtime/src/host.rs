@@ -72,6 +72,12 @@ pub trait Mod: Send {
     fn on_settings(&mut self, _settings: &toml::Table) {}
     fn on_save(&mut self, _state: &mut ModSaveState) {}
     fn on_load_save(&mut self, _state: &ModSaveState) {}
+    /// Draws the mod's own controls in its section of the overlay menu,
+    /// below its settings (buttons, status text). Called once per frame on
+    /// the game's render thread while the menu is open and the mod's
+    /// section is expanded, only while the mod is active. Must not block;
+    /// work that touches the game is best queued and done in `on_frame`.
+    fn menu(&mut self, _ui: &mut egui::Ui) {}
 }
 
 /// Constructor of a built-in mod, as passed by the proxy.
@@ -1281,6 +1287,17 @@ impl Host {
         let empty = ModSaveState::default();
         self.each_active(|m, _, id| {
             m.on_load_save(states.get(id).unwrap_or(&empty));
+            false
+        });
+    }
+
+    /// Calls `menu` on mod `id` if it's active (see [`Mod::menu`]).
+    pub fn menu(&mut self, id: &str, ui: &mut egui::Ui) {
+        self.each_active(|m, _, mid| {
+            if mid == id {
+                m.menu(ui);
+                return true;
+            }
             false
         });
     }
