@@ -390,19 +390,24 @@ In order of difficulty; each ships when done, with settings and tests.
     refused; `swap_costs_turn = false` swaps for free.
   - Not tested in game: a hero who already acted being refused, a level
     change (static: the level change runs `Game_SaveGameState` right
-    before re-restoring the party, so its snapshot is current); the test
-    saves start in the opening forest with no fight reachable. New-game
-    `g_state` 3 is static only.
+    before re-restoring the party, so its snapshot is current): no fight
+    or stairs were reached in this session (the test save starts in the
+    opening forest). New-game `g_state` 3 is static only.
   - 2026-11-14: the slot on the character sheet, an overlay widget left of
     the helmet slot (placed from the sheet's live slot rects), drawn like
     the game's empty slots with a bow silhouette drawn by the mod
     (`sheet_slot`, default on). Tested in game with pushed SDL mouse and
     key events (3440x1440 and a 1706x960 window): a sling from the hand
-    and from the inventory clicked into it, a potion refused (red, stays
-    on the cursor), the stored weapon clicked onto the weapon slot (swap)
-    and onto the inventory, right-click to the inventory, Shift+3 swaps; a
-    two-handed sling pushed a buckler out and the swap back put it on.
-    Item counts conserved in every action.
+    and from the inventory clicked into it, a shortbow onto the filled
+    slot (the sling went to the inventory), the hand's bow onto the filled
+    slot (a swap), a potion refused (red, stays on the cursor), the stored
+    weapon clicked onto the sheet's weapon slot and the HUD hand slot
+    (swaps) and onto the inventory, right-click to the inventory, Shift+3
+    swaps; a two-handed sling pushed a buckler out and the swap back put
+    it on. Item counts conserved in every action. A pushed click on the
+    HUD hand slot didn't pick its weapon up while the sheet was open, so
+    a bow from another hero's hand (same `Hero::Unequip` path) wasn't
+    tried.
   - 2026-11-14: HUD button on the weapon hand slot of heroes with a filled
     slot, showing the stored weapon's initials; click swaps (`hud_button`,
     default on). Seen in game (a sling stored for Kabam: "Sl"); its click
