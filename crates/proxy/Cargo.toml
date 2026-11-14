@@ -1,0 +1,23 @@
+[package]
+name = "uk-qol-proxy"
+description = "winmm.dll proxy that loads the Underkeep QoL runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+# Output is winmm.dll.
+name = "winmm"
+crate-type = ["cdylib"]
+
+[dependencies]
+uk-qol-runtime.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_System_SystemServices",
+] }

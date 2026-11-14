@@ -286,12 +286,39 @@ tools/          pattern extraction and build-diffing helpers
 
 ## Building
 
-Requires Rust (stable) and, on Linux, the MinGW-w64 target:
+Requires Rust (stable, edition 2024). The mod loader is a Windows DLL (the
+game is a Windows program, also under Proton/Wine), built on Linux by
+cross-compiling with MinGW-w64:
 
 ```sh
 rustup target add x86_64-pc-windows-gnu
-cargo build --release --target x86_64-pc-windows-gnu
+
+# MinGW-w64 linker, one of:
+sudo apt install gcc-mingw-w64-x86-64     # Debian, Ubuntu
+sudo dnf install mingw64-gcc              # Fedora
+sudo pacman -S mingw-w64-gcc              # Arch
+
+# winmm.dll (proxy + runtime) → target/x86_64-pc-windows-gnu/release/winmm.dll
+cargo build --release --target x86_64-pc-windows-gnu -p uk-qol-proxy
+
+# Manager / uk-qol CLI for this computer → target/release/uk-qol
+cargo build --release -p uk-qol-manager
+
+# Checks
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
 ```
+
+`.cargo/config.toml` sets the MinGW linker for the Windows target. Building
+the DLL on Windows itself hasn't been tried yet; use Linux or WSL. The `dft` tests also round-trip every data file of a local
+game install when `UNDERKEEP_DIR` points at the game folder.
+
+Release builds use `panic = "unwind"`, unlike Underkeeper: the runtime
+catches a panic in a mod and turns that mod off instead of ending the game.
+
+CI (`.github/workflows/build.yml`) runs only for `v*` tags and manual runs
+from the Actions tab, not on pushes or pull requests.
 
 ## Supporting a new game version
 

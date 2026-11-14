@@ -1,0 +1,11 @@
+[package]
+name = "uk-qol-manager"
+description = "Installer, settings and updater for Underkeep QoL"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "uk-qol"
+path = "src/main.rs"

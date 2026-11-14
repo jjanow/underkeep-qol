@@ -1,0 +1,10 @@
+[package]
+name = "uk-qol-dft"
+description = "Reader and writer for Underkeep's DfT definition files"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "dft"

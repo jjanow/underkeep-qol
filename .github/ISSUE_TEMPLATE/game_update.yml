@@ -1,0 +1,16 @@
+name: Game updated, a mod turned off
+description: After a game patch a mod reports that its patterns weren't found.
+labels: [game-update]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the pinned issues first: a game update usually has one already.
+  - type: textarea
+    id: report
+    attributes:
+      label: "Output of `uk-qol report`"
+      description: Lists your game build and which patterns no longer resolve.
+      render: text
+    validations:
+      required: true

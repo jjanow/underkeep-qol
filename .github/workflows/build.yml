@@ -1,0 +1,112 @@
+name: build
+
+# Runs only for release tags and manual runs (Actions tab → build → Run
+# workflow). Pushes to main and pull requests don't trigger it, so builds
+# happen only when someone means them to.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: x86_64-pc-windows-gnu
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo clippy --target x86_64-pc-windows-gnu -p uk-qol-proxy -p uk-qol-runtime -p uk-qol-dft -- -D warnings
+      - run: cargo test --workspace
+
+  runtime:
+    needs: check
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-gnu
+      - name: Install MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Build winmm.dll
+        run: |
+          cargo build --release --target x86_64-pc-windows-gnu -p uk-qol-proxy
+          mkdir dist
+          cp target/x86_64-pc-windows-gnu/release/winmm.dll dist/
+      - name: Check the DLL imports nothing from MinGW
+        run: |
+          if x86_64-w64-mingw32-objdump -p dist/winmm.dll | grep -iE 'DLL Name: (libgcc|libwinpthread|libstdc)'; then
+            echo "::error::winmm.dll depends on a MinGW runtime DLL"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: uk-qol-runtime
+          path: dist/*
+
+  manager:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            bin: uk-qol.exe
+          - os: ubuntu-22.04 # older glibc = runs on more distros
+            name: linux-x64
+            bin: uk-qol
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build
+        shell: bash
+        run: |
+          cargo build --release -p uk-qol-manager
+          mkdir dist
+          cp target/release/${{ matrix.bin }} dist/
+      - uses: actions/upload-artifact@v7
+        with:
+          name: uk-qol-manager-${{ matrix.name }}
+          path: dist/*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [runtime, manager]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag must match Cargo.toml version
+        run: |
+          VERSION=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [ "${GITHUB_REF_NAME#v}" != "$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match Cargo.toml version $VERSION"
+            exit 1
+          fi
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+      - name: Package
+        run: |
+          mkdir out
+          (cd artifacts/uk-qol-runtime && zip -9 ../../out/uk-qol-runtime-windows-x64.zip winmm.dll)
+          cp artifacts/uk-qol-manager-windows-x64/uk-qol.exe out/uk-qol-windows-x64.exe
+          tar -C artifacts/uk-qol-manager-linux-x64 -czf out/uk-qol-linux-x64.tar.gz uk-qol
+          (cd out && sha256sum * > SHA256SUMS)
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: out/*
+          generate_release_notes: true

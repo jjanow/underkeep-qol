@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/proxy", "crates/runtime", "crates/dft", "crates/manager"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/jjanow/underkeep-qol"
+
+[workspace.dependencies]
+uk-qol-runtime = { path = "crates/runtime" }
+uk-qol-dft = { path = "crates/dft" }
+
+# Same as Underkeeper except `panic`: the runtime catches panics around every
+# hook (a failing mod is disabled, the game keeps running), which needs
+# unwinding. Cargo can't set `panic` per package, so it's unwind everywhere.
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+panic = "unwind"

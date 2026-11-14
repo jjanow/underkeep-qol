@@ -5,22 +5,42 @@ Check items off as they land; add findings under the item they belong to.
 
 ## 0. Groundwork
 
-- [ ] Cargo workspace: `crates/proxy`, `crates/runtime`, `crates/dft`,
+- [x] Cargo workspace: `crates/proxy`, `crates/runtime`, `crates/dft`,
       `crates/manager`; edition 2024, release profile as in Underkeeper.
-- [ ] Cross-compile setup: `x86_64-pc-windows-gnu` target and MinGW-w64 on
+  - Deviation: `panic = "unwind"` (Underkeeper uses abort). Panic containment
+    in §2 needs unwinding, and Cargo can't set `panic` per package.
+  - `dft` is Underkeeper's `dft.rs`, with the save-fragment hex test replaced
+    by a hand-built document (no game data in the repo). With `UNDERKEEP_DIR`
+    set, all 107 DfT files of the current install round-trip byte for byte.
+  - `manager` is a command skeleton (`uk-qol`, commands print "not implemented").
+- [x] Cross-compile setup: `x86_64-pc-windows-gnu` target and MinGW-w64 on
       Linux; document it in README *Building*.
-- [ ] CI (GitHub Actions): build the Windows DLLs and the Linux/Windows
-      manager on PRs and tags; `cargo fmt`, `clippy`, tests.
+  - The built `winmm.dll` imports only kernel32, ntdll, msvcrt and
+    api-ms-win-core-synch; no MinGW runtime DLLs.
+- [x] CI (GitHub Actions): build the Windows DLLs and the Linux/Windows
+      manager; `cargo fmt`, `clippy`, tests.
+  - Runs **only on `v*` tags and manual runs** (`workflow_dispatch`), not on
+    pushes or PRs: builds happen only for a release or a deliberate test.
+    Tags publish a release with `SHA256SUMS`.
 - [x] `.gitignore` blocking game file types (no game material in the repo).
-- [ ] `CONTRIBUTING.md`: how to add a mod and update patterns, and the rule
+- [x] `CONTRIBUTING.md`: how to add a mod and update patterns, and the rule
       that no game files, assets, extracted text or decompiled code go in
       the repo.
-- [ ] Issue templates (bug report asks for `uk-qol report`).
+- [x] Issue templates (bug report asks for `uk-qol report`; game-update template).
 
 ## 1. Prove the loader (go/no-go for the whole design)
 
-- [ ] `winmm.dll` proxy: forward every winmm export to the system DLL,
-      start a thread that writes `uk_qol/uk_qol.log`.
+- [x] `winmm.dll` proxy: forward every winmm export to the system DLL,
+      start a thread that writes `uk_qol/uk_qol.log`. (Built, not yet run in game.)
+  - The game's only winmm users: `SDL3.dll` imports `timeBeginPeriod` and
+    `timeEndPeriod`, `fmod.dll` imports `timeGetTime`.
+  - Exports come from Wine's winmm (186 names, `crates/proxy/winmm.exports`).
+    Wine also has 3 ordinal-only entries, which aren't forwarded. Real Windows
+    winmm may differ slightly; only the 3 imports above matter to the game.
+  - Each export is an asm stub jumping through a table that is filled on the
+    first call (LoadLibrary of `<system dir>\winmm.dll`), not in DllMain.
+    PE forwarders can't be used: `winmm.x` would resolve back to the proxy.
+  - The DLL also exports `DllMain` (harmless; the real winmm doesn't).
 - [ ] Confirm it loads on **Steam + Proton** with
       `WINEDLLOVERRIDES="winmm=n,b" %command%`.
 - [ ] Confirm it loads on **Windows** with no extra setup.

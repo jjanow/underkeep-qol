@@ -1,0 +1,10 @@
+[package]
+name = "uk-qol-runtime"
+description = "Underkeep QoL mod runtime: runs inside the game process"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_runtime"

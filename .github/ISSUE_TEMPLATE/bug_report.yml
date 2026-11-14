@@ -1,0 +1,50 @@
+name: Bug report
+description: Something doesn't work, or the game behaves differently with the mods installed.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please don't attach game files or save files; the
+        report below has what's needed.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows (Steam)
+        - Linux, Steam + Proton
+        - Steam Deck
+        - macOS (CrossOver / Whisky)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: report
+    attributes:
+      label: "Output of `uk-qol report`"
+      description: |
+        Run `uk-qol report` (or use "Copy report" in the manager) and paste the
+        result. It lists your game build, installed mods and recent log lines.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: "uk_qol.log (if the game crashed)"
+      description: "From the `uk_qol` folder inside the game folder."
+      render: text
+  - type: checkboxes
+    id: without-mods
+    attributes:
+      label: Checks
+      options:
+        - label: The problem goes away when I disable all mods (or start in safe mode by holding Shift).
