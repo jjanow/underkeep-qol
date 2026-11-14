@@ -6,6 +6,7 @@
 //! hooks (`corehooks`): save sidecars (`savehook`) and in-memory data
 //! patches (`datapatch`). The overlay is in progress (PLAN.md).
 
+pub mod bridge;
 pub mod build;
 pub mod config;
 pub mod corehooks;
@@ -14,6 +15,9 @@ pub mod game;
 pub mod guard;
 pub mod hook;
 pub mod host;
+pub mod hotkey;
+pub mod i18n;
+pub mod iat;
 pub mod input;
 pub mod overlay;
 pub mod pattern;
@@ -59,6 +63,7 @@ fn run(builtin: &'static [host::ModCtor]) {
         std::process::id()
     ));
     guard::install_crash_handler();
+    overlay::install();
     let build = match exe
         .map_err(build::DetectError::Io)
         .and_then(|p| build::detect_from_file(&p))
@@ -134,6 +139,7 @@ fn run(builtin: &'static [host::ModCtor]) {
             .unwrap_or(false);
         corehooks::install(&core, base, patches, log_defs);
     }
+    bridge::install();
 }
 
 // Startup gate. The game's code must not run ahead of the mod hooks: defs
