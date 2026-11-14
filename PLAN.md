@@ -11,8 +11,11 @@ Check items off as they land; add findings under the item they belong to.
       Linux; document it in README *Building*.
 - [ ] CI (GitHub Actions): build the Windows DLLs and the Linux/Windows
       manager on PRs and tags; `cargo fmt`, `clippy`, tests.
-- [ ] `.gitignore`, `CONTRIBUTING.md` (how to add a mod, how to update
-      patterns), issue templates (bug report asks for `uk-qol report`).
+- [x] `.gitignore` blocking game file types (no game material in the repo).
+- [ ] `CONTRIBUTING.md`: how to add a mod and update patterns, and the rule
+      that no game files, assets, extracted text or decompiled code go in
+      the repo.
+- [ ] Issue templates (bug report asks for `uk-qol report`).
 
 ## 1. Prove the loader (go/no-go for the whole design)
 
@@ -74,9 +77,11 @@ offsets and patterns in each mod's `patterns.toml` with a comment.
 - [ ] **Inventory:** inventory container struct, item struct (category,
       rarity, value, stack size, max stack), "dragging" and trade state,
       the function that marks the inventory changed / refreshes the UI.
-- [ ] **Weapon swap:** the game's equip function, how combat turns are
-      spent (to charge a turn on swap), the `ranged_weapon` flag, how to
-      mark items in the inventory view.
+- [ ] **Weapon swap:** how the character sheet draws and handles equipment
+      slots (to add a ranged slot that behaves like them), the game's equip
+      function, how combat turns are spent (to charge a turn on swap), the
+      `ranged_weapon` flag, two-handed weapons vs shields, how to serialize
+      an item into the sidecar and rebuild it on load.
 - [ ] **Skill slots:** how `selected_skill_slot` and the skill slot are
       stored per hero, the cast path from the HUD button, the HUD layout
       entries (`hud_skill_slot_*`, `face_hand_slot_*` in `def_def`).
@@ -90,9 +95,13 @@ In order of difficulty; each ships when done, with settings and tests.
 - [ ] `inventory-sort`: category → rarity/value → name, merge stacks,
       skip equipped and quick slots; hotkey **S** first, then the overlay
       button anchored to the inventory panel.
-- [ ] `weapon-swap`: pick a swap set from the inventory, mark it, swap via
-      the game's equip function; Shift+1..4 and a selected-hero key;
-      `swap_costs_turn` (default true); clear the set if an item leaves.
+- [ ] `weapon-swap`: ranged slot on the character sheet (ranged weapons
+      only), drag in/out like other slots, swap via the game's equip function;
+      Shift+1..4 and a selected-hero key; `swap_costs_turn` (default true);
+      the slot's item saved to and restored from the sidecar.
+- [ ] Ranged-slot loss warning: in README, as a first-use notice in game
+      (acknowledged once per install, reopenable from the overlay) and in
+      the manager before uninstall. The player handles emptying slots.
 - [ ] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
 

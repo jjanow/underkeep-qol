@@ -24,7 +24,7 @@ Underkeep has no official mod support. This project adds it in a way that:
 |---|---|
 | `bloodmage-cost` | Choose how Blood Mages pay for spells: bones, or their own health. |
 | `inventory-sort` | Sort an inventory with one key press or button. |
-| `weapon-swap` | A second weapon set per hero (e.g. a bow) and a key to swap to it. |
+| `weapon-swap` | A ranged-weapon slot on each hero's character sheet and a key to swap to it. |
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 
 Details for each are in [Mod designs](#mod-designs).
@@ -115,13 +115,13 @@ mod. The overlay edits the same file.
 ### 4. Save safety
 
 - The game's save files are never rewritten by a mod.
-- State a mod must keep (which items form a swap set, extra skill slot
+- State a mod must keep (the weapon in a ranged slot, extra skill slot
   assignments, per-hero toggles) is written to `<save name>.qol.toml` next to
   the save, keyed by hero, whenever the game saves, and read when it loads.
-- No item ever exists only in mod state. A swap weapon, for example, stays a
-  real item in the game's own inventory; the sidecar file only remembers which
-  one it is. So if the mods are removed in any way (uninstall, a reinstall of
-  the game, a deleted DLL), the game loads your saves with nothing missing.
+- Saves always load without the mods, with one exception the player must
+  know about: **an item in a ranged slot exists only in the sidecar file.**
+  If the mods are removed, or the sidecar is lost (another computer, cloud
+  sync, a deleted file), that weapon is gone. See [`weapon-swap`](#weapon-swap).
 - The sidecar files may **not** be synced by Steam Cloud, which only
   syncs the game's own files. Mod state is then local to one
   computer; the saves themselves still sync.
@@ -134,7 +134,9 @@ file, nothing else to install, dark and light mode.
 
 - Finds Steam installs on its own (Steam libraries, Flatpak, Proton, Wine
   bottles), or lets you pick the folder.
-- **Install / Uninstall** buttons. On Linux it shows the launch option to
+- **Install / Uninstall** buttons. Before uninstalling, it warns that any
+  weapon still in a ranged slot will be lost and tells the player to move
+  them to the inventory in game first. It doesn't move them itself. On Linux it shows the launch option to
   paste, with a copy button, and checks whether it's set in Steam.
 - A mod list with on/off switches and each mod's settings.
 - A **compatibility** panel: your game build, and for each mod whether it works
@@ -154,7 +156,8 @@ uk-qol status                  # installed version, game build, which mods work 
 uk-qol enable  <mod>           # same as toggling in the overlay
 uk-qol disable <mod>
 uk-qol config  <mod> <key> <value>
-uk-qol uninstall               # remove everything the installer added
+uk-qol uninstall               # remove everything the installer added (warns
+                               # about weapons left in ranged slots first)
 uk-qol report                  # bundle log, config and build info for a bug report
 ```
 
@@ -194,22 +197,37 @@ Sorts the open inventory (party stash or a hero's bag).
 
 ### `weapon-swap`
 
-Each hero gets a swap set: a second weapon (and optional off-hand) chosen
-from the inventory. A key swaps it with what's equipped, in one action, e.g.
-sword + shield ⇄ bow. Keys: **Shift+1..4** for heroes 1–4, plus one for the
-selected hero; all rebindable.
+Adds a **ranged slot** to each hero's character sheet, next to the weapon
+and shield slots. It holds one ranged weapon (bow or other weapon the game
+flags as ranged). A key swaps it with the equipped weapon in one action, e.g.
+sword ⇄ bow. Keys: **Shift+1..4** for heroes 1–4, plus one for the selected
+hero; all rebindable.
 
-- The swap set stays in the game's own inventory, marked in the inventory
-  view. The mod only remembers which items they are (sidecar file), so no new
-  equipment slot is added to the game's data or saves, and nothing is lost if
-  the mod is removed. If a marked item is sold or dropped, the set is cleared.
-- Requirements are checked on swap like a normal equip.
+- Drag a ranged weapon into the slot like any equipment slot. Requirements
+  are checked when it's swapped in, like a normal equip.
+- The weapon in the ranged slot gives no stats until it's swapped in.
 - **In combat, a swap costs the hero's turn** by default. Setting:
   `swap_costs_turn = true | false`. Outside combat it's always free.
-- To investigate: the game's equipment slots are fixed (helmet, armor, sword,
-  shield, rings, ...) and weapons carry a `ranged_weapon` flag used by ranged
-  skills. The swap goes through the game's own equip function so that stats,
-  skills and the HUD update the same way as a manual equip.
+- The game's save format has no room for this slot, so the weapon in it is
+  stored in the save's sidecar file (`<save>.qol.toml`), not in the save.
+- To investigate: the slot is drawn and handled by the mod (the game's own
+  equipment slots are fixed); what happens to a shield when a two-handed
+  ranged weapon is swapped in; the swap goes through the game's own equip
+  function so that stats, skills and the HUD update the same way as a manual
+  equip.
+
+**What players are told** (in the README, on the mod's first use in game,
+and in the manager before uninstalling):
+
+```
+A weapon in a ranged slot is kept by the mod, not by the game.
+If you remove the mod, reinstall the game, play the save on another computer,
+or the mod's file next to your save is lost, that weapon is gone for good.
+Before uninstalling, move every ranged-slot weapon back to your inventory.
+```
+
+The first-use notice must be acknowledged once per install; it can be
+reopened from the overlay.
 
 ### `extra-skill-slots`
 
@@ -284,6 +302,15 @@ When the game updates:
    and new builds around the old match) and update `patterns.toml`.
 3. Patterns are kept per build, so players still on an older build keep working.
 4. Publish the new pattern files; installed managers pick them up.
+
+## What this repository contains
+
+Only original code and documentation. **No game files or anything taken from
+them** are committed: no executables or DLLs, no `base/` files or assets, no
+extracted text, data tables or decompiled code. Mods describe what to change
+(byte patterns, field names, new values); the runtime finds the game's own
+data on the player's computer at run time. `.gitignore` blocks game file
+types as a safety net.
 
 ## Disclaimer
 

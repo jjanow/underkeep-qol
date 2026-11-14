@@ -1,0 +1,19 @@
+# Build output
+/target/
+
+# Never commit game files or anything extracted from them.
+*.exe
+*.dll
+*.rfile
+*.db
+*.clip
+*.dds
+*.sample.*
+*.texture.*
+*.level.*
+base/
+steam_settings/
+*.gzf
+*.rep/
+*.sav
+save_*
