@@ -229,7 +229,7 @@ hero; all rebindable.
 - The game's save format has no room for this slot, so the weapon in it is
   stored in the save's sidecar file (`<save>.qol.toml`), not in the save.
 
-How it works now (0.1.0; tested in game 1.0.5 except combat):
+How it works now (0.1.0; tested in game 1.0.5 with a gamepad):
 
 - The slot lives in the mod's section of the overlay menu, not yet on the
   character sheet: per hero, **Put the bow in hand in the slot**, **Put
@@ -248,8 +248,10 @@ How it works now (0.1.0; tested in game 1.0.5 except combat):
   is still in the inventory.
 - In combat (the game's own "battle" check) a swap needs the hero to be able
   to act and the monsters not to be moving, then ends that hero's turn
-  (`swap_costs_turn`) through the turn queue's "hero is done" action. Not
-  tested in a fight yet.
+  (`swap_costs_turn`) through the turn queue's "hero is done" action: the
+  hero is greyed out, the next hero is selected, and the monsters act when
+  everyone is done. During the monsters' turn a swap is refused. With
+  `swap_costs_turn = false` the swap is free.
 - If a save's sidecar doesn't match the save (e.g. it was saved while the
   mod was off), its weapons aren't put back in the slots; the menu lists
   them with a **Move to inventory** button, warning that they may already

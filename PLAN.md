@@ -315,7 +315,11 @@ In order of difficulty; each ships when done, with settings and tests.
     keys (tested with pad bindings), sidecar save / load / other save
     loaded with an empty slot; item counts logged before and after every
     action, all conserved.
-  - Not tested in game: a swap in combat (turn cost; default on), a level
+  - Combat tested 2026-11-14 (new game, the giant rats): a swap ends the
+    hero's turn (greyed out, next hero selected, monsters act after the
+    last hero, next round normal); swaps during the monsters' turn are
+    refused; `swap_costs_turn = false` swaps for free.
+  - Not tested in game: a hero who already acted being refused, a level
     change (static: the level change runs `Game_SaveGameState` right
     before re-restoring the party, so its snapshot is current), a
     two-handed bow pushing a shield out and back, keyboard keys and mouse
