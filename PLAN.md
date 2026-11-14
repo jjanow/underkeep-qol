@@ -257,9 +257,10 @@ Check items off as they land; add findings under the item they belong to.
     (the per-frame camera setup; the same values are its letterbox
     viewport, and the mouse goes back through the inverse). The HUD's named
     rects are f32 `{x, y, w, h}` in the `GuiLayout` global (`def_def`'s
-    `gui` table), read live. The plain HUD is up when game state is 4, the
-    HUD mode isn't 0 (the HUD returns at once on 0), and the menu state and
-    HUD interaction mode are 0. Five core patterns.
+    `gui` table), read live. The HUD is up when game state is 4, the HUD
+    mode is 1, 2, 3 or 6 (0: no HUD; 11: the full-screen map, seen in
+    game), and the menu state and HUD interaction mode are 0. Five core
+    patterns.
   - The overlay runs a HUD pass only while an active mod's `has_hud` is true
     and the HUD is up; a mouse press inside a clickable widget of the last
     frame is swallowed with its release, everything else (and all motion)
@@ -269,8 +270,13 @@ Check items off as they land; add findings under the item they belong to.
     40 px) every layout rect sits on its HUD element. Clicks pushed as real
     SDL events at both sizes (a temporary test build): widget clicks reached
     the mods and were swallowed, a click on the dungeon view was delivered.
-  - Not followed: the GUI camera's screen-shake offset. The character sheet
-    (HUD mode 6) wasn't screenshotted.
+  - Cost: with the widgets of all four mods up, the overlay's draw takes
+    about 0.14-0.19 ms of CPU per frame at 3440x1440 (600-frame averages).
+    Nothing runs while no active mod has HUD widgets.
+  - Not followed: the GUI camera's screen-shake offset. Not seen in game:
+    the character sheet (HUD mode 6), alchemy (10, excluded), the widgets
+    in a fight (static: nothing on the battle path sets the menu state or
+    interaction mode; target selection hides them).
 
 ## 5. Reverse engineering per mod
 
@@ -361,7 +367,8 @@ In order of difficulty; each ships when done, with settings and tests.
   - Open: the slot on the character sheet with drag and drop (see §5).
   - 2026-11-14: HUD button on the weapon hand slot of heroes with a filled
     slot, showing the stored weapon's initials; click swaps (`hud_button`,
-    default on).
+    default on). Seen in game (a sling stored for Kabam: "Sl"); its click
+    wasn't pushed (the same path as the other mods' buttons).
 - [x] Ranged-slot loss warning: in README, as a first-use notice in game
       (acknowledged once per install, reopenable from the overlay) and in
       the manager before uninstall. The player handles emptying slots.

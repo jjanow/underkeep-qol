@@ -251,7 +251,8 @@ pub struct HudState {
     /// HUD's input check).
     pub game_state: Option<i32>,
     /// The HUD panel mode: 0 no HUD (the HUD returns at once), 1 plain HUD,
-    /// 3 gamepad inventory cursor, 6 character sheet, 10 alchemy, others.
+    /// 2 gamepad pick-from-floor, 3 gamepad inventory cursor, 6 character
+    /// sheet, 10 alchemy, 11 the full-screen map, others.
     pub hud_mode: Option<i32>,
     /// A menu or dialog over the HUD (0 none).
     pub menu: Option<i32>,
@@ -260,12 +261,17 @@ pub struct HudState {
     pub interaction: Option<i32>,
 }
 
+/// HUD modes in which the HUD (portraits, hand slots, inventory panel) is
+/// on screen: the plain HUD, the gamepad floor and inventory cursors and
+/// the character sheet. Not the map (11), alchemy (10) or other panels.
+pub const HUD_MODES: &[i32] = &[1, 2, 3, 6];
+
 impl HudState {
-    /// The plain HUD is up and takes input: playing, a HUD mode, no menu,
-    /// dialog, shop, skill panel or target selection.
+    /// The HUD is up and takes input: playing, a HUD mode of [`HUD_MODES`],
+    /// no menu, dialog, shop, skill panel or target selection.
     pub fn shown(&self) -> bool {
         self.game_state == Some(4)
-            && self.hud_mode.is_some_and(|m| m != 0)
+            && self.hud_mode.is_some_and(|m| HUD_MODES.contains(&m))
             && self.menu == Some(0)
             && self.interaction == Some(0)
     }
@@ -512,6 +518,13 @@ mod tests {
         assert!(
             !HudState {
                 hud_mode: Some(0),
+                ..play
+            }
+            .shown()
+        );
+        assert!(
+            !HudState {
+                hud_mode: Some(11),
                 ..play
             }
             .shown()

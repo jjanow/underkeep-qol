@@ -202,11 +202,11 @@ a skill slot, a button on the inventory panel). Implement two methods:
   make it return false.
 - `Mod::hud(&mut self, ui: &mut egui::Ui)`: called every frame while the menu
   is closed, the mod's `has_hud` is true and the game's plain HUD is up
-  (`hud::shown()`: playing, no menu, dialog, shop, skill panel or target
-  selection over it), on the game's render thread inside the mod's panic
-  guard. `ui` covers the window; place widgets with `ui.put(rect, ...)` or
-  `hud::button(ui, rect, text, fill)` (a small label-button in the HUD's
-  style).
+  (`hud::shown()`: playing, not on the map, no menu, dialog, shop, skill
+  panel or target selection over it), on the game's render thread inside
+  the mod's panic guard. `ui` covers the window; place widgets with
+  `ui.put(rect, ...)` or `hud::button(ui, rect, text, fill)` (a small
+  label-button in the HUD's style).
 
 Positions come from `uk_qol_runtime::hud`, in overlay points:
 
