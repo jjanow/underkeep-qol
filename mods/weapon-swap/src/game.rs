@@ -40,7 +40,6 @@ const ITEM_COOLDOWN: usize = 0xe8;
 const ITEM_TYPE: usize = 0x100;
 const ITEM_TWO_HANDED: usize = 0x430;
 const ITEM_STACKABLE: usize = 0x432;
-const ITEM_QUEST: usize = 0x433;
 /// Item type 1: weapons (swords, daggers, maces, axes, staves, bows).
 const TYPE_WEAPON: i32 = 1;
 
@@ -131,6 +130,7 @@ fn intern(s: &str) -> &'static [u8] {
 }
 
 /// What the mod needs from the game, resolved at load.
+#[derive(Clone, Copy)]
 pub struct Game {
     equip_item: EquipFn,
     unequip: UnequipFn,
@@ -192,7 +192,6 @@ pub struct ItemInfo {
     pub weapon: bool,
     pub two_handed: bool,
     pub stackable: bool,
-    pub quest: bool,
 }
 
 impl ItemInfo {
@@ -206,17 +205,17 @@ impl ItemInfo {
 
     /// Why this item can't go into (or through) the second weapon slot, if so.
     pub fn slot_problem(&self) -> Option<&'static str> {
+        // Quest weapons may go in: quest scripts asking for one get it back
+        // in the inventory first (`quest`).
         if self.stackable {
             Some("it stacks")
-        } else if self.quest {
-            Some("it's a quest item")
         } else {
             None
         }
     }
 }
 
-unsafe fn rd<T: Copy>(addr: usize) -> T {
+pub(crate) unsafe fn rd<T: Copy>(addr: usize) -> T {
     // SAFETY: the caller passes an address inside a live game object.
     unsafe { std::ptr::read_unaligned(addr as *const T) }
 }
@@ -386,7 +385,6 @@ impl Game {
                 weapon: rd::<i32>(a + ITEM_TYPE) == TYPE_WEAPON,
                 two_handed: rd::<u8>(a + ITEM_TWO_HANDED) != 0,
                 stackable: rd::<u8>(a + ITEM_STACKABLE) != 0,
-                quest: rd::<u8>(a + ITEM_QUEST) != 0,
             })
         }
     }
@@ -611,7 +609,7 @@ impl Game {
     }
 
     /// Creates `s` in the party inventory.
-    pub fn to_inventory(&self, s: &StoredItem) -> Result<(), String> {
+    pub fn put_in_inventory(&self, s: &StoredItem) -> Result<(), String> {
         let it = self.create(s)?;
         // SAFETY: a fresh item handed to the inventory.
         unsafe { (self.inventory_add)(self.inventory as *mut u8, it, 1) };

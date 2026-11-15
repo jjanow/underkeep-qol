@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.3](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.4](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far. Steam Deck and macOS bottles are
@@ -354,8 +354,12 @@ keyboard):
   their weapon hand slot on the HUD, showing the stored weapon's initials;
   clicking it swaps (setting `hud_button`).
 - A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
-  next swap brings it back. Only weapons go in; items that stack and quest
-  items never do.
+  next swap brings it back. Only weapons go in, never items that stack.
+- Quest weapons (J'Axe, the Soulforge Axe) go in like any other. The game's
+  quest scripts look for them in the party's inventory and equipment
+  (`party_has_item`, `remove_party_item`), where the slot isn't, so when a
+  script asks for a weapon that is in a second slot, the mod first moves it
+  to the inventory and says so. The quest then sees it as without the mod.
 - The swap goes through the game's own equip function, as when equipping
   from the inventory: class checks, the item's equip scripts, stats and HUD
   update like a manual equip. A weapon the hero can't use stays where it

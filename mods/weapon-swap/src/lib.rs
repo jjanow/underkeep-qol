@@ -40,6 +40,7 @@
 //!   plus the slots before and after: they must stay equal.
 
 mod game;
+mod quest;
 mod slot;
 mod state;
 
@@ -220,6 +221,33 @@ impl Inner {
         t
     }
 
+    /// Clears the slots whose weapon a quest script needed (the detour
+    /// already put it in the inventory) and says so.
+    fn take_returned(&mut self) {
+        for (h, s) in quest::drain() {
+            if self.state.heroes[h].stored.as_ref() == Some(&s) {
+                self.state.heroes[h].stored = None;
+                let who = self.game.hero_name(h);
+                self.say(format!(
+                    "{who}: {} moved from the second weapon slot to the inventory (a quest \
+                     asked for it)",
+                    s.def
+                ));
+            } else {
+                log(&format!(
+                    "{} went to the inventory for a script, but hero {}'s slot changed meanwhile",
+                    s.def,
+                    h + 1
+                ));
+            }
+        }
+    }
+
+    /// Hands the slots to the quest detours.
+    fn mirror(&self) {
+        quest::mirror(std::array::from_fn(|h| self.state.heroes[h].stored.clone()));
+    }
+
     fn keys(&self) -> [Option<String>; HEROES] {
         std::array::from_fn(|i| self.game.hero_key(i))
     }
@@ -315,7 +343,7 @@ impl Inner {
                     .stored
                     .clone()
                     .ok_or("the second weapon slot is empty")?;
-                self.game.to_inventory(&s)?;
+                self.game.put_in_inventory(&s)?;
                 self.state.heroes[*i].stored = None;
                 Ok(format!(
                     "{}: {} moved to the inventory",
@@ -325,7 +353,7 @@ impl Inner {
             }
             Action::ParkedToInventory(k) => {
                 let p = self.state.parked.get(*k).cloned().ok_or("already moved")?;
-                self.game.to_inventory(&p.item)?;
+                self.game.put_in_inventory(&p.item)?;
                 self.state.parked.remove(*k);
                 Ok(format!("{} moved to the inventory", p.item.def))
             }
@@ -385,10 +413,10 @@ impl Inner {
         let name = self.game.hero_name(h);
         let mut msg = format!("{name}: {} is now in the second weapon slot", new.def);
         if let Some(old) = self.state.heroes[h].stored.take() {
-            if let Err(e) = self.game.to_inventory(&old) {
+            if let Err(e) = self.game.put_in_inventory(&old) {
                 // Keep the old one; the new one goes back to the game.
                 self.state.heroes[h].stored = Some(old);
-                if self.game.to_inventory(&new).is_err() {
+                if self.game.put_in_inventory(&new).is_err() {
                     self.state.parked.push(Parked {
                         key: format!("slot {}", h + 1),
                         item: new,
@@ -509,6 +537,13 @@ impl Mod for WeaponSwap {
                     .ok_or_else(|| format!("pattern {n} not resolved"))
             })
         }?;
+        let at = |n: &str| {
+            pats.get(n)
+                .map(|&rva| base + rva as usize)
+                .ok_or_else(|| format!("pattern {n} not resolved"))
+        };
+        // SAFETY: the resolved function starts of these two patterns.
+        unsafe { quest::install(cx.hooks, at("script_condition")?, at("script_command")?) }?;
         // Turning the mod off and on again keeps the slots of this session,
         // unless the party changed meanwhile (e.g. another save was loaded
         // while the mod was off, which it isn't told about): then they
@@ -542,11 +577,18 @@ impl Mod for WeaponSwap {
             seen_carried: None,
             press: None,
         });
+        quest::drain();
+        quest::set_game(Some(game));
+        if let Some(i) = &self.inner {
+            i.mirror();
+        }
         Ok(())
     }
 
     fn on_unload(&mut self) {
+        quest::set_game(None);
         if let Some(i) = &mut self.inner {
+            i.take_returned();
             let keys = i.keys();
             i.off_identity = Some(state::identity(&keys, &i.fingerprint()));
         }
@@ -587,9 +629,11 @@ impl Mod for WeaponSwap {
 
     fn on_frame(&mut self, _cx: &mut FrameCtx) {
         let Some(inner) = &mut self.inner else { return };
+        inner.take_returned();
         for a in std::mem::take(&mut inner.queue) {
             inner.run(a);
         }
+        inner.mirror();
         // The mod's pick-up ends when the sheet closes or something covers
         // it (the weapon never left the slot).
         if inner.carry.is_some() && !(inner.game.ui_mode() == UI_SHEET && hud::shown()) {
@@ -609,12 +653,16 @@ impl Mod for WeaponSwap {
     }
 
     fn on_save(&mut self, st: &mut ModSaveState) {
-        let Some(inner) = &self.inner else { return };
+        let Some(inner) = &mut self.inner else { return };
+        inner.take_returned();
         *st = inner.state.to_save(&inner.keys(), &inner.fingerprint());
     }
 
     fn on_load_save(&mut self, st: &ModSaveState) {
         let Some(inner) = &mut self.inner else { return };
+        // Weapons a script took out of the slots belonged to the game state
+        // being replaced.
+        quest::drain();
         inner.queue.clear();
         inner.carry = None;
         let keys = inner.keys();
@@ -644,6 +692,7 @@ impl Mod for WeaponSwap {
                 inner.state = s;
             }
         }
+        inner.mirror();
     }
 
     fn menu(&mut self, ui: &mut egui::Ui) {
@@ -1148,7 +1197,7 @@ mod tests {
         assert!(manifest.setting("swap_costs_turn").is_some());
         assert!(manifest.setting("sheet_slot").is_some());
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 19);
+        assert_eq!(pats.patterns.len(), 21);
     }
 
     /// Resolves every pattern against the game's exe when it's installed
@@ -1187,6 +1236,8 @@ mod tests {
             ("drag_end", 0x165f90),
             ("char_sheet", 0x440db0),
             ("ui_context", 0x43ca68),
+            ("script_condition", 0xda910),
+            ("script_command", 0xdbc20),
         ]
         .into_iter()
         .collect();

@@ -65,6 +65,20 @@ pattern = "40 57 48 83 EC 20 48 8B 05 ?? ?? ?? ?? 33 FF 8B 48 58 83 F9 01 0F 8E"
 [drag_end]
 pattern = "48 89 5C 24 08 55 48 8D 6C 24 A9 48 81 EC 90 00 00 00 48 8B 1D ?? ?? ?? ?? 83 7B 58 00 0F 84"
 
+# script_condition(id, ?, ctx) -> bool: evaluates one condition of an
+# encounter script (`[state x and party_has_item y]`). Condition 0x10 is
+# party_has_item, 0x11 party_has_all_items: both count the named def over
+# the party inventory and every hero's equipment. ctx+0x30 is the argument
+# list. Found from the opcode-name table built at 0x1400e5d90 (1.0.5).
+[script_condition]
+pattern = "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D0 48 81 EC 30 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 20 4D 8B F8 4C 89 45"
+
+# script_command(id, ctx): runs one encounter-script command. Command 0x18
+# is remove_party_item (inventory first, then the heroes' equipment; 0x17
+# is give_party_item). Same opcode table as script_condition.
+[script_command]
+pattern = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A0 DD FF FF B8 60 23 00 00 E8 ?? ?? ?? ?? 48 2B E0 0F 29 B4 24 50 23 00 00"
+
 # --- Data ------------------------------------------------------------------
 
 # The TurnManager (+0 = phase, 1 while monsters act; +8 = queued actions).

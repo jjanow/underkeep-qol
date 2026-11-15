@@ -507,6 +507,25 @@ In order of difficulty; each ships when done, with settings and tests.
     type, so they never do. No second shield slot: a shield only moves for a
     two-hander, and the swap already puts it back. The sidecar key stays
     `ranged`, so existing sidecars load.
+  - 2026-11-15 (player report: J'Axe refused as "a quest item"): quest
+    weapons now go in slot II. The block existed because quest scripts look
+    for them where the slot isn't: `encounter_jacob_release` asks
+    `party_has_item item_jacob_hand_axe`, then `remove_party_item`s it (400
+    XP), and `encounter_wizard_defeat` picks the good ending with
+    `party_has_item item_soulforge_axe`. Those are the only weapons with
+    `quest_item` (Item+0x433) and the only scripts that name them. The mod
+    detours `script_condition` (0x1400da910; condition 0x10
+    party_has_item, 0x11 party_has_all_items) and `script_command`
+    (0x1400dbc20; command 0x18 remove_party_item). Before one runs, a slot
+    II weapon named in its arguments (ctx+0x30) is created in the
+    inventory; the slot is cleared on the mod's next frame or save, with a
+    toast. In game (Proton, 2026-11-15): with a player patch adding
+    `[party_has_item item_damaged_flail]` to the minor heal potion's
+    `on_use`, the flail in Kabam's slot II went to the inventory when the
+    potion was drunk (the hook read `["item_damaged_flail"]`), the slot
+    emptied with the toast, and the potion worked as usual. The Jacob and
+    wizard scenes themselves weren't reached, and `remove_party_item` was
+    only checked statically (same argument layout, runs the same move).
   - Icon (the user's choice): the game's own empty-weapon-slot sword with a
     pixel "II" drawn by the mod in the slot's top-right corner. The sword is
     read at run time from the player's install (`runtime::sprite`: sprite
@@ -665,6 +684,8 @@ In order of difficulty; each ships when done, with settings and tests.
     the `color` setting type and `bridge::request_setting`.
   - 2026-11-15: version 1.0.3, tag `v1.0.3`: extra-skill-slots' HUD
     buttons turn red while their skill is on cooldown (a player's request).
+  - 2026-11-15: version 1.0.4, tag `v1.0.4`: weapon-swap takes quest
+    weapons (a player couldn't put J'Axe in the slot).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
