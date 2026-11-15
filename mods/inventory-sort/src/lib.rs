@@ -65,6 +65,16 @@ fn log(msg: &str) {
     uk_qol_runtime::log(&format!("{ID}: {msg}"));
 }
 
+/// Logs `msg` and shows `shown` on screen.
+fn say(msg: &str, shown: &str) {
+    log(msg);
+    uk_qol_runtime::toast::show(shown.to_owned());
+}
+
+/// The Sort button's tooltip: what the sort does.
+const BUTTON_TIP: &str = "Sort the inventory: inside each of the game's sections, by item \
+                          type, then value (highest first), then name. Merges split stacks.";
+
 impl InventorySort {
     fn apply(&mut self, settings: &toml::Table) {
         self.merge = settings
@@ -84,7 +94,10 @@ impl InventorySort {
     fn run(&mut self, g: Game) {
         // SAFETY: resolved addresses of this build, on the game thread.
         if let Err(why) = unsafe { g.can_sort() } {
-            log(&format!("not sorting: {why}"));
+            say(
+                &format!("not sorting: {why}"),
+                "Inventory not sorted: not now",
+            );
             return;
         }
         if self.debug {
@@ -94,13 +107,22 @@ impl InventorySort {
         }
         // SAFETY: as above; `can_sort` just passed.
         match unsafe { g.sort(self.merge) } {
-            Ok(Sorted::AlreadySorted { entries }) => {
-                log(&format!("already sorted ({entries} entries)"))
-            }
-            Ok(Sorted::Sorted { entries, merged }) => log(&format!(
-                "sorted {entries} entries, merged {merged} duplicate stacks"
-            )),
-            Err(e) => log(&format!("sort failed: {e}")),
+            Ok(Sorted::AlreadySorted { entries }) => say(
+                &format!("already sorted ({entries} entries)"),
+                "Inventory already sorted",
+            ),
+            Ok(Sorted::Sorted { entries, merged }) => say(
+                &format!("sorted {entries} entries, merged {merged} duplicate stacks"),
+                &match merged {
+                    0 => "Inventory sorted".to_owned(),
+                    1 => "Inventory sorted, 1 split stack merged".to_owned(),
+                    n => format!("Inventory sorted, {n} split stacks merged"),
+                },
+            ),
+            Err(e) => say(
+                &format!("sort failed: {e}"),
+                "Inventory sort failed (see the log)",
+            ),
         }
         if self.debug {
             for l in unsafe { g.dump("after") } {
@@ -179,7 +201,7 @@ impl Mod for InventorySort {
             return;
         };
         let b = hud::button(ui, r, "Sort", egui::Color32::from_rgb(70, 62, 52));
-        if b.on_hover_text("Sort the inventory").clicked() {
+        if b.on_hover_text(BUTTON_TIP).clicked() {
             log("Sort button clicked");
             self.pending = true;
         }

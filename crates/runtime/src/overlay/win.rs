@@ -109,6 +109,13 @@ static HUD_IN_FRAME: AtomicBool = AtomicBool::new(false);
 static LOGGED_TARGET: AtomicBool = AtomicBool::new(false);
 /// Last logged game text-input state (0 unknown, 1 off, 2 on).
 static GAME_TEXT: AtomicU8 = AtomicU8::new(0);
+/// Last logged draw geometry: window size in points and pixels, target
+/// size, in-frame or not (see [`draw`]).
+static LOGGED_GEOMETRY: Mutex<Option<[c_int; 7]>> = Mutex::new(None);
+/// Mouse presses logged while HUD widgets are up (capped at
+/// [`MAX_PRESS_LOGS`] per session).
+static PRESS_LOGS: AtomicUsize = AtomicUsize::new(0);
+const MAX_PRESS_LOGS: usize = 60;
 
 struct State {
     router: Router,
@@ -298,6 +305,26 @@ fn route(ev: &Event) -> bool {
         }
         None => false,
     };
+    // Where mouse presses land while HUD widgets are up (for triage of
+    // clicks that don't reach a widget on some setups).
+    if let Input::MouseButton {
+        button,
+        down: true,
+        x,
+        y,
+    } = input
+        && !st.router.open
+        && !st.router.hud_hits.is_empty()
+        && PRESS_LOGS.fetch_add(1, Ordering::Relaxed) < MAX_PRESS_LOGS
+    {
+        let hit = st.router.hud_hit(x, y);
+        crate::log(&format!(
+            "overlay: mouse {button} down at {x:.1},{y:.1} (window), {:.1},{:.1} (points): {}",
+            x * st.router.to_points,
+            y * st.router.to_points,
+            if hit { "HUD widget" } else { "game" }
+        ));
+    }
     let (v, t) = st.router.route(&input, &env, &mut to_mods);
     SWALLOWED.store(st.router.swallowed_pad, Ordering::Relaxed);
     apply_toggle(api, st, t);
@@ -612,6 +639,22 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool, in_frame:
         (pw, ph)
     };
     let ppp_target = ppp * tw as f32 / pw as f32;
+    {
+        let g = [w, h, pw, ph, tw, th, in_frame as c_int];
+        let mut last = LOGGED_GEOMETRY.lock().unwrap_or_else(|e| e.into_inner());
+        if *last != Some(g) {
+            *last = Some(g);
+            crate::log(&format!(
+                "overlay: window {w}x{h} (points) {pw}x{ph} (pixels), drawing {} at {tw}x{th}, \
+                 {ppp:.3} pixels per point, window to points x{to_points:.4}",
+                if in_frame {
+                    "in the game's frame"
+                } else {
+                    "at swap"
+                }
+            ));
+        }
+    }
     if g.painter.is_none() {
         match egui_glow::Painter::new(g.gl.clone(), "", None, false) {
             Ok(p) => g.painter = Some(p),

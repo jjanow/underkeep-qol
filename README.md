@@ -178,7 +178,8 @@ from Linux too).
   keys are configurable (`S`, `Shift+1`, `Pad:Y`, `Pad:LB+Pad:X`, …), and a
   key a mod handles never reaches the game. Hotkeys are off while you type in
   a game text field.
-- **Logging** to `uk_qol/uk_qol.log` in the game folder.
+- **Logging** to `uk_qol/uk_qol.log` in the game folder. The first line names
+  the version and the git commit of the build.
 
 ### 3. Mods
 
@@ -288,13 +289,16 @@ and report "no bones" in `health` mode, so the game's own health payment runs.
 
 Sorts the open inventory (party stash or a hero's bag).
 
-- Order: item category (weapons, armor, jewelry, consumables, materials,
-  quest items), then rarity / value high to low, then name.
+- Order: the game's own inventory sections (weapons, armor, jewelry,
+  potions, consumables, food, keys, other, recipes) stay as they are; inside
+  each, by item type, then value high to low, then name.
 - Stackable items are merged into full stacks first.
 - Equipped items and hotbar / quick slots are never moved.
 - A hotkey (default **Z**: the game uses S), and a small **Sort** button
   drawn by the overlay in the inventory panel's top-right corner while a sort
-  is possible (setting `hud_button`).
+  is possible (setting `hud_button`). The result shows on screen ("Inventory
+  sorted", "Inventory already sorted"): the game already keeps the sections
+  apart, so a small inventory is often already in order.
 - Runs only when nothing is being dragged and no trade window is mid-transaction.
 
 ### `weapon-swap`

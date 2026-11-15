@@ -41,6 +41,9 @@ use std::sync::{Mutex, Once};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// The git commit this runtime was built from (`build.rs`), "unknown"
+/// outside git.
+pub const COMMIT: &str = env!("UK_QOL_COMMIT");
 
 static START: Once = Once::new();
 static LOG: Mutex<Option<File>> = Mutex::new(None);
@@ -67,7 +70,7 @@ fn run(builtin: &'static [host::ModCtor]) {
         .as_ref()
         .map_or_else(|_| "?".into(), |p| p.display().to_string());
     log(&format!(
-        "uk-qol {VERSION} loaded into {shown} (pid {})",
+        "uk-qol {VERSION} ({COMMIT}) loaded into {shown} (pid {})",
         std::process::id()
     ));
     guard::install_crash_handler();

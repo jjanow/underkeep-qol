@@ -65,7 +65,18 @@ Check items off as they land; add findings under the item they belong to.
   - 2026-11-14, the user's first Windows test: it loads and runs. Found:
     the HUD widgets covered the game's cursor, slot II looked flat, and a
     held drag into slot II bounced back (all fixed, see §6 weapon-swap).
-    Retest with the next build.
+  - 2026-11-14, second Windows test (build d545bbd): the cursor layering is
+    fixed; drops into slot II still bounce back to the hand, and the Sort
+    button seemed to do nothing. Neither reproduces under Proton with a
+    real (uinput) mouse (§6). The Sort button only logged its result (now a
+    toast). For the drops, the log now carries what's needed: the build's
+    commit on the first line, the window / pixel / point geometry
+    (`overlay: window …`), and for the first 60 mouse presses while HUD
+    widgets are up, where each landed and whether it hit a widget or went
+    to the game (`overlay: mouse … down at …`). Next: the user's
+    `uk_qol.log` from a build with these lines, the drag source and style
+    (click-click or held), whether slot II turns green, and the display
+    scale and window mode.
   - Every module in the process that imports winmm binds to the proxy
     (Steam overlay, Discord, GPU driver DLLs, MangoHud). Check the Steam
     overlay still works, and diff our export list against a real
@@ -421,6 +432,9 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-14: **Sort** button in `inventory_rect`'s top-right corner,
     shown while a sort is allowed (window focus not required for showing),
     `hud_button` (default on); a pushed click sorted ("already sorted").
+  - 2026-11-14: the result is a toast ("Inventory sorted", "… already
+    sorted", "not sorted: not now", "sort failed"), and the button's tooltip
+    says the order. Clicked with a real (uinput) mouse under Proton: works.
 - [x] `weapon-swap`: ranged slot on the character sheet (ranged weapons
       only), drag in/out like other slots, swap via the game's equip function;
       Shift+1..4 and a selected-hero key; `swap_costs_turn` (default true);
@@ -510,9 +524,18 @@ In order of difficulty; each ships when done, with settings and tests.
       phase goes from 1 to 0 with the pointer over the slot. In game (test
       build with pushed SDL events): Oris's two-handed sling held from the
       sheet's weapon slot onto slot II: green frame while held, in the slot
-      on release, counts conserved. Not tried: held drags from the
-      inventory or the HUD hand slot.
+      on release, counts conserved. Held drags from the inventory: see the
+      real-mouse test below.
     - The cursor covering: see the HUD widgets item (`ui_layers_draw`).
+  - 2026-11-14, after the second Windows report (drops still bounce back),
+    tested under Proton with a real mouse (a uinput device, so the whole OS
+    input path, not pushed SDL events) on build d545bbd: from the sheet's
+    weapon slot and from the inventory, click-then-click and held drags
+    (also a 2 s hold and a slow drag) all put the weapon in slot II; counts
+    conserved. Only a press and release within a frame or two bounced back
+    (the press is never seen; no human drag is that fast). The HUD hand
+    slot takes no clicks while the sheet is open (game behaviour), so it
+    can't be a drag source there. Waiting on the user's log (§1).
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).

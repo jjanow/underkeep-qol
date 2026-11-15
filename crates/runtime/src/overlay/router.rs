@@ -282,6 +282,13 @@ impl Router {
         Pos2::new(x * self.to_points, y * self.to_points)
     }
 
+    /// Whether a mouse press at window point (`x`, `y`) lands on a HUD
+    /// widget of the last frame (the same test [`Router::route`] makes).
+    pub fn hud_hit(&self, x: f32, y: f32) -> bool {
+        let p = self.pointer(x, y);
+        self.hud_hits.iter().any(|r| r.contains(p))
+    }
+
     /// Stops sending input to the HUD (no mod draws on it now). A button
     /// held on a widget still gets its release swallowed.
     pub fn clear_hud(&mut self) {
