@@ -607,7 +607,7 @@ In order of difficulty; each ships when done, with settings and tests.
 - [x] Self-update and mod/pattern updates from GitHub releases with
       SHA-256 checks.
   - `manager::update`: every download is checked against `SHA256SUMS`.
-    Not yet exercised against a real release (none published).
+    Exercised against the 1.0.0 release (§8 test matrix).
 
 ## 8. Release
 

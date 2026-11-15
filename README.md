@@ -14,11 +14,12 @@ Underkeep has no official mod support. This project adds it in a way that:
 - **keeps your saves loadable without the mods**: the save file format is never
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
-> Status: in development, nothing released yet. The loader, runtime, overlay
-> (F10 / L3+R3), manager and all six mods work in game 1.0.5 under Proton;
-> Windows and Steam Deck are untested. See PLAN.md for what's left.
-> It's built for a public release, so installing, updating and recovering
-> from a game patch must work without any technical knowledge.
+**Status:** released. The current version is
+[1.0.1](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+version 1.0.5. The loader, overlay (F10 / L3+R3), manager and all six mods are
+tested on Windows and on Linux with Proton. Steam Deck and macOS bottles are
+expected to work but haven't been tested; reports are welcome in the
+[issues](https://github.com/jjanow/underkeep-qol/issues).
 
 ## Mods
 
@@ -144,9 +145,9 @@ On **Linux** (Proton) Wine prefers its built-in winmm, so the game needs a DLL
 override. In Steam, *Properties → Launch Options*:
 `WINEDLLOVERRIDES="winmm=n,b" %command%`
 
-This works under Steam (Flatpak) with Proton: the runtime loads in game
-version 1.0.5 and audio, gamepad, save/load and quit work normally. Windows
-is still to be tested.
+This works on Windows with no extra setup, and under Steam (Flatpak) with
+Proton: the runtime loads in game version 1.0.5 and audio, gamepad,
+save/load and quit work normally.
 
 The manager sets this up or prints the exact line to paste.
 
@@ -264,6 +265,9 @@ uk-qol config  <mod> <key> <value>
 uk-qol uninstall               # remove everything the installer added (warns
                                # about weapons left in second slots first)
 uk-qol report                  # bundle log, config and build info for a bug report
+uk-qol update                  # update the manager, loader and patterns from
+                               # the latest release (asks first)
+uk-qol reset-safe-mode         # turn the mods back on after safe mode
 ```
 
 Install discovery and the DfT file parser are shared with
@@ -394,9 +398,11 @@ adds 3 more (configurable 1–5).
   the game's own skill panel; the mod's menu section has a list too.
 - Assignments are stored in the save's sidecar file. Without the mod the hero
   just has their original slot.
-- To investigate: how the combat code reads the selected skill slot
-  (`selected_skill_slot`) and whether casting from a non-selected slot can reuse
-  that path directly.
+- A cast from an extra slot goes through the game's own cast queue, the
+  same path as its skill slot, so its checks apply ("Cooldown not finished
+  yet!").
+- The buttons show text labels, not the game's skill icons (setting
+  `hud_buttons` turns them off).
 
 ### `skip-logos`
 
@@ -406,10 +412,10 @@ main menu. This mod skips them, so the game starts on the main menu.
 - The intro cinematic needs nothing: the game plays it once and then skips
   it on its own (`intro_was_played` in `game_config.txt`). The main menu's
   own reveal animation is left as is.
-- To investigate: where the startup logo animation (`anim_startup_logo`)
-  is started and how it hands over to the menu; whether ending it early
-  (or a data patch of its length) is enough, or the hand-over has to be
-  called directly.
+- It patches the per-frame check that keeps the logo running, so the game
+  takes its own hand-over to the main menu right away. The game is held at
+  startup until the patch is in, so the logos never show.
+- One on/off switch, on by default; nothing saved.
 
 ### `borderless-compat`
 
@@ -450,8 +456,9 @@ keeps a normal desktop window, but players have to know to pick it.
   a mod must not end up in front of the game's developers as game bugs, so the
   runtime notes in its log which mod was active, and `uk-qol report` makes a
   bundle to attach to an issue here.
-- **Languages.** Overlay and manager text is translatable, starting with the
-  game's own languages: English, Czech, German, Spanish, French, Polish, Russian.
+- **Languages.** Overlay and manager text is in English and translatable.
+  Tables for the game's other languages (Czech, German, Spanish, French,
+  Polish, Russian) are in place but empty, so they show English for now.
 - **Steam Deck.** The overlay works with a gamepad (L3+R3 opens it, the d-pad
   or left stick moves, A selects, B closes), and the Linux launch option is all
   that's needed.
@@ -497,8 +504,9 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-`.cargo/config.toml` sets the MinGW linker for the Windows target. Building
-the DLL on Windows itself hasn't been tried yet; use Linux or WSL. With
+`.cargo/config.toml` sets the MinGW linker for the Windows target. On
+Windows the DLL builds with the GNU toolchain and a MinGW-w64 install
+such as WinLibs (done once); Linux or WSL is the tested route. With
 `UNDERKEEP_DIR` pointing at the game folder, the tests also use the local
 install: `dft` round-trips every data file, and the runtime tests run build
 detection and the pattern scanner against `underkeep.exe`.
