@@ -336,6 +336,7 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ("kind_float", "number"),
     ("kind_text", "text"),
     ("kind_key", "key"),
+    ("kind_color", "color like #33FF33"),
     ("err_manifest_parse", "{} is damaged: {}"),
     (
         "manifest_header",

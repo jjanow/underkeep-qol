@@ -32,6 +32,8 @@ pub enum SettingKind {
     Choice(Vec<String>),
     /// A key binding, stored as text (`"Shift+1"`).
     Key,
+    /// An RGB color, stored as text (`"#33FF33"`).
+    Color,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -99,6 +101,7 @@ fn kind_of(t: &Table, default: Option<&Value>) -> SettingKind {
         Some("int" | "integer") => SettingKind::Int,
         Some("float" | "number" | "f32" | "f64") => SettingKind::Float,
         Some("key" | "hotkey" | "keybind" | "binding") => SettingKind::Key,
+        Some("color" | "colour") => SettingKind::Color,
         Some("choice" | "enum" | "select") => SettingKind::Choice(options.unwrap_or_default()),
         Some(_) => SettingKind::Text,
         None => match (options, default) {
@@ -138,6 +141,7 @@ fn setting_from_def(d: &SettingDef) -> SettingInfo {
         K::String => (SettingKind::Text, None, None),
         K::Enum { choices } => (SettingKind::Choice(choices.clone()), None, None),
         K::Key => (SettingKind::Key, None, None),
+        K::Color => (SettingKind::Color, None, None),
     };
     SettingInfo {
         key: d.key.clone(),

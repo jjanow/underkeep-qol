@@ -74,6 +74,8 @@ pub enum SettingKind {
     Enum(Vec<String>),
     /// A hotkey spec (see [`crate::hotkey`]), stored as a string.
     Key,
+    /// An RGB color, stored as `"#RRGGBB"` (see [`crate::host::parse_color`]).
+    Color,
 }
 
 impl SettingKind {
@@ -81,7 +83,7 @@ impl SettingKind {
     ///
     /// ```toml
     /// [settings.swap_key]
-    /// type = "key"            # bool | int | float | string | enum | key
+    /// type = "key"            # bool | int | float | string | enum | key | color
     /// default = "Shift+1"
     /// min = 0                 # int / float, optional
     /// max = 10
@@ -109,6 +111,7 @@ impl SettingKind {
             },
             "string" => SettingKind::String,
             "key" => SettingKind::Key,
+            "color" => SettingKind::Color,
             "enum" => {
                 let choices: Vec<String> = t
                     .get("choices")
@@ -294,7 +297,11 @@ mod tests {
             Ok(SettingKind::Key)
         );
         assert!(SettingKind::from_manifest(&table("type = 'enum'")).is_err());
-        assert!(SettingKind::from_manifest(&table("type = 'color'")).is_err());
+        assert_eq!(
+            SettingKind::from_manifest(&table("type = 'color'")),
+            Ok(SettingKind::Color)
+        );
+        assert!(SettingKind::from_manifest(&table("type = 'colour'")).is_err());
         assert!(SettingKind::from_manifest(&table("default = 1")).is_err());
     }
 }

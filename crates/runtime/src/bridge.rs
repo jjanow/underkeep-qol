@@ -60,8 +60,31 @@ fn input_sink(ev: &InputEvent) -> bool {
     host::with(|h| h.input(ev)).unwrap_or(false)
 }
 
+/// Setting changes a mod asked for from its own code (a hotkey that flips
+/// one of its settings), applied after the frame's mod calls.
+static REQUESTS: Mutex<Vec<(String, String, toml::Value)>> = Mutex::new(Vec::new());
+
+/// Asks for setting `key` of mod `mod_id` to become `value`, as if changed in
+/// the menu: checked against the manifest, saved to `config.toml` and passed
+/// to the mod's `on_settings`. Mods run inside the host, so the change can't
+/// be applied on the spot; it is applied at the end of the current frame
+/// (and logged if it fails).
+pub fn request_setting(mod_id: &str, key: &str, value: toml::Value) {
+    REQUESTS.lock().unwrap_or_else(|e| e.into_inner()).push((
+        mod_id.to_owned(),
+        key.to_owned(),
+        value,
+    ));
+}
+
 fn frame_sink() {
     host::with(|h| h.frame());
+    let requests = std::mem::take(&mut *REQUESTS.lock().unwrap_or_else(|e| e.into_inner()));
+    for (m, k, v) in requests {
+        if let Err(e) = Bridge.set_setting(&m, &k, v) {
+            crate::log(&format!("mod {m}: couldn't change {k}: {e}"));
+        }
+    }
     let changed = {
         let mut g = WATCH.lock().unwrap_or_else(|e| e.into_inner());
         match g.as_mut() {
@@ -107,6 +130,7 @@ fn kind(k: &HK) -> OK {
         HK::String => OK::String,
         HK::Enum { choices } => OK::Enum(choices.clone()),
         HK::Key => OK::Key,
+        HK::Color => OK::Color,
     }
 }
 

@@ -15,9 +15,10 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.1](https://github.com/jjanow/underkeep-qol/releases/latest), for game
-version 1.0.5. The loader, overlay (F10 / L3+R3), manager and all six mods are
-tested on Windows and on Linux with Proton. Steam Deck and macOS bottles are
+[1.0.2](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
+tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
+only on Linux with Proton so far. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -31,6 +32,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
+| `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -438,6 +440,35 @@ keeps a normal desktop window, but players have to know to pick it.
   result without the mod: NVIDIA Control Panel → *Vulkan/OpenGL present
   method* → *Prefer layered on DXGI swapchain*.
 
+### `item-highlight`
+
+Things you can pick up or use are easy to miss in the dungeon art. This mod
+colors them, bright green by default, in the dungeon view.
+
+- Three groups, each with its own switch: **items** on the ground or in
+  alcoves; **containers** (chests until they're opened, alcoves and shelves
+  while something is in them); **switches** (wall buttons, levers, secret
+  buttons and keyholes).
+- Only what the game draws is marked: anything behind a wall stays hidden,
+  and the game's fog and shade still apply. The item under the cursor (or
+  picked with the gamepad) keeps the game's own highlight.
+- **H** turns the highlight off and on (a pad button can be bound; none by
+  default). The choice is kept for the next game (setting `shown`).
+- Settings: the **color**, its **strength** (0 only tints things, 1 colors
+  them fully; default 0.85) and the three groups.
+- How: the game draws each thing in the dungeon view as a sprite and already
+  passes a "highlight" amount per sprite for its hover effect. The mod finds
+  the sprites of the marked things (by the entity's class, from the exe's
+  type information, so no byte pattern per class) and gives them the color
+  and a highlight amount the game never uses itself. At startup it also adds
+  one branch to the game's sprite shader, compiled in memory, that recolors
+  only sprites with that amount; every other sprite, including the game's own
+  hover highlight, draws exactly as before. Nothing in the game's files or
+  saves changes.
+- If the mod is turned on after the game has started, the shader is already
+  compiled: things are then tinted with the game's plain white glow until
+  the next start.
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -475,7 +506,7 @@ crates/
   manager/      Manager app and uk-qol CLI
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
-  borderless-compat/
+  borderless-compat/  item-highlight/
 ```
 
 ## Building

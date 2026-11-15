@@ -67,7 +67,7 @@ enabled = true                # optional (default true): on unless the user turn
 
 [[settings]]                  # one table per setting, in display order
 key = "swap_costs_turn"       # lowercase, digits, `_`; not `enabled`
-type = "bool"                 # bool | int | float | string | enum | key
+type = "bool"                 # bool | int | float | string | enum | key | color
 default = true
 label = "Swapping costs a turn"
 description = "..."           # optional
@@ -92,7 +92,19 @@ key = "sort_key"
 type = "key"                  # hotkey: "" (unbound), "S", "Shift+1",
 default = "S"                 # "Ctrl+Alt+F5", "Pad:North"
 label = "Sort hotkey"
+
+[[settings]]
+key = "color"
+type = "color"                # "#RRGGBB" (stored upper case); a color
+default = "#33FF33"           # picker in the overlay and the manager
+label = "Highlight color"
 ```
+
+A mod that changes one of its own settings from code (a hotkey that flips
+an on/off setting, so the choice is kept) calls
+`uk_qol_runtime::bridge::request_setting(id, key, value)`: the change is
+checked, saved to `config.toml` and passed to `on_settings` at the end of
+the frame, as if made in the menu.
 
 Unknown keys are errors, so typos don't pass silently. Every default is
 checked against its type and limits. A mod with one on/off switch declares no

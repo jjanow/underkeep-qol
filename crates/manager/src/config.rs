@@ -188,6 +188,9 @@ fn coerce_kind(s: &SettingInfo, raw: &str) -> Result<Value, String> {
             }
         }
         SettingKind::Text | SettingKind::Key => Ok(raw.into()),
+        SettingKind::Color => uk_qol_runtime::host::parse_color(raw)
+            .map(|c| uk_qol_runtime::host::format_color(c).into())
+            .ok_or_else(bad),
     }
 }
 
@@ -198,6 +201,7 @@ pub fn kind_name(k: &SettingKind) -> String {
         SettingKind::Float => tr!("kind_float"),
         SettingKind::Text => tr!("kind_text"),
         SettingKind::Key => tr!("kind_key"),
+        SettingKind::Color => tr!("kind_color"),
         SettingKind::Choice(o) => o.join(" | "),
     }
 }

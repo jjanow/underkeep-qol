@@ -590,6 +590,27 @@ In order of difficulty; each ships when done, with settings and tests.
       `Changing display mode to emulated borderless fullscreen...`. Without
       the mod the same settings log `...to borderless fullscreen...`.
     - Windows (user, 2026-11-14): works.
+- [x] `item-highlight`: items on the ground, containers and switches are
+      recolored in the dungeon view (default `#33FF33`, strength 0.85),
+      each group switchable; **H** toggles, the choice is kept (`shown`).
+  - How: a detour of QueueWorldSprite (`sprite_submit`) finds the entity
+    from the sprite's pick id (`pick_lookup`) and its class from RTTI
+    (Item, Container, Chest, Button, and Decorations named `*wall_lock*`);
+    chests only while closed, alcoves only with items in them. The
+    `DungObject` shader gets a branch for highlight amounts >= 2 through a
+    `glShaderSource` wrapper (exe import of `SDL_GL_GetProcAddress`); the
+    game's own highlight statement is kept for everything else.
+  - Runtime: new `color` setting type (overlay and manager pickers) and
+    `bridge::request_setting` for a mod's own setting changes.
+  - [x] Proton, 2026-11-15, game 1.0.5: floor items, an alcove and the
+    items in it glow; the toggle hides it and saves `shown`.
+  - [ ] In game: a closed chest, a lever or wall button, a keyhole (only
+    checked in the disassembly so far), the **H** key itself, and the
+    fallback look when the mod is turned on mid-session.
+  - [ ] Windows.
+  - 2026-11-15: released in 1.0.2 (tag `v1.0.2`). The shader anchor (one
+    statement of the game's GLSL, kept verbatim in the mod as its search
+    string) was approved by the user.
 
 ## 7. Manager
 
@@ -632,6 +653,8 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-14: version 1.0.1 (workspace and every `mod.toml`), tag
     `v1.0.1`: weapon-swap's icon and no notice gate, the hook write lock,
     the update fixes above, executable manager downloads.
+  - 2026-11-15: version 1.0.2, tag `v1.0.2`: the new `item-highlight` mod,
+    the `color` setting type and `bridge::request_setting`.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

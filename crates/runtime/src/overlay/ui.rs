@@ -239,6 +239,30 @@ fn setting(
                     }
                 }
             }
+            SettingKind::Color => {
+                let stored = st
+                    .drafts
+                    .get(&key)
+                    .and_then(toml::Value::as_str)
+                    .or(s.value.as_str())
+                    .and_then(crate::host::parse_color)
+                    .unwrap_or([255, 255, 255]);
+                let mut rgb = stored;
+                if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
+                    st.drafts.insert(
+                        key.clone(),
+                        toml::Value::String(crate::host::format_color(rgb)),
+                    );
+                }
+                ui.monospace(crate::host::format_color(rgb));
+                // Saved once the pointer is released, not on every frame of a
+                // drag in the picker.
+                if !ui.input(|i| i.pointer.any_down())
+                    && let Some(v) = st.drafts.get(&key).cloned()
+                {
+                    st.apply(h, m, &s.key, v);
+                }
+            }
             SettingKind::Key => {
                 let capturing = router
                     .capture

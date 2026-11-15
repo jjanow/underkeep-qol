@@ -1071,6 +1071,31 @@ fn setting_widget(
                 });
             picked.map(Into::into)
         }
+        SettingKind::Color => {
+            let key = (id.to_string(), s.key.clone());
+            let cur = user
+                .and_then(toml_edit::Value::as_str)
+                .map(str::to_string)
+                .or_else(|| default.and_then(toml::Value::as_str).map(str::to_string))
+                .unwrap_or_default();
+            let parse = uk_qol_runtime::host::parse_color;
+            let mut rgb = edits
+                .get(&key)
+                .and_then(|e| parse(e))
+                .or_else(|| parse(&cur))
+                .unwrap_or([255, 255, 255]);
+            if egui::color_picker::color_edit_button_srgb(ui, &mut rgb).changed() {
+                edits.insert(key.clone(), uk_qol_runtime::host::format_color(rgb));
+            }
+            ui.monospace(uk_qol_runtime::host::format_color(rgb));
+            // Commit once the pointer is released, not on every frame of a
+            // drag in the picker.
+            if ui.input(|i| i.pointer.any_down()) {
+                return None;
+            }
+            let v = edits.remove(&key)?;
+            (parse(&v) != parse(&cur)).then(|| v.into())
+        }
         SettingKind::Text | SettingKind::Key => {
             let key = (id.to_string(), s.key.clone());
             let cur = user

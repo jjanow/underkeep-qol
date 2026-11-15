@@ -1,0 +1,20 @@
+# Patterns for item-highlight. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.5 (Steam) VAs.
+
+# QueueWorldSprite(layer, u16 flags, int* pos, rect*, cell*, int pick_id,
+# SpriteDraw* d), 0x14014f420: appends one world sprite's 0x48-byte draw
+# record to the frame's sprite list (drawn later in one batch with the
+# DungObject shader). Called by the entity draw helper 0x140150520 (items,
+# containers, doors, buttons, monsters...) and 0x140150670. Found from the
+# entity draw functions (Item::PreDraw 0x1401db0d0 reads the
+# "highlight_items" cvar and passes the hover highlight down to it).
+[sprite_submit]
+pattern = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 83 EC 20 48 63 1D ?? ?? ?? ?? 4D 8B F1 49 8B F0 0F B7 EA"
+
+# FindPickable(u32 pick_id) -> Pickable*, 0x1401d44e0: the world's hash map
+# from an entity's pick id to its record (type at +0x0c; null when not found
+# or deleted). Used by the draw code to test whether an entity is the one
+# under the cursor.
+[pick_lookup]
+pattern = "4C 8B 15 ?? ?? ?? ?? 44 8B C9 48 C7 44 24 10 00 00 00 00 41 8B 8A 28 04 00 00 85 C9"
+

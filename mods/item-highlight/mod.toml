@@ -1,0 +1,73 @@
+id = "item-highlight"
+name = "Item highlight"
+version = "1.0.2"
+author = "underkeep-qol"
+description = "Makes items on the ground, containers with something in them, and switches glow in the dungeon view, so nothing pickable is missed."
+# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+enabled = true
+
+[[settings]]
+key = "shown"
+type = "bool"
+default = true
+label = "Highlight on"
+description = "Whether the highlight is shown. The toggle key flips this, and the choice is kept for the next game."
+
+[[settings]]
+key = "toggle_key"
+type = "key"
+default = "H"
+label = "Toggle key"
+description = "Turns the highlight on or off."
+
+[[settings]]
+key = "toggle_pad"
+type = "key"
+default = ""
+label = "Toggle button (gamepad)"
+description = "Turns the highlight on or off. Unbound by default: every pad button already has a game action."
+
+[[settings]]
+key = "color"
+type = "color"
+default = "#33FF33"
+label = "Color"
+description = "The highlight's color."
+
+[[settings]]
+key = "strength"
+type = "float"
+default = 0.85
+min = 0.0
+max = 1.0
+label = "Strength"
+description = "How strongly highlighted things take the color: 0 only tints them, 1 colors them fully."
+
+[[settings]]
+key = "items"
+type = "bool"
+default = true
+label = "Items"
+description = "Items lying on the ground or in alcoves."
+
+[[settings]]
+key = "containers"
+type = "bool"
+default = true
+label = "Containers"
+description = "Chests that haven't been opened, and alcoves and shelves with something in them."
+
+[[settings]]
+key = "switches"
+type = "bool"
+default = true
+label = "Switches"
+description = "Wall buttons, levers and keyholes."
+
+[[settings]]
+key = "debug"
+type = "bool"
+default = false
+label = "Log what's drawn"
+description = "Write each kind of thing in the dungeon view to uk_qol.log once (class and definition name), for bug reports."

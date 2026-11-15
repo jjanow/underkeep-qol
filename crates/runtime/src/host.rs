@@ -138,6 +138,8 @@ pub enum SettingKind {
     },
     /// A hotkey, see [`check_hotkey`].
     Key,
+    /// An RGB color, stored as `"#RRGGBB"`; see [`parse_color`].
+    Color,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -184,6 +186,11 @@ impl SettingDef {
                 check_hotkey(s)?;
                 v.clone()
             }
+            (SettingKind::Color, V::String(s)) => {
+                let [r, g, b] = parse_color(s)
+                    .ok_or_else(|| format!("{s:?} is not a color like \"#33FF33\""))?;
+                V::String(format_color([r, g, b]))
+            }
             _ => return Err(format!("expected {}", self.kind.name())),
         };
         Ok(out)
@@ -204,8 +211,26 @@ impl SettingKind {
             SettingKind::String => "a string",
             SettingKind::Enum { .. } => "one of the choices",
             SettingKind::Key => "a hotkey",
+            SettingKind::Color => "a color (#RRGGBB)",
         }
     }
+}
+
+/// Parses a color setting: `#RRGGBB` (the `#` is optional, hex digits in
+/// either case, surrounding spaces ignored).
+pub fn parse_color(s: &str) -> Option<[u8; 3]> {
+    let h = s.trim();
+    let h = h.strip_prefix('#').unwrap_or(h);
+    if h.len() != 6 || !h.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&h[i..i + 2], 16).ok();
+    Some([byte(0)?, byte(2)?, byte(4)?])
+}
+
+/// The stored form of a color: `#RRGGBB`, upper case.
+pub fn format_color([r, g, b]: [u8; 3]) -> String {
+    format!("#{r:02X}{g:02X}{b:02X}")
 }
 
 /// Modifier names accepted in a hotkey, in canonical order.
@@ -462,9 +487,10 @@ fn setting(s: RawSetting) -> Result<SettingDef, String> {
             SettingKind::Enum { choices }
         }
         "key" => SettingKind::Key,
+        "color" => SettingKind::Color,
         t => {
             return Err(ctx(format!(
-                "unknown type {t:?} (bool, int, float, string, enum, key)"
+                "unknown type {t:?} (bool, int, float, string, enum, key, color)"
             )));
         }
     };
@@ -1618,6 +1644,54 @@ mod tests {
     const SHA_B: &str = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
 
     // ----- manifests
+
+    #[test]
+    fn colors() {
+        assert_eq!(parse_color("#33FF33"), Some([0x33, 0xff, 0x33]));
+        assert_eq!(parse_color(" 33ff33 "), Some([0x33, 0xff, 0x33]));
+        assert_eq!(parse_color("#3F3"), None);
+        assert_eq!(parse_color("#GG0000"), None);
+        assert_eq!(parse_color("#33FF33FF"), None);
+        assert_eq!(format_color([0x33, 0xff, 0x0a]), "#33FF0A");
+        let m = Manifest::parse(
+            r##"
+            id = "c"
+            name = "C"
+            version = "1.0.0"
+            game_builds = "any"
+            [[settings]]
+            key = "color"
+            type = "color"
+            default = "#33ff33"
+            label = "Color"
+            "##,
+        )
+        .unwrap();
+        let def = m.setting("color").unwrap();
+        assert_eq!(def.kind, SettingKind::Color);
+        assert_eq!(
+            def.check(&toml::Value::String("00ff00".into())),
+            Ok(toml::Value::String("#00FF00".into()))
+        );
+        assert!(def.check(&toml::Value::String("green".into())).is_err());
+        assert!(def.check(&toml::Value::Integer(3)).is_err());
+        assert!(
+            Manifest::parse(
+                r##"
+                id = "c"
+                name = "C"
+                version = "1.0.0"
+                game_builds = "any"
+                [[settings]]
+                key = "color"
+                type = "color"
+                default = "green"
+                label = "Color"
+                "##,
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn manifest_full() {
