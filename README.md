@@ -333,7 +333,8 @@ keyboard):
   the filled slot to pick its weapon up, then click the inventory panel
   (moves it there) or the weapon slot (swaps); a click anywhere else puts
   it back. A right click moves it straight to the inventory. The slot shows
-  the stored weapon's initials (no item icons) and is framed green, or
+  the stored weapon's own icon (read from your game files; its initials if
+  the icon can't be read) and is framed green, or
   veiled red, while an item that fits or doesn't is on the cursor. The
   game's cursor and the item it carries draw over the mod's widgets, as
   over the game's own.

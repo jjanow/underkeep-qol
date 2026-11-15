@@ -82,6 +82,86 @@ pub fn texture(ctx: &egui::Context, name: &str) -> Option<(egui::TextureHandle, 
     Some(t)
 }
 
+/// Each def's own `icon` and `parent`, from the game's def files.
+type Defs = BTreeMap<String, (Option<String>, Option<String>)>;
+
+static DEFS: Mutex<Option<Arc<Defs>>> = Mutex::new(None);
+
+/// The sprite name of item def `def`'s icon (its `icon` field, or its
+/// parent's, and so on), from the game's def files. `None` if the def or
+/// its icon can't be found. The defs are read once per session.
+pub fn item_icon(def: &str) -> Option<String> {
+    let defs = {
+        let mut d = DEFS.lock().unwrap_or_else(|e| e.into_inner());
+        d.get_or_insert_with(|| {
+            let defs = base_dir().map(|b| load_defs(&b)).unwrap_or_default();
+            crate::log(&format!("item icons: {} defs read", defs.len()));
+            Arc::new(defs)
+        })
+        .clone()
+    };
+    resolve_icon(&defs, def)
+}
+
+/// Follows `parent` from `def` to the first `icon` (at most 32 steps).
+fn resolve_icon(defs: &Defs, def: &str) -> Option<String> {
+    let mut name = def;
+    for _ in 0..32 {
+        let (icon, parent) = defs.get(name)?;
+        if let Some(i) = icon {
+            return Some(i.clone());
+        }
+        name = parent.as_deref()?;
+    }
+    None
+}
+
+/// `icon` and `parent` of every record in the item def files
+/// (`base/def_def_item*.txt.rfile`). Unreadable files are logged and skipped.
+fn load_defs(base: &Path) -> Defs {
+    let mut out = Defs::new();
+    let Ok(dir) = std::fs::read_dir(base) else {
+        return out;
+    };
+    let mut files: Vec<PathBuf> = dir
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("def_def_item") && n.ends_with(".txt.rfile"))
+        })
+        .collect();
+    files.sort();
+    for f in files {
+        let doc = std::fs::read(&f)
+            .map_err(|e| e.to_string())
+            .and_then(|d| dft::Doc::parse(&d).map_err(|e| e.to_string()));
+        let doc = match doc {
+            Ok(d) => d,
+            Err(e) => {
+                crate::log(&format!("item icons: {}: {e}", f.display()));
+                continue;
+            }
+        };
+        for rec in &doc.root {
+            let (dft::Key::Name(k), dft::Value::Table(fields)) = (rec.key, &rec.value) else {
+                continue;
+            };
+            let field = |name: &str| {
+                fields.iter().find_map(|e| match (e.key, &e.value) {
+                    (dft::Key::Name(n), dft::Value::Str(s)) if doc.str(n) == name => {
+                        Some(doc.str(*s))
+                    }
+                    _ => None,
+                })
+            };
+            out.insert(doc.str(k), (field("icon"), field("parent")));
+        }
+    }
+    out
+}
+
 fn read_db(base: &Path, file: &str) -> Result<Value, String> {
     let d = std::fs::read(base.join(file)).map_err(|e| format!("{file}: {e}"))?;
     db::parse(&d).map_err(|e| format!("{file}: {e}"))
@@ -197,5 +277,43 @@ mod tests {
         assert!(opaque.contains(&(45, 45, 57)), "{opaque:?}");
         assert!(opaque.contains(&(15, 15, 27)), "{opaque:?}");
         assert!(load(&base, "no_such_sprite").is_err());
+    }
+
+    #[test]
+    fn icon_follows_parents() {
+        let mut d = Defs::new();
+        d.insert("_base".into(), (Some("ico_base".into()), None));
+        d.insert("mid".into(), (None, Some("_base".into())));
+        d.insert("own".into(), (Some("ico_own".into()), Some("_base".into())));
+        d.insert("loop".into(), (None, Some("loop".into())));
+        assert_eq!(resolve_icon(&d, "mid").as_deref(), Some("ico_base"));
+        assert_eq!(resolve_icon(&d, "own").as_deref(), Some("ico_own"));
+        assert_eq!(resolve_icon(&d, "loop"), None);
+        assert_eq!(resolve_icon(&d, "missing"), None);
+    }
+
+    /// With `UNDERKEEP_DIR` set: weapon defs resolve to icon sprites that
+    /// load (the battle axe's icon isn't named after it).
+    #[test]
+    fn installed_weapon_icons() {
+        let Some(dir) = std::env::var_os("UNDERKEEP_DIR") else {
+            return;
+        };
+        let base = PathBuf::from(dir).join("base");
+        let defs = load_defs(&base);
+        assert_eq!(
+            resolve_icon(&defs, "item_battle_axe").as_deref(),
+            Some("item_axe_02")
+        );
+        for def in [
+            "item_battle_axe",
+            "item_dagger",
+            "item_sling",
+            "item_shortbow",
+        ] {
+            let icon = resolve_icon(&defs, def).unwrap_or_else(|| panic!("{def}: no icon"));
+            let s = load(&base, &icon).unwrap_or_else(|e| panic!("{def} -> {icon}: {e}"));
+            eprintln!("{def} -> {icon} {:?}", s.image.size);
+        }
     }
 }

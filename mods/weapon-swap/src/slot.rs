@@ -204,6 +204,46 @@ pub fn paint_sword(ctx: &egui::Context, p: &egui::Painter, t: &hud::Transform, g
     true
 }
 
+/// Item def `def`'s icon (the game's own sprite, from its def's `icon`)
+/// centred in `rect` (points) at `scale` points per sprite pixel, shrunk to
+/// fit if it's larger. `false` if the icon can't be found or read.
+pub fn paint_item(
+    ctx: &egui::Context,
+    p: &egui::Painter,
+    rect: Rect,
+    scale: f32,
+    def: &str,
+    tint: Color32,
+) -> bool {
+    let Some(name) = uk_qol_runtime::sprite::item_icon(def) else {
+        return false;
+    };
+    let Some((tex, size)) = uk_qol_runtime::sprite::texture(ctx, &name) else {
+        return false;
+    };
+    let size = icon_size(size, scale, rect.size());
+    let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+    p.image(
+        tex.id(),
+        Rect::from_center_size(rect.center(), size),
+        uv,
+        tint,
+    );
+    true
+}
+
+/// A sprite of `size` pixels at `scale` points each, shrunk (keeping its
+/// shape) to fit in `room` points.
+fn icon_size(size: Vec2, scale: f32, room: Vec2) -> Vec2 {
+    let s = size * scale;
+    let fit = (room.x / s.x).min(room.y / s.y).min(1.0);
+    if fit.is_finite() && fit > 0.0 {
+        s * fit
+    } else {
+        s
+    }
+}
+
 /// The "II" mark: a Roman numeral two, 5x5 pixels (serifs top and bottom,
 /// two stems), outlined in the silhouettes' dark edge colour.
 const NUMERAL: [&str; 5] = ["#####", ".#.#.", ".#.#.", ".#.#.", "#####"];
@@ -308,6 +348,19 @@ mod tests {
         ];
         assert_eq!(place_beside(weapon, &all), None);
         assert_eq!(place_beside(q(0.0, 345.0), &[]), Some(q(0.0, 323.0)));
+    }
+
+    #[test]
+    fn icon_fits() {
+        let room = Vec2::splat(58.0);
+        // Small icons keep their pixel scale.
+        assert_eq!(
+            icon_size(Vec2::new(21.0, 23.0), 2.0, room),
+            Vec2::new(42.0, 46.0)
+        );
+        // A tall axe shrinks to the room's height, keeping its shape.
+        let s = icon_size(Vec2::new(20.0, 38.0), 2.0, room);
+        assert!((s.y - 58.0).abs() < 1e-3 && (s.x - 20.0 * 58.0 / 38.0).abs() < 1e-3);
     }
 
     #[test]

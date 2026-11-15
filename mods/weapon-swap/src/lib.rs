@@ -834,14 +834,15 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
         }
         match &stored {
             Some(s) if inner.carry.is_none() => {
-                let label = gui.shrink(3.0);
-                p.rect_filled(t.rect_to_points(label), 0.0, slot::STORED);
-                slot_text(
-                    p,
-                    t.rect_to_points(label),
-                    &hud_label(&s.def),
-                    egui::Color32::WHITE,
-                );
+                // The weapon's own icon, as the game's slots show it; its
+                // initials on a plain square if the icon can't be read.
+                let room = t.rect_to_points(gui.shrink(2.0));
+                let scale = t.points_per_unit();
+                if !slot::paint_item(&ctx, p, room, scale, &s.def, egui::Color32::WHITE) {
+                    let label = t.rect_to_points(gui.shrink(3.0));
+                    p.rect_filled(label, 0.0, slot::STORED);
+                    slot_text(p, label, &hud_label(&s.def), egui::Color32::WHITE);
+                }
             }
             _ => {
                 if !slot::paint_sword(&ctx, p, t, gui) && !inner.sprite_missing_logged {
@@ -930,10 +931,15 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
     if inner.carry == Some(h)
         && let (Some(s), Some(p)) = (&stored, ui.ctx().input(|i| i.pointer.latest_pos()))
     {
-        let ghost = egui::Rect::from_center_size(p, rect.size() * 0.8);
+        let ghost = egui::Rect::from_center_size(p, rect.size());
         let painter = ui.painter();
-        painter.rect_filled(ghost, 0.0, slot::STORED.gamma_multiply(0.85));
-        slot_text(painter, ghost, &hud_label(&s.def), egui::Color32::WHITE);
+        let ctx = ui.ctx().clone();
+        let tint = egui::Color32::WHITE.gamma_multiply(0.85);
+        if !slot::paint_item(&ctx, painter, ghost, t.points_per_unit(), &s.def, tint) {
+            let ghost = ghost.scale_from_center(0.8);
+            painter.rect_filled(ghost, 0.0, slot::STORED.gamma_multiply(0.85));
+            slot_text(painter, ghost, &hud_label(&s.def), egui::Color32::WHITE);
+        }
     }
 }
 

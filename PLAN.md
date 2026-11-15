@@ -520,6 +520,15 @@ In order of difficulty; each ships when done, with settings and tests.
       top-left on the rect's), and the highlights are the game's
       `hud_barbie_slot_allow` / `_deny` / `_selected`; the flat drawing is
       the fallback if the sprite is missing or changes size.
+  - 2026-11-14: the filled slot (and the weapon following the cursor after
+    a click on it) shows the stored weapon's own icon instead of its
+    initials on a green square. Each item def in `def/def_item*.txt`
+    (`base/def_def_item*.txt.rfile`) names its sprite in `icon`, inherited
+    through `parent` (`item_battle_axe` -> `item_axe_02`); the runtime reads
+    them once (`sprite::item_icon`). 419 of the 420 item defs in game 1.0.5
+    resolve to a sprite that loads (`item_coins` has none). Icons bigger
+    than the slot (up to 29x97) are shrunk to fit, keeping their shape. The
+    initials stay as the fallback, and on the 11-unit HUD swap button.
     - Held drags: the game's drag source (style 1) turns a press into a
       carry only when the button comes up over the pressed item; released
       elsewhere it cancels (`drag_end`), so a held drag moves nothing in the
