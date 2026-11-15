@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.2](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.3](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far. Steam Deck and macOS bottles are
@@ -403,6 +403,9 @@ adds 3 more (configurable 1–5).
 - A cast from an extra slot goes through the game's own cast queue, the
   same path as its skill slot, so its checks apply ("Cooldown not finished
   yet!").
+- A button turns red while its skill is on cooldown, and grey if the hero
+  no longer has the skill, so you can see every option before you act. The
+  hover text and the menu list say "on cooldown" too.
 - The buttons show text labels, not the game's skill icons (setting
   `hud_buttons` turns them off).
 

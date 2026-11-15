@@ -573,6 +573,14 @@ In order of difficulty; each ships when done, with settings and tests.
     cast through the game's checks ("Cooldown not finished yet!"), a right
     click opened the panel, closing it put the original skill back. Text
     labels, not the game's skill icons (their textures weren't traced).
+  - 2026-11-15 (player request): a button is red while its skill is on
+    cooldown ("on cooldown" in the hover text and the menu). Read
+    where CanCastSkill (0x140180ed0) reads it: skill state +0x10 for a class
+    skill, Item+0xd8+0x10 for an item skill; above 0 means "Cooldown not
+    finished yet!". The game's own slot greys out for any refusal and shows
+    no count; its tooltip prints the def's cooldown as a bare number, so the
+    unit of what's left wasn't settled and no count is shown. Static RE
+    only; not yet seen in game.
 - [x] `borderless-compat`: borderless fullscreen always takes the game's
       Compatibility ("emulated borderless") path; one on/off setting, on
       by default, nothing saved.
@@ -655,6 +663,8 @@ In order of difficulty; each ships when done, with settings and tests.
     the update fixes above, executable manager downloads.
   - 2026-11-15: version 1.0.2, tag `v1.0.2`: the new `item-highlight` mod,
     the `color` setting type and `bridge::request_setting`.
+  - 2026-11-15: version 1.0.3, tag `v1.0.3`: extra-skill-slots' HUD
+    buttons turn red while their skill is on cooldown (a player's request).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

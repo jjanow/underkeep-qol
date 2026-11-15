@@ -474,18 +474,16 @@ impl ExtraSkillSlots {
                     Some(s) => {
                         let name = self.display(&g, s);
                         // SAFETY: as above.
-                        let ok = unsafe { game::resolve(h, s) }.is_some();
+                        let state = SlotState::of(unsafe { game::resolve(h, s) }, |p| unsafe {
+                            game::cooldown(h, p)
+                        });
                         (
                             initials(&name),
-                            if ok {
-                                egui::Color32::from_rgb(40, 70, 120)
-                            } else {
-                                egui::Color32::from_rgb(70, 70, 70)
-                            },
+                            state.fill(),
                             format!(
                                 "Extra slot {}: {name}{}\nLeft-click: cast. Right-click: assign another skill.",
                                 slot + 1,
-                                if ok { "" } else { " (not available)" }
+                                state.note()
                             ),
                         )
                     }
@@ -555,11 +553,10 @@ impl ExtraSkillSlots {
                     Some(s) => {
                         let n = self.display(&g, s);
                         // SAFETY: as above.
-                        if unsafe { game::resolve(h, s) }.is_some() {
-                            n
-                        } else {
-                            format!("{n} (not available)")
-                        }
+                        let state = SlotState::of(unsafe { game::resolve(h, s) }, |p| unsafe {
+                            game::cooldown(h, p)
+                        });
+                        format!("{n}{}", state.note())
                     }
                 };
                 let open = self.picker.as_ref() == Some(&(key.clone(), slot));
@@ -791,6 +788,44 @@ fn hud_cells(skill_slot: egui::Rect, n: usize) -> Vec<egui::Rect> {
         .collect()
 }
 
+/// An assigned slot's skill as the HUD shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SlotState {
+    Ready,
+    /// The game would refuse it: "Cooldown not finished yet!".
+    Cooldown,
+    /// The hero no longer has it (unlearned, item unequipped).
+    Missing,
+}
+
+impl SlotState {
+    /// From the slot's resolved pair and a cooldown lookup for it.
+    fn of(pair: Option<u64>, cooldown: impl FnOnce(u64) -> i32) -> Self {
+        match pair.map(cooldown) {
+            None => Self::Missing,
+            Some(left) if left > 0 => Self::Cooldown,
+            Some(_) => Self::Ready,
+        }
+    }
+
+    fn fill(self) -> egui::Color32 {
+        match self {
+            Self::Ready => egui::Color32::from_rgb(40, 70, 120),
+            Self::Cooldown => egui::Color32::from_rgb(150, 30, 30),
+            Self::Missing => egui::Color32::from_rgb(70, 70, 70),
+        }
+    }
+
+    /// Appended to the skill's name in the tooltip and the menu.
+    fn note(self) -> String {
+        match self {
+            Self::Ready => String::new(),
+            Self::Cooldown => " (on cooldown)".into(),
+            Self::Missing => " (not available)".into(),
+        }
+    }
+}
+
 /// A short label for a skill name: the initials of its first two words, or
 /// its first two letters.
 fn initials(name: &str) -> String {
@@ -929,6 +964,15 @@ mod tests {
         }
         assert_eq!(hud_cells(slot, 3)[0].width(), HUD_CELL);
         assert!(hud_cells(slot, 0).is_empty());
+    }
+
+    #[test]
+    fn slot_state_flags_cooldown() {
+        assert_eq!(SlotState::of(None, |_| 3), SlotState::Missing);
+        assert_eq!(SlotState::of(Some(1), |_| 0), SlotState::Ready);
+        assert_eq!(SlotState::of(Some(1), |_| 2), SlotState::Cooldown);
+        assert_ne!(SlotState::Cooldown.fill(), SlotState::Ready.fill());
+        assert_eq!(SlotState::Cooldown.note(), " (on cooldown)");
     }
 
     #[test]

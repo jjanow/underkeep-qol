@@ -4,12 +4,15 @@
 //! - Hero (0x2b8 bytes, 4 in the party array): +0x00 valid (byte), +0x08
 //!   hero_id (int), +0x10 name (String), +0x210 equipment `Item*[11]`,
 //!   +0x268 skill count, +0x270 skill states (0x18 bytes each: +0x00
-//!   `SkillDef*`, +0x0c level), +0x278 the selected skill: a pair of ints,
+//!   `SkillDef*`, +0x0c level, +0x10 cooldown left), +0x278 the selected skill: a pair of ints,
 //!   (skill state index, equipment slot of an item skill or -1). An item
 //!   skill's pair is (-1, slot).
 //! - SkillDef: +0x00 name (String, e.g. "skill_fireball"), +0x5a4 passive.
-//! - Item: +0x578 its skill (an embedded SkillDef), +0x598 non-zero if the
-//!   item has a skill.
+//! - Item: +0xd8 its skill state (laid out like a hero's, so its cooldown is
+//!   at +0xe8), +0x578 its skill (an embedded SkillDef), +0x598 non-zero if
+//!   the item has a skill.
+//! - Hero::CanCastSkill (0x140180ed0 in 1.0.5) refuses a skill whose state's
+//!   cooldown is above 0 ("Cooldown not finished yet!").
 //! - RoundAction (0xe8 bytes, queued on the TurnManager): +0x00 type (4 =
 //!   hero acts), +0x08 hero index (-1 = the selected one), +0x0c 1 = use the
 //!   selected skill (0 = attack), +0xd0 step (0 until it first runs), +0xdc
@@ -31,6 +34,8 @@ pub const H_SKILLS: usize = 0x270;
 pub const H_SELECTED_SKILL: usize = 0x278;
 const SKILL_STATE_SIZE: usize = 0x18;
 const SS_LEVEL: usize = 0x0c;
+const SS_COOLDOWN: usize = 0x10;
+const ITEM_SKILL_STATE: usize = 0xd8;
 const DEF_PASSIVE: usize = 0x5a4;
 const ITEM_SKILL: usize = 0x578;
 const ITEM_HAS_SKILL: usize = 0x598;
@@ -391,6 +396,27 @@ pub unsafe fn skill_of(h: usize, p: u64) -> Option<Skill> {
         })
     }
     .filter(|s| !s.name.is_empty())
+}
+
+/// How much cooldown is left on the skill a selected-skill pair stands for
+/// (0 = ready), read where the game's CanCastSkill reads it.
+///
+/// # Safety
+/// `h` must point at a valid hero; game thread only.
+pub unsafe fn cooldown(h: usize, p: u64) -> i32 {
+    let (index, equip_slot) = (p as u32 as i32, (p >> 32) as u32 as i32);
+    // SAFETY: as in `assignable_skills`.
+    unsafe {
+        let (arr, n) = skill_states(h);
+        let state = if (0..n).contains(&index) {
+            arr + index as usize * SKILL_STATE_SIZE
+        } else if let Some(item) = skill_item(h, equip_slot) {
+            item + ITEM_SKILL_STATE
+        } else {
+            return 0;
+        };
+        rd::<i32>(state + SS_COOLDOWN).max(0)
+    }
 }
 
 /// "skill_fire_spark" -> "Fire spark": a readable name when the game's text
