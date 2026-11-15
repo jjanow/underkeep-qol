@@ -21,7 +21,9 @@ Check items off as they land; add findings under the item they belong to.
       manager; `cargo fmt`, `clippy`, tests.
   - Runs **only on `v*` tags and manual runs** (`workflow_dispatch`), not on
     pushes or PRs: builds happen only for a release or a deliberate test.
-    Tags publish a release with `SHA256SUMS`.
+    Tags publish a release with `SHA256SUMS`. A manual run can tick
+    **Windows only** (`windows_only`) to skip the Linux and macOS managers
+    for a quick test build (the macOS runner is slow to get).
 - [x] `.gitignore` blocking game file types (no game material in the repo).
 - [x] `CONTRIBUTING.md`: how to add a mod and update patterns, and the rule
       that no game files, assets, extracted text or decompiled code go in

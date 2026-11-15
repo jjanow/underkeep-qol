@@ -48,7 +48,9 @@ use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
 use uk_qol_runtime::input::InputEvent;
 use uk_qol_runtime::{hotkey, hud};
 
-use game::{Game, KIND_EQUIPPED, KIND_INVENTORY, Readiness, SLOT_WEAPON, UI_SHEET, busy_reason};
+use game::{
+    Game, KIND_EQUIPPED, KIND_INVENTORY, Readiness, SLOT_SHIELD, SLOT_WEAPON, UI_SHEET, busy_reason,
+};
 use state::{HEROES, Loaded, Parked, State, StoredItem};
 
 const ID: &str = "weapon-swap";
@@ -134,7 +136,24 @@ enum Action {
         kind: i32,
         src_hero: i32,
         src_slot: i32,
+        /// Released over the slot after a held drag: the game cancelled its
+        /// click (nothing is on the cursor any more), so there is no drag
+        /// to end; the item is checked where it was pressed instead.
+        held: bool,
     },
+}
+
+/// A weapon the button went down on (the game's click not yet a carry),
+/// for a held drag released over the second slot.
+#[derive(Clone)]
+struct HeldPress {
+    id: [u64; 2],
+    item: usize,
+    def: String,
+    fits: bool,
+    kind: i32,
+    src_hero: i32,
+    src_slot: i32,
 }
 
 struct Inner {
@@ -166,6 +185,9 @@ struct Inner {
     sprite_missing_logged: bool,
     /// Last item seen on the game's cursor on the sheet, to log changes.
     seen_carried: Option<usize>,
+    /// The item under a held button (see [`HeldPress`]), `None` inside if
+    /// it isn't one the slot can take.
+    press: Option<Option<HeldPress>>,
 }
 
 #[derive(Default)]
@@ -215,7 +237,10 @@ impl Inner {
     }
 
     fn run(&mut self, a: Action) {
-        if let Action::DropCarried { item, .. } = &a {
+        if let Action::DropCarried {
+            item, held: false, ..
+        } = &a
+        {
             // The game's drop targets end the drag before acting on it.
             match self.game.carried() {
                 Some(c) if c.item as usize == *item => self.game.end_drag(),
@@ -321,6 +346,7 @@ impl Inner {
                 kind,
                 src_hero,
                 src_slot,
+                ..
             } => self.drop_carried(
                 *hero,
                 *item as game::Item,
@@ -536,6 +562,7 @@ impl Mod for WeaponSwap {
             sheet_logged: false,
             sprite_missing_logged: false,
             seen_carried: None,
+            press: None,
         });
         Ok(())
     }
@@ -729,6 +756,7 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
         .filter(|&h| inner.game.hero_valid(h));
     let (Some(h), true, true) = (hero, inner.sheet_slot, inner.game.ui_mode() == UI_SHEET) else {
         inner.carry = None;
+        inner.press = None;
         return;
     };
     if inner.carry.is_some_and(|c| c != h) {
@@ -765,17 +793,67 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
         .as_ref()
         .map(|i| i.weapon && i.slot_problem().is_none());
 
+    // A held drag: the button went down on a weapon elsewhere and comes up
+    // over this slot. The game cancels its click then (it picks an item up
+    // only when the button comes up over that item), so the press is
+    // remembered while it's held and turned into a drop here.
+    let pointer = ui.ctx().input(|i| i.pointer.latest_pos());
+    let over = pointer.is_some_and(|p| rect.contains(p));
+    match inner.game.pressed() {
+        Some(p) => {
+            if inner
+                .press
+                .as_ref()
+                .is_none_or(|k| k.as_ref().is_none_or(|k| k.id != p.id))
+            {
+                let at = pointer.map(|p| t.from_points(p));
+                inner.press = Some(held_press(&inner.game, &p, at));
+            }
+        }
+        None => {
+            if let Some(Some(k)) = inner.press.take()
+                && over
+                && carried.is_none()
+                && inner.carry.is_none()
+            {
+                if k.fits {
+                    inner.queue.push(Action::DropCarried {
+                        hero: h,
+                        item: k.item,
+                        def: k.def,
+                        kind: k.kind,
+                        src_hero: k.src_hero,
+                        src_slot: k.src_slot,
+                        held: true,
+                    });
+                } else {
+                    inner.say(format!("{} doesn't fit the second weapon slot", k.def));
+                }
+            }
+        }
+    }
+    let held_fits = match &inner.press {
+        Some(Some(k)) if over => Some(k.fits),
+        _ => None,
+    };
+    let fits = fits.or(held_fits);
+
     let r = ui.allocate_rect(rect, egui::Sense::click_and_drag());
     let ctx = ui.ctx().clone();
     {
         let p = ui.painter();
-        let outline = match fits {
-            Some(true) => Some(slot::FITS),
-            Some(false) => Some(slot::NO_FIT),
-            None if r.hovered() => Some(slot::HOVER),
-            None => None,
+        let (outline, highlight) = match fits {
+            Some(true) => (Some(slot::FITS), Some(slot::ALLOW_SPRITE)),
+            Some(false) => (Some(slot::NO_FIT), Some(slot::DENY_SPRITE)),
+            None if r.hovered() => (Some(slot::HOVER), Some(slot::SELECTED_SPRITE)),
+            None => (None, None),
         };
-        slot::paint_frame(p, t, gui, outline);
+        // The game's stone and highlight sprites; the mod's own drawing if
+        // they can't be read.
+        let stone = slot::paint_stone(&ctx, p, t, gui);
+        if !stone {
+            slot::paint_frame(p, t, gui, outline);
+        }
         match &stored {
             Some(s) if inner.carry.is_none() => {
                 let label = gui.shrink(3.0);
@@ -795,6 +873,13 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
             }
         }
         slot::paint_numeral(p, t, gui);
+        if stone
+            && let (Some(c), Some(h)) = (outline, highlight)
+            && !slot::paint_highlight(&ctx, p, t, gui, h)
+        {
+            let s = egui::Stroke::new(t.points_per_unit(), c);
+            p.rect_stroke(rect, 0.0, s, egui::StrokeKind::Inside);
+        }
     }
     let r = r.on_hover_text(match (&stored, fits) {
         (_, Some(false)) => "Weapon slot II: only weapons fit.".into(),
@@ -818,6 +903,7 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
                     kind: c.kind,
                     src_hero: c.hero,
                     src_slot: c.slot,
+                    held: false,
                 });
             }
             (Some(_), Some(info)) => {
@@ -870,6 +956,55 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
         painter.rect_filled(ghost, 0.0, slot::STORED.gamma_multiply(0.85));
         slot_text(painter, ghost, &hud_label(&s.def), egui::Color32::WHITE);
     }
+}
+
+/// What the button went down on (`p`, at GUI point `at` when first seen),
+/// if it's an item the second slot could take a held drag of: an inventory
+/// item, or a hero's weapon (from the HUD hand slot, or the sheet's weapon
+/// or shield slot showing a two-handed weapon). `None` for anything else.
+fn held_press(game: &Game, p: &game::Pressed, at: Option<egui::Pos2>) -> Option<HeldPress> {
+    let (item, src_hero, src_slot) = match p.kind {
+        KIND_INVENTORY => (game.pressed_inventory_item(p)?, -1, -1),
+        KIND_EQUIPPED => {
+            let on = |k: i32| {
+                at.is_some_and(|at| {
+                    game.sheet_slot_rect(k)
+                        .and_then(hud::rect_from_layout)
+                        .is_some_and(|r| r.contains(at))
+                })
+            };
+            let hero = match Game::pressed_hand_slot(p) {
+                Some(h) => h,
+                None if on(SLOT_WEAPON) => game.selected_hero()?,
+                None if on(SLOT_SHIELD) => {
+                    let h = game.selected_hero()?;
+                    if !game.equipped(h, SLOT_SHIELD).is_null() {
+                        return None;
+                    }
+                    h
+                }
+                None => return None,
+            };
+            (game.equipped(hero, SLOT_WEAPON), hero as i32, SLOT_WEAPON)
+        }
+        _ => return None,
+    };
+    // SAFETY: on a hero or in the inventory (checked above).
+    let info = unsafe { game.item_info(item) }?;
+    let fits = info.weapon && info.slot_problem().is_none();
+    log(&format!(
+        "held on: {} (from {}, hero {src_hero}), fits {fits}",
+        info.def, p.kind
+    ));
+    Some(HeldPress {
+        id: p.id,
+        item: item as usize,
+        def: info.def,
+        fits,
+        kind: p.kind,
+        src_hero,
+        src_slot,
+    })
 }
 
 /// Drops the mod's pick-up of hero `h`'s second-slot weapon at GUI point

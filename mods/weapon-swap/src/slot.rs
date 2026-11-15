@@ -118,6 +118,71 @@ pub fn paint_frame(p: &egui::Painter, t: &hud::Transform, gui: Rect, outline: Op
 /// The game's sprite for the character sheet's empty weapon slot.
 pub const SWORD_SPRITE: &str = "hud_barbie_sword";
 
+/// The sheet's slot backgrounds: one sprite with all 11 stone slots and the
+/// cords between them (115x202 in game 1.0.5).
+pub const SLOTS_SPRITE: &str = "hud_barbie_equip_slots";
+const SLOTS_SPRITE_SIZE: Vec2 = Vec2::new(115.0, 202.0);
+/// The helmet's stone in [`SLOTS_SPRITE`], without the cords below it:
+/// pixels x 39..77, y 0..37 (the stone itself starts at (39, 3), with a
+/// crack rising above it).
+const HELMET_CELL: Rect = Rect::from_min_max(Pos2::new(39.0, 0.0), Pos2::new(77.0, 37.0));
+/// The stone's top-left inside [`HELMET_CELL`]; in game it sits on the
+/// slot rect's top-left.
+const HELMET_STONE: Vec2 = Vec2::new(0.0, 3.0);
+
+/// The game's own slot highlights: green frame while the carried item fits,
+/// red veil while it doesn't, yellow frame on hover.
+pub const ALLOW_SPRITE: &str = "hud_barbie_slot_allow";
+pub const DENY_SPRITE: &str = "hud_barbie_slot_deny";
+pub const SELECTED_SPRITE: &str = "hud_barbie_slot_selected";
+
+/// The slot's background: the game's stone slot, cut out of the sheet's
+/// slot sprite (the helmet's cell). `false` if the sprite can't be read or
+/// isn't the layout this was measured on; draw [`paint_frame`] then.
+pub fn paint_stone(ctx: &egui::Context, p: &egui::Painter, t: &hud::Transform, gui: Rect) -> bool {
+    let Some((tex, size)) = uk_qol_runtime::sprite::texture(ctx, SLOTS_SPRITE) else {
+        return false;
+    };
+    if size != SLOTS_SPRITE_SIZE {
+        return false;
+    }
+    let uv = Rect::from_min_max(
+        (HELMET_CELL.min.to_vec2() / size).to_pos2(),
+        (HELMET_CELL.max.to_vec2() / size).to_pos2(),
+    );
+    let at = gui.min - HELMET_STONE;
+    p.image(
+        tex.id(),
+        t.rect_to_points(Rect::from_min_size(at, HELMET_CELL.size())),
+        uv,
+        Color32::WHITE,
+    );
+    true
+}
+
+/// One of the game's highlight sprites (`name`), centred on the slot on
+/// whole GUI units. `false` if it can't be read.
+pub fn paint_highlight(
+    ctx: &egui::Context,
+    p: &egui::Painter,
+    t: &hud::Transform,
+    gui: Rect,
+    name: &str,
+) -> bool {
+    let Some((tex, size)) = uk_qol_runtime::sprite::texture(ctx, name) else {
+        return false;
+    };
+    let at = (gui.center() - size / 2.0).floor();
+    let uv = Rect::from_min_max(Pos2::ZERO, Pos2::new(1.0, 1.0));
+    p.image(
+        tex.id(),
+        t.rect_to_points(Rect::from_min_size(at, size)),
+        uv,
+        Color32::WHITE,
+    );
+    true
+}
+
 /// The weapon icon of the second slot: the game's own empty-weapon-slot
 /// sprite (read from the player's install, see `runtime::sprite`) centred
 /// in `gui` on whole GUI units, as the sheet draws it. `false` if the

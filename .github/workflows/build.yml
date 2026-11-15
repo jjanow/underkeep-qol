@@ -7,6 +7,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      windows_only:
+        description: "Windows only (skip the Linux and macOS managers; a test build)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -60,17 +65,12 @@ jobs:
     needs: check
     strategy:
       fail-fast: false
+      # Windows; Linux (ubuntu-22.04: older glibc, runs on more distros);
+      # macOS (Apple silicon; the game runs in CrossOver / Whisky). A manual
+      # run with "Windows only" builds just the first. Tag builds (no
+      # inputs) build all three.
       matrix:
-        include:
-          - os: windows-latest
-            name: windows-x64
-            bin: uk-qol.exe
-          - os: ubuntu-22.04 # older glibc = runs on more distros
-            name: linux-x64
-            bin: uk-qol
-          - os: macos-15 # Apple silicon; the game runs in CrossOver / Whisky
-            name: macos-arm64
-            bin: uk-qol
+        include: ${{ fromJSON(inputs.windows_only && '[{"os":"windows-latest","name":"windows-x64","bin":"uk-qol.exe"}]' || '[{"os":"windows-latest","name":"windows-x64","bin":"uk-qol.exe"},{"os":"ubuntu-22.04","name":"linux-x64","bin":"uk-qol"},{"os":"macos-15","name":"macos-arm64","bin":"uk-qol"}]') }}
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

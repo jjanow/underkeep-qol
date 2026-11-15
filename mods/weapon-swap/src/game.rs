@@ -73,6 +73,11 @@ const CURSOR_DRAG_STYLE: usize = 0x5c;
 const CURSOR_DRAG_KIND: usize = 0x60;
 const CURSOR_DRAG_SLOT: usize = 0x7c;
 const CURSOR_DRAG_HERO: usize = 0x80;
+/// The pressed widget's id (two qwords), set when the button goes down on
+/// a draggable: the HUD hand slots use `0x1c + 2 * hero, 0`, the inventory
+/// panel `panel, UI object id`.
+const CURSOR_PRESS_ID: usize = 0x68;
+const HAND_SLOT_ID: u64 = 0x1c;
 /// Drag kinds (+0x60).
 pub const KIND_EQUIPPED: i32 = 0;
 pub const KIND_INVENTORY: i32 = 1;
@@ -638,6 +643,15 @@ pub struct Carried {
     pub slot: i32,
 }
 
+/// An item click that hasn't become a carry yet ([`Game::pressed`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Pressed {
+    /// [`KIND_EQUIPPED`], [`KIND_INVENTORY`] or another source.
+    pub kind: i32,
+    /// The pressed widget's id.
+    pub id: [u64; 2],
+}
+
 impl Game {
     fn context_object(&self) -> usize {
         // SAFETY: a pointer global of the running game.
@@ -690,6 +704,66 @@ impl Game {
                 slot: rd(c + CURSOR_DRAG_SLOT),
             })
         }
+    }
+
+    /// An item click the game hasn't turned into a carry yet: the button
+    /// went down on an item and is still held. The game picks the item up
+    /// only if the button comes up over that same item; released anywhere
+    /// else, it cancels (so a held drag moves nothing, in the game too). The
+    /// second slot uses this to take a held drag released over it.
+    pub fn pressed(&self) -> Option<Pressed> {
+        let c = self.context_object();
+        if c == 0 {
+            return None;
+        }
+        // SAFETY: the UI context lives as long as the game.
+        unsafe {
+            let phase: i32 = rd(c + CURSOR_DRAG);
+            let style: i32 = rd(c + CURSOR_DRAG_STYLE);
+            if phase != 1 || style != 1 {
+                return None;
+            }
+            Some(Pressed {
+                kind: rd(c + CURSOR_DRAG_KIND),
+                id: [rd(c + CURSOR_PRESS_ID), rd(c + CURSOR_PRESS_ID + 8)],
+            })
+        }
+    }
+
+    /// The party inventory item behind a pressed inventory entry (its UI
+    /// object id, [`Pressed::id`]`[1]`), through the game's own lookup:
+    /// the drag's payload is filled in as the game does when the click
+    /// turns into a carry, read with `drag_item`, then put back.
+    pub fn pressed_inventory_item(&self, p: &Pressed) -> Option<Item> {
+        if p.kind != KIND_INVENTORY {
+            return None;
+        }
+        let c = self.context_object();
+        if c == 0 {
+            return None;
+        }
+        let id = i32::try_from(p.id[1] as i64).ok()?;
+        // SAFETY: the game's UI context, game thread; every field written is
+        // restored before returning, and `drag_item` only reads.
+        let it = unsafe {
+            let phase: i32 = rd(c + CURSOR_DRAG);
+            let slot: i32 = rd(c + CURSOR_DRAG_SLOT);
+            wr(c + CURSOR_DRAG, 2i32);
+            wr(c + CURSOR_DRAG_SLOT, id);
+            let it = self.in_ui(|| (self.drag_item)());
+            wr(c + CURSOR_DRAG_SLOT, slot);
+            wr(c + CURSOR_DRAG, phase);
+            it?
+        };
+        (!it.is_null() && self.in_inventory(it)).then_some(it)
+    }
+
+    /// The hero whose HUD hand slot a pressed widget id is (the HUD's hand
+    /// slots use ids `0x1c + 2 * hero`), if it is one.
+    pub fn pressed_hand_slot(p: &Pressed) -> Option<usize> {
+        let h = p.id[0].checked_sub(HAND_SLOT_ID)?;
+        (p.kind == KIND_EQUIPPED && p.id[1] == 0 && h % 2 == 0 && h / 2 < 4)
+            .then_some(h as usize / 2)
     }
 
     /// Ends the game's drag without dropping anything: the item stays
