@@ -3394,7 +3394,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-dft"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "toml",
@@ -3402,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-manager"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "dirs",
  "eframe",
@@ -3422,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-bloodmage-cost"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3430,14 +3430,14 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-borderless-compat"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "uk-qol-runtime",
 ]
 
 [[package]]
 name = "uk-qol-mod-extra-skill-slots"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3445,7 +3445,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-inventory-sort"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3453,14 +3453,14 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-skip-logos"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "uk-qol-runtime",
 ]
 
 [[package]]
 name = "uk-qol-mod-weapon-swap"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3468,7 +3468,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-proxy"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "uk-qol-mod-bloodmage-cost",
  "uk-qol-mod-borderless-compat",
@@ -3482,7 +3482,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-runtime"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "egui",
  "egui_glow",

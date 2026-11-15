@@ -583,14 +583,13 @@ In order of difficulty; each ships when done, with settings and tests.
     emulated path (`mods/borderless-compat/patterns.toml`); the pattern
     matches once in 1.0.5. Leaving the mode uses the game's own state
     flag, so windowed and exclusive still work.
-  - [ ] Test in game: HDR and Alt+Tab on Windows (§1).
+  - [x] Test in game: HDR and Alt+Tab on Windows (§1).
     - Proton, 2026-11-14, game 1.0.5: with `fullscreen 1` and
       `borderless_fullscreen_mode 0` (Performance; both are the game's
       defaults, so `game_config.txt` leaves them out), the game log says
       `Changing display mode to emulated borderless fullscreen...`. Without
       the mod the same settings log `...to borderless fullscreen...`.
-    - Windows (user, 2026-11-14): the game runs with the mod on; HDR and
-      Alt+Tab weren't reported on. Needs an HDR display on Windows.
+    - Windows (user, 2026-11-14): works.
 
 ## 7. Manager
 
@@ -628,10 +627,12 @@ In order of difficulty; each ships when done, with settings and tests.
     `SHA256SUMS`.
   - Found in the 1.0.0 downloads: the Linux and macOS managers come out of
     their tarballs without the execute bit (`actions/upload-artifact` drops
-    file modes). The workflow now runs `chmod 755` before `tar`; the README
-    says to `chmod +x` the 1.0.0 download. Self-update was never affected
-    (`unpack` sets the mode).
-- [ ] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
+    file modes). The workflow now runs `chmod 755` before `tar` (1.0.1).
+    Self-update was never affected (`unpack` sets the mode).
+  - 2026-11-14: version 1.0.1 (workspace and every `mod.toml`), tag
+    `v1.0.1`: weapon-swap's icon and no notice gate, the hook write lock,
+    the update fixes above, executable manager downloads.
+- [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
     `detect`/`status` found the Flatpak install; a fresh `install` (no
@@ -652,7 +653,8 @@ In order of difficulty; each ships when done, with settings and tests.
     (unless edited by hand). Also: `install` no longer asks to paste the
     launch option when it's set and the only other Steam account never ran
     the game.
-  - Windows: the user's tests (§1). Steam Deck: not tested (no device).
+  - Windows: the user's tests (§1). Steam Deck: not tested; the user has
+    no Deck (decided 2026-11-14: left to user reports).
 - [x] README: replace "planned" with real install steps and screenshots.
   - 2026-11-14: *Installing* section (Windows, Linux, Deck, macOS, by hand,
     update, uninstall, safe mode), checked against the manager's labels.
@@ -677,5 +679,6 @@ In order of difficulty; each ships when done, with settings and tests.
     with a MinGW exe importing winmm next to the proxy: without the override
     Wine's builtin winmm is used and nothing loads; with the registry
     override (`HKCU\Software\Wine\DllOverrides`, `winmm` = `native,builtin`,
-    what a bottle's winecfg writes) the proxy loads and forwards. Not tried:
-    a real CrossOver/Whisky bottle on a Mac, the arm64 manager.
+    what a bottle's winecfg writes) the proxy loads and forwards. A real
+    CrossOver/Whisky bottle and the arm64 manager aren't tested: the user
+    has no Mac (decided 2026-11-14: left to user reports).

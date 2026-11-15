@@ -72,8 +72,7 @@ Close the game first; the manager won't change files while it runs.
 **Linux (Proton)**
 
 1. Download `uk-qol-linux-x64.tar.gz`, unpack it and run `uk-qol`
-   (`./uk-qol gui` from a terminal). With the 1.0.0 download, make it
-   executable first: `chmod +x uk-qol`.
+   (`./uk-qol gui` from a terminal).
 2. Click **Install**.
 3. The game needs one Steam launch option, so Proton loads the mod loader:
    `WINEDLLOVERRIDES="winmm=n,b" %command%`. With Steam closed the manager
@@ -86,11 +85,11 @@ Close the game first; the manager won't change files while it runs.
 back to Gaming Mode and play. Open the mod menu with **L3+R3**.
 
 **macOS (CrossOver, Whisky, Wine)**: download `uk-qol-macos-arm64.tar.gz`,
-run `uk-qol` (with the 1.0.0 download, `chmod +x uk-qol` first), choose the game folder inside the bottle and click
+run `uk-qol`, choose the game folder inside the bottle and click
 **Install**. Then set a DLL override in the bottle: open its Wine
 configuration (*winecfg*), and on the *Libraries* tab add `winmm` and set it
 to *Native then Builtin*. Without it the bottle uses Wine's own winmm and no
-mod loads. Checked in a Wine prefix with that override; not yet on a Mac.
+mod loads. Checked in a Wine prefix with that override, not on a Mac.
 
 **By hand**: unzip `winmm.dll` from the runtime zip into the game folder
 (next to `underkeep.exe`), plus the launch option above on Linux. To remove
@@ -324,7 +323,7 @@ rebindable.
 - The game's save format has no room for this slot, so the weapon in it is
   stored in the save's sidecar file (see *Save safety*), not in the save.
 
-How it works now (1.0.0; tested in game 1.0.5 with a gamepad, mouse and
+How it works now (1.0.1; tested in game 1.0.5 with a gamepad, mouse and
 keyboard):
 
 - On the character sheet the slot sits left of the helmet slot, drawn like
