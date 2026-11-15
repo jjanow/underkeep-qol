@@ -324,6 +324,21 @@ Check items off as they land; add findings under the item they belong to.
     (2026-11-14). Not seen in game: alchemy (10, excluded), the widgets
     in a fight (static: nothing on the battle path sets the menu state or
     interaction mode; target selection hides them).
+  - 2026-11-14 (Windows report: the cursor disappeared behind HUD
+    widgets): the game draws its UI into an offscreen frame in three
+    layers (panels, popups, the dragged item), copies it to the window,
+    then draws its own cursor sprite, so widgets drawn at swap time covered
+    both. The HUD (and toasts) now draw when the game submits its top UI
+    layer (`overlay::layer`, core pattern `ui_layers_draw`), into the
+    game's framebuffer (3440x1440 at a 3441x1440 window); the menu stays at
+    swap time. Without the pattern the HUD draws at swap time and the
+    game's cursor sprite (`g_cursor_cvar` / `g_cvars` pick cursor1..3) is
+    redrawn over widgets under the pointer. Both checked in game 1.0.5 with
+    pushed SDL events (a temporary test build): the cursor over the Blood
+    Mage badge and the Sort button, a carried flail over the badge's
+    tooltip and over the second weapon slot, the menu (F10); the fallback
+    with `ui_layers_draw` broken by a pattern override. Not checked: a
+    real mouse on Windows.
 
 ## 5. Reverse engineering per mod
 

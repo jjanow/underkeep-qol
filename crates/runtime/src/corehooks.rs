@@ -1,6 +1,6 @@
 //! The runtime's own hooks: save hooks ([`crate::savehook`]) and data
-//! patches ([`crate::datapatch`]), plus the HUD's addresses
-//! ([`crate::hud`]). Their patterns are `patterns/core.toml` (built in;
+//! patches ([`crate::datapatch`]), the HUD's addresses ([`crate::hud`])
+//! and the overlay's in-frame HUD hook (`overlay::layer`). Their patterns are `patterns/core.toml` (built in;
 //! `uk_qol/patterns/core.toml` replaces it whole, like a mod's override),
 //! resolved before any mod's hooks change the code. The hooks go in during
 //! startup, before the startup gate lets the game's init run, and stay in
@@ -83,6 +83,7 @@ pub fn install(
     crate::savehook::install(&mut hooks, patterns, base);
     crate::datapatch::install(&mut hooks, patterns, base, patches, log_defs);
     crate::hud::install(patterns, base);
+    crate::overlay::layer::install(&mut hooks, patterns, base);
     match hooks.enable() {
         Ok(()) => crate::log("core hooks installed"),
         Err(e) => crate::log(&format!(
@@ -112,6 +113,9 @@ mod tests {
             "g_hud_mode",
             "g_menu_state",
             "g_interaction_mode",
+            "ui_layers_draw",
+            "g_cursor_cvar",
+            "g_cvars",
         ] {
             assert!(names.contains(&n), "{n} missing");
         }

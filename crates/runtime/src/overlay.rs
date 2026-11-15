@@ -3,10 +3,12 @@
 //!
 //! [`install`] hooks four SDL3 functions in `underkeep.exe`'s import table
 //! (see [`crate::iat`]):
-//! - `SDL_GL_SwapWindow`: draws the menu (or, with the menu closed, the
-//!   mods' HUD widgets, see [`crate::hud`]) and toasts just before the
+//! - `SDL_GL_SwapWindow`: draws the menu and toasts just before the
 //!   game's frame is presented, saving and restoring all GL state it
-//!   touches; nothing is drawn when there is nothing to show;
+//!   touches; nothing is drawn when there is nothing to show. With the menu
+//!   closed the mods' HUD widgets (see [`crate::hud`]) and toasts are drawn
+//!   earlier, inside the game's frame under its cursor (`layer`), or here
+//!   if that hook isn't in;
 //! - `SDL_PollEvent`: routes each event (see `router`): menu toggle (F10, or
 //!   LS+RS on a gamepad), menu input, and mod hotkeys; a swallowed event is
 //!   dropped and the next one polled, so the game never sees it;
@@ -25,6 +27,7 @@
 mod capture;
 #[cfg(windows)]
 mod gl;
+pub(crate) mod layer;
 #[cfg_attr(not(windows), allow(dead_code))] // used by the Windows glue
 pub(crate) mod router;
 pub(crate) mod sdl;

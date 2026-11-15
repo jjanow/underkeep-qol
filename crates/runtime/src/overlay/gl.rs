@@ -98,12 +98,13 @@ const UNPACK: [u32; 4] = [
 
 impl<'a> Saved<'a> {
     /// Saves the state and leaves the context ready for egui: drawing to
-    /// the default framebuffer, texture unit 0 with no sampler, no unpack
-    /// buffer, no stencil test, filled polygons.
+    /// the default framebuffer (or, with `keep_fb`, to the one bound now),
+    /// texture unit 0 with no sampler, no unpack buffer, no stencil test,
+    /// filled polygons.
     ///
     /// # Safety
     /// `gl` must be the current context on this thread.
-    pub unsafe fn save(gl: &'a glow::Context, caps: Caps) -> Saved<'a> {
+    pub unsafe fn save(gl: &'a glow::Context, caps: Caps, keep_fb: bool) -> Saved<'a> {
         let i = |p| unsafe { gl.get_parameter_i32(p) };
         let caps_list = [
             glow::BLEND,
@@ -200,7 +201,9 @@ impl<'a> Saved<'a> {
             for p in &UNPACK[1..] {
                 gl.pixel_store_i32(*p, 0);
             }
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            if !keep_fb {
+                gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            }
             gl.disable(glow::STENCIL_TEST);
             gl.disable(glow::RASTERIZER_DISCARD);
             if caps.polygon_mode {
@@ -208,6 +211,18 @@ impl<'a> Saved<'a> {
             }
         }
         s
+    }
+}
+
+impl Saved<'_> {
+    /// The game's viewport when the state was saved.
+    pub fn viewport(&self) -> [i32; 4] {
+        self.viewport
+    }
+
+    /// The draw framebuffer bound when the state was saved (0: the window).
+    pub fn draw_fb(&self) -> i32 {
+        self.draw_fb
     }
 }
 
