@@ -263,7 +263,12 @@ fn launch_option_step(g: &GameInstall, set: bool) -> Result<(), String> {
         .as_deref()
         .map(launch::check)
         .unwrap_or_default();
-    if !accounts.is_empty() && accounts.iter().all(|a| a.state == LaunchState::Set) {
+    // Accounts that never ran the game (no entry) don't need it.
+    if accounts.iter().any(|a| a.state == LaunchState::Set)
+        && accounts
+            .iter()
+            .all(|a| matches!(a.state, LaunchState::Set | LaunchState::NoApp))
+    {
         println!("{}", tr!("launch_already_set"));
         return Ok(());
     }
@@ -613,7 +618,7 @@ fn cmd_update(a: &Args) -> Result<(), String> {
         .as_ref()
         .is_some_and(|m| update::is_newer(&rel.version, &m.runtime_version));
     let patterns = match (&game, &manifest) {
-        (Some(g), Some(_)) => update::changed_patterns(&g.dir, &update::fetch_patterns(&rel)?),
+        (Some(g), Some(m)) => update::pattern_updates(&g.dir, m, &rel)?,
         _ => Vec::new(),
     };
 

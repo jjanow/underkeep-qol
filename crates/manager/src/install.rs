@@ -164,6 +164,8 @@ pub struct InstallOpts<'a> {
 pub struct InstallOutcome {
     pub updated: bool,
     pub backed_up: bool,
+    /// Pattern files from an earlier update, removed for the new loader.
+    pub patterns_removed: usize,
 }
 
 /// Installs (or updates) the loader in `game_dir`.
@@ -199,6 +201,22 @@ pub fn install(game_dir: &Path, opts: &InstallOpts) -> Result<InstallOutcome, St
         }
     }
     write_atomic(&game_dir.join(DLL), opts.dll)?;
+    // Pattern files from an earlier update replace the new loader's built-in
+    // patterns whole, so drop the ones still as installed.
+    let pattern_dir = format!("{DATA_DIR}/patterns/");
+    manifest.files.retain(|rel, want| {
+        if !rel.starts_with(&pattern_dir) || rel.contains("..") {
+            return true;
+        }
+        let p = game_dir.join(rel.as_str());
+        if p.is_file() && !sha256_file(&p).is_ok_and(|h| &h == want) {
+            return true; // changed by hand: keep it
+        }
+        let _ = std::fs::remove_file(&p);
+        outcome.patterns_removed += 1;
+        false
+    });
+    remove_if_empty(&game_dir.join(&pattern_dir));
     manifest.manager_version = env!("CARGO_PKG_VERSION").into();
     manifest.runtime_version = opts.runtime_version.clone();
     manifest.installed_at = now();
@@ -436,6 +454,17 @@ pub mod tests {
         // Update in place.
         let dll2 = fake_dll(2);
         assert!(install(g, &opts(&dll2, false)).unwrap().updated);
+
+        // A new loader drops pattern files installed for the old one, unless
+        // they were changed by hand.
+        install_pattern(g, "skip-logos", b"x = \"C3\"").unwrap();
+        install_pattern(g, "core", b"x = \"C3\"").unwrap();
+        std::fs::write(g.join(pattern_rel("core")), b"edited").unwrap();
+        let out = install(g, &opts(&fake_dll(3), false)).unwrap();
+        assert_eq!(out.patterns_removed, 1);
+        assert!(!g.join(pattern_rel("skip-logos")).exists());
+        assert!(g.join(pattern_rel("core")).exists());
+        std::fs::remove_file(g.join(pattern_rel("core"))).unwrap();
 
         // Runtime files, a pattern update, settings and a sidecar.
         install_pattern(g, "skip-logos", b"x = \"C3\"").unwrap();

@@ -72,7 +72,8 @@ Close the game first; the manager won't change files while it runs.
 **Linux (Proton)**
 
 1. Download `uk-qol-linux-x64.tar.gz`, unpack it and run `uk-qol`
-   (`./uk-qol gui` from a terminal).
+   (`./uk-qol gui` from a terminal). With the 1.0.0 download, make it
+   executable first: `chmod +x uk-qol`.
 2. Click **Install**.
 3. The game needs one Steam launch option, so Proton loads the mod loader:
    `WINEDLLOVERRIDES="winmm=n,b" %command%`. With Steam closed the manager
@@ -85,9 +86,11 @@ Close the game first; the manager won't change files while it runs.
 back to Gaming Mode and play. Open the mod menu with **L3+R3**.
 
 **macOS (CrossOver, Whisky, Wine)**: download `uk-qol-macos-arm64.tar.gz`,
-run `uk-qol`, choose the game folder inside the bottle and click
-**Install**. Then set a DLL override in the bottle (`winmm` = *native, then
-builtin*). Not tested yet.
+run `uk-qol` (with the 1.0.0 download, `chmod +x uk-qol` first), choose the game folder inside the bottle and click
+**Install**. Then set a DLL override in the bottle: open its Wine
+configuration (*winecfg*), and on the *Libraries* tab add `winmm` and set it
+to *Native then Builtin*. Without it the bottle uses Wine's own winmm and no
+mod loads. Checked in a Wine prefix with that override; not yet on a Mac.
 
 **By hand**: unzip `winmm.dll` from the runtime zip into the game folder
 (next to `underkeep.exe`), plus the launch option above on Linux. To remove
@@ -237,10 +240,10 @@ file, nothing else to install, dark and light mode.
 
 - Finds Steam installs on its own (Steam libraries, Flatpak, Proton, Wine
   bottles), or lets you pick the folder.
-- **Install / Uninstall** buttons. Before uninstalling, it warns that any
-  weapon still in a second weapon slot will be lost and tells the player to move
-  them to the inventory in game first. It doesn't move them itself. On Linux it shows the launch option to
-  paste, with a copy button, and checks whether it's set in Steam.
+- **Install / Uninstall** buttons. Emptying second weapon slots before an
+  uninstall is up to the player (see [`weapon-swap`](#weapon-swap)). On Linux
+  it shows the launch option to paste, with a copy button, and checks whether
+  it's set in Steam.
 - A mod list with on/off switches and each mod's settings.
 - A **compatibility** panel: your game build, and for each mod whether it works
   on it.
@@ -441,9 +444,9 @@ keeps a normal desktop window, but players have to know to pick it.
 - **Unknown builds.** On a game build no release has seen, each mod still
   tries its patterns, and turns on only if every one matches exactly once.
   A mod is never run on a "best guess" address.
-- **Pattern updates without a new release.** Pattern files are data. After a
-  game patch, the manager can download updated patterns, so most game
-  updates are fixed in minutes, without new code.
+- **Pattern updates without new code.** Pattern files are data. After a
+  game patch, most mods need only new patterns: a release with them is built
+  by CI and offered by the manager on its next start, with no code to write.
 - **Crash reports.** The game ships its own crash reporter. Crashes caused by
   a mod must not end up in front of the game's developers as game bugs, so the
   runtime notes in its log which mod was active, and `uk-qol report` makes a
@@ -516,7 +519,7 @@ When the game updates:
    update `patterns.toml`.
 3. Patterns are kept per build, so players still on an older build keep working.
 4. Publish a release with the new pattern files; installed managers offer
-   them on their next start (`uk-qol update`), without a new loader.
+   it on their next start (`uk-qol update`).
 
 Players follow a pinned "game updated" issue; the full process is in
 [CONTRIBUTING](CONTRIBUTING.md#when-the-game-updates-maintainers).

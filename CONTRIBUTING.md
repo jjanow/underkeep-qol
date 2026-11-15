@@ -319,8 +319,7 @@ remove = "old_record.unused"      # in a list, later items move up
 
 The goal is a pattern update within a day or two of a game patch, so
 players aren't left with a mod turned off for long. Most updates move code
-around without changing it, and need only new patterns: the manager offers
-these without a new loader.
+around without changing it, and need only new patterns, no code.
 
 1. **Open a pinned issue** as soon as the update is out (or the first
    game-update report arrives), titled `Game <version> (<date>): <mods>
@@ -336,9 +335,10 @@ these without a new loader.
 4. **Test in game** what each changed pattern does (the mod's own in-game
    checks in PLAN.md), on the new build.
 5. **Release**: bump the version in `Cargo.toml`, tag `v<version>`. CI
-   builds and publishes the loader, the managers and `uk-qol-patterns.zip`.
-   Pattern-only releases change only the patterns zip's contents; installed
-   managers offer just those.
+   builds and publishes the loader (with the new patterns built in), the
+   managers and `uk-qol-patterns.zip`. Installed managers offer the new
+   loader; the patterns zip is only for a loader of unknown version (one
+   installed with `--dll`).
 6. **Update the pinned issue** with the release and close it after a few
    days.
 

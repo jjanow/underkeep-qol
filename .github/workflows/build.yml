@@ -107,6 +107,8 @@ jobs:
           mkdir out
           (cd artifacts/uk-qol-runtime && zip -9 ../../out/uk-qol-runtime-windows-x64.zip winmm.dll)
           cp artifacts/uk-qol-manager-windows-x64/uk-qol.exe out/uk-qol-windows-x64.exe
+          # upload-artifact drops file modes: make the managers executable again.
+          chmod 755 artifacts/uk-qol-manager-linux-x64/uk-qol artifacts/uk-qol-manager-macos-arm64/uk-qol
           tar -C artifacts/uk-qol-manager-linux-x64 -czf out/uk-qol-linux-x64.tar.gz uk-qol
           tar -C artifacts/uk-qol-manager-macos-arm64 -czf out/uk-qol-macos-arm64.tar.gz uk-qol
           # Pattern files for updates without a new loader: <mod id>.toml,

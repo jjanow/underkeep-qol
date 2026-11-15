@@ -1102,7 +1102,7 @@ fn plan_update(game: Option<&GameInstall>) -> Result<Option<UpdatePlan>, String>
         .as_ref()
         .is_some_and(|m| update::is_newer(&rel.version, &m.runtime_version));
     let patterns = match (game, &manifest) {
-        (Some(g), Some(_)) => update::changed_patterns(&g.dir, &update::fetch_patterns(&rel)?),
+        (Some(g), Some(m)) => update::pattern_updates(&g.dir, m, &rel)?,
         _ => Vec::new(),
     };
     Ok(Some(UpdatePlan {

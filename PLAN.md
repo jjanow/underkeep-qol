@@ -61,7 +61,7 @@ Check items off as they land; add findings under the item they belong to.
     The log shows `uk-qol 0.1.0 loaded into S:\steamapps\common\Underkeep\underkeep.exe`.
     The launch option is set in `userdata/<account>/config/localconfig.vdf`
     (`LaunchOptions` in the app's block) while Steam is closed.
-- [ ] Confirm it loads on **Windows** with no extra setup.
+- [x] Confirm it loads on **Windows** with no extra setup.
   - 2026-11-14, the user's first Windows test: it loads and runs. Found:
     the HUD widgets covered the game's cursor, slot II looked flat, and a
     held drag into slot II bounced back (all fixed, see §6 weapon-swap).
@@ -94,6 +94,10 @@ Check items off as they land; add findings under the item they belong to.
     proxy in place; the overlay itself wasn't opened. The export list now
     covers mingw-w64's Windows list, but hasn't been checked against a real
     `System32\winmm.dll`.
+  - 2026-11-14, after the fixes above (824e396, built and run on the user's
+    Windows PC): the user reports Windows working fine. The two checks above
+    (overlay opened, export diff) weren't done separately; nothing in the
+    process failed to load.
 - [x] Confirm the game runs normally with the proxy and no mods: audio
       (fmod uses winmm), controller input, save/load, quit.
   - Proton, 2026-11-14: the game's audio stream plays (a 4 s capture of it
@@ -105,9 +109,9 @@ Check items off as they land; add findings under the item they belong to.
     (`save_1`, `save_auto`, `player_profile`); the game log says "Save
     location: Steam cloud". `game_log.txt` and `game_config.txt` are in the
     prefix's `Documents/Underkeep/`. The log is rewritten each launch.
-- [ ] Fallback if winmm fails anywhere: `version.dll` (also imported by
+- [x] Fallback if winmm fails anywhere: `version.dll` (also imported by
       SDL3). Record the result here.
-  - Not needed on Proton. Open until Windows is tested.
+  - Not needed: winmm works on Proton and Windows (2026-11-14).
 
 ## 2. Runtime core
 
@@ -585,6 +589,8 @@ In order of difficulty; each ships when done, with settings and tests.
       defaults, so `game_config.txt` leaves them out), the game log says
       `Changing display mode to emulated borderless fullscreen...`. Without
       the mod the same settings log `...to borderless fullscreen...`.
+    - Windows (user, 2026-11-14): the game runs with the mod on; HDR and
+      Alt+Tab weren't reported on. Needs an HDR display on Windows.
 
 ## 7. Manager
 
@@ -606,7 +612,7 @@ In order of difficulty; each ships when done, with settings and tests.
 
 ## 8. Release
 
-- [ ] Tagged release via CI: Windows, Linux, macOS manager builds +
+- [x] Tagged release via CI: Windows, Linux, macOS manager builds +
       runtime zip + checksums.
   - Manual run (`workflow_dispatch`, 2026-11-14, run 43648018936): check
     (fmt, both clippys, tests), runtime, Windows and Linux managers passed;
@@ -617,8 +623,36 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-14: version 1.0.0 (workspace and every `mod.toml`), tag `v1.0.0`
     pushed for the first release; Windows testing (§1, §6) is done from
     that build.
+  - 2026-11-14: release `v1.0.0` published (run 43656770879): both manager
+    tarballs, the Windows manager, the runtime and patterns zips,
+    `SHA256SUMS`.
+  - Found in the 1.0.0 downloads: the Linux and macOS managers come out of
+    their tarballs without the execute bit (`actions/upload-artifact` drops
+    file modes). The workflow now runs `chmod 755` before `tar`; the README
+    says to `chmod +x` the 1.0.0 download. Self-update was never affected
+    (`unpack` sets the mode).
 - [ ] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
+  - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
+    `detect`/`status` found the Flatpak install; a fresh `install` (no
+    loader in the folder) downloaded the runtime zip, checked it against
+    `SHA256SUMS` and wrote the release's `winmm.dll` byte for byte; the game
+    loaded it (`uk-qol 1.0.0`, every pattern found). `update` with
+    `UK_QOL_FAKE_VERSION=0.9.0`: refused while the game ran, then replaced
+    the manager (executable, same hash) and wrote pattern files. `uninstall`
+    removed everything it had added (`uk_qol/` gone). Without the loader,
+    save 001 (made with mods) loaded and played; the load list showed only
+    the game's saves.
+  - Found and fixed (main): the update wrote every mod's pattern file
+    next to a loader of the same release. A pattern file replaces a mod's
+    built-in patterns whole, so after a later loader update these would
+    shadow its newer patterns. Pattern files now go only to a loader of
+    unknown version (`--dll` installs); every release's loader carries its
+    patterns, and `install()` drops pattern files left by an earlier update
+    (unless edited by hand). Also: `install` no longer asks to paste the
+    launch option when it's set and the only other Steam account never ran
+    the game.
+  - Windows: the user's tests (§1). Steam Deck: not tested (no device).
 - [x] README: replace "planned" with real install steps and screenshots.
   - 2026-11-14: *Installing* section (Windows, Linux, Deck, macOS, by hand,
     update, uninstall, safe mode), checked against the manager's labels.
@@ -634,7 +668,14 @@ In order of difficulty; each ships when done, with settings and tests.
   - CONTRIBUTING, "When the game updates (maintainers)": a day or two,
     steps, and the pinned-issue text; the issue is opened at the first
     game update.
-- [ ] macOS: no native runtime (decided 2026-11-14). The game runs in a
+- [x] macOS: no native runtime (decided 2026-11-14). The game runs in a
       CrossOver/Whisky/Wine bottle, which loads the Windows `winmm.dll`; ship
       that plus the existing arm64 manager. Document the bottle's
       `winmm=n,b` override in README and try it once in a bottle.
+  - 2026-11-14: README says how to set it (winecfg, *Libraries*, `winmm`,
+    *Native then Builtin*). Tried in a fresh Wine 10 prefix (no Mac here)
+    with a MinGW exe importing winmm next to the proxy: without the override
+    Wine's builtin winmm is used and nothing loads; with the registry
+    override (`HKCU\Software\Wine\DllOverrides`, `winmm` = `native,builtin`,
+    what a bottle's winecfg writes) the proxy loads and forwards. Not tried:
+    a real CrossOver/Whisky bottle on a Mac, the arm64 manager.

@@ -278,6 +278,21 @@ pub fn fetch_patterns(rel: &Release) -> Result<BTreeMap<String, Vec<u8>>, String
         .collect())
 }
 
+/// Pattern files to install from `rel`. A loader of a known version is
+/// either the release's own (its patterns are built in) or gets replaced by
+/// it in the same update, so pattern files only go to a loader whose version
+/// isn't known.
+pub fn pattern_updates(
+    game_dir: &Path,
+    manifest: &crate::install::InstallManifest,
+    rel: &Release,
+) -> Result<Vec<(String, Vec<u8>)>, String> {
+    if parse_version(&manifest.runtime_version).is_some() {
+        return Ok(Vec::new());
+    }
+    Ok(changed_patterns(game_dir, &fetch_patterns(rel)?))
+}
+
 /// Pattern files that differ from what's installed in `game_dir`.
 pub fn changed_patterns(
     game_dir: &Path,
@@ -476,6 +491,21 @@ mod tests {
         assert!(files.contains_key("skip-logos.toml"));
         assert!(verify(&buf, &crate::install::sha256_hex(&buf)).is_ok());
         assert!(verify(&buf, &"0".repeat(64)).is_err());
+    }
+
+    #[test]
+    fn no_pattern_files_for_a_known_loader() {
+        let game = crate::install::tests::fake_game();
+        let m = crate::install::InstallManifest {
+            runtime_version: "1.0.0".into(),
+            ..Default::default()
+        };
+        // Returns before downloading anything.
+        assert!(
+            pattern_updates(game.path(), &m, &sample())
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
