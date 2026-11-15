@@ -3,11 +3,13 @@
 //!
 //! Positions are in the game's GUI space (one unit is one pixel of the
 //! game's art), from the sheet's own equipment slot rects, so the slot
-//! follows the sheet at every window size. It is drawn in the style of the
-//! game's empty slots: a dark square with a shadowed top-left edge and a
-//! lighter bottom-right one. Its icon is the game's own empty-weapon-slot
-//! sword (read from the player's install at run time; no game art in the
-//! repo) with a Roman numeral "II" drawn by the mod in the same palette.
+//! follows the sheet at every window size. It is drawn with the game's own
+//! art, read from the player's install at run time (no game art in the
+//! repo): the helmet slot's stone cut out of the sheet's slot sprite, the
+//! game's allow / deny / selected highlights and its empty-weapon-slot
+//! sword, plus a Roman numeral "II" drawn by the mod in the same palette.
+//! If the stone can't be read, a flat square in the slots' colours with a
+//! shadowed top-left edge and a lighter bottom-right one stands in.
 
 use uk_qol_runtime::egui::{self, Color32, Pos2, Rect, Vec2};
 use uk_qol_runtime::hud;

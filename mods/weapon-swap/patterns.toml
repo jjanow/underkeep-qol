@@ -103,8 +103,9 @@ rip = { disp = 2, len = 10 }
 
 # The UI mode (6 = character sheet open) and the current-UI-context
 # pointer (`cursor`: the game's immediate-mode UI state, set by the UI
-# pass's begin and nulled by its end, so null whenever the mod runs; the
-# functions above read it). Hero::EquipItem: `cmp [ui_mode], 6; jne;
+# pass's begin and nulled by its end, so null when the mod's queue runs;
+# the functions above read it, and the mod points it at `ui_context` for
+# each call, then puts it back). Hero::EquipItem: `cmp [ui_mode], 6; jne;
 # mov rax, [cursor]`.
 [ui_mode]
 pattern = "0F 87 ?? ?? ?? ?? 83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8B 05 ?? ?? ?? ?? F3 0F 10 18 F3 0F 10 60 04"

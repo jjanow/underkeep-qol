@@ -62,6 +62,10 @@ Check items off as they land; add findings under the item they belong to.
     The launch option is set in `userdata/<account>/config/localconfig.vdf`
     (`LaunchOptions` in the app's block) while Steam is closed.
 - [ ] Confirm it loads on **Windows** with no extra setup.
+  - 2026-11-14, the user's first Windows test: it loads and runs. Found:
+    the HUD widgets covered the game's cursor, slot II looked flat, and a
+    held drag into slot II bounced back (all fixed, see §6 weapon-swap).
+    Retest with the next build.
   - Every module in the process that imports winmm binds to the proxy
     (Steam overlay, Discord, GPU driver DLLs, MangoHud). Check the Steam
     overlay still works, and diff our export list against a real
@@ -488,6 +492,27 @@ In order of difficulty; each ships when done, with settings and tests.
     the inventory), Shift+1: greatsword in hand, shield to the inventory;
     Shift+1: sword in hand, shield back on. Right-click emptied the slot.
     Item counts conserved in every action.
+  - 2026-11-14, after the user's Windows test (real mouse): three fixes.
+    - The slot's background is now the game's stone, cut out of
+      `hud_barbie_equip_slots` (the helmet's cell, x 39..77, y 0..37, stone
+      top-left on the rect's), and the highlights are the game's
+      `hud_barbie_slot_allow` / `_deny` / `_selected`; the flat drawing is
+      the fallback if the sprite is missing or changes size.
+    - Held drags: the game's drag source (style 1) turns a press into a
+      carry only when the button comes up over the pressed item; released
+      elsewhere it cancels (`drag_end`), so a held drag moves nothing in the
+      game either. While phase is 1 the context holds the pressed widget's
+      id at +0x68 (HUD hand slot: `0x1c + 2 * hero, 0`; inventory: `panel,
+      UI object id`), but no payload. The slot remembers the pressed item
+      (inventory: `drag_item` with the payload filled in for the call, then
+      restored; sheet weapon / two-hander's shield slot: by the pointer's
+      position when the press is first seen) and drops it in when the
+      phase goes from 1 to 0 with the pointer over the slot. In game (test
+      build with pushed SDL events): Oris's two-handed sling held from the
+      sheet's weapon slot onto slot II: green frame while held, in the slot
+      on release, counts conserved. Not tried: held drags from the
+      inventory or the HUD hand slot.
+    - The cursor covering: see the HUD widgets item (`ui_layers_draw`).
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).

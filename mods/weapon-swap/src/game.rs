@@ -62,8 +62,10 @@ const ACTION_HERO: usize = 0x08;
 
 /// The game's immediate-mode UI context (mouse, drag state). The `cursor`
 /// global points at it only during the game's UI pass and is null
-/// outside it (where the mod runs: between frames, and in the overlay);
-/// the context itself is in the `ui_context` global. +0x58 drag phase: 0
+/// outside it (where the mod's queue runs, between frames; the HUD
+/// widgets draw inside the game's frame, where it may be set or not);
+/// the context itself is in the `ui_context` global, which is what the
+/// mod reads and points `cursor` at for its calls (`in_ui`). +0x58 drag phase: 0
 /// none, 1 pressed on a draggable, 2 carried; +0x5c drag style: 1 for
 /// items (click picks up, the next click drops); +0x60 what is carried: 0
 /// a hero's equipment slot (+0x7c slot, +0x80 hero), 1 a party inventory

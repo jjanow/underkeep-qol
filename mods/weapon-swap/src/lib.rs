@@ -20,11 +20,14 @@
 //!   goes on normally). It needs the hero to be able to act and the
 //!   monsters not to be moving. Outside combat it's free.
 //! - The character sheet shows the slot left of the helmet slot (an overlay
-//!   widget placed from the sheet's own slot rects, drawn like the game's
-//!   empty slots with the game's own weapon-slot sword and a "II" mark:
+//!   widget placed from the sheet's own slot rects, drawn with the game's
+//!   own slot stone, highlights and weapon-slot sword and a "II" mark:
 //!   `slot`). It works like the game's slots, which pick an item up with a
 //!   click and drop it with the next: clicking it with a weapon on the
-//!   cursor (from the inventory or a hand) puts the weapon in; clicking it while it holds a weapon picks that
+//!   cursor (from the inventory or a hand) puts the weapon in, and so does
+//!   a held drag released over it (the game itself cancels those: it picks
+//!   an item up only when the button comes up over that item, so the mod
+//!   remembers what the button went down on); clicking it while it holds a weapon picks that
 //!   up (the mod's own pick-up: the weapon isn't in the game), and the next
 //!   click drops it on the inventory panel or the weapon slot (a swap);
 //!   anywhere else puts it back. A right click moves it to the inventory.

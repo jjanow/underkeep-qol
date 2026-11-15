@@ -321,15 +321,18 @@ How it works now (1.0.0; tested in game 1.0.5 with a gamepad, mouse and
 keyboard):
 
 - On the character sheet the slot sits left of the helmet slot, drawn like
-  the game's empty weapon slot (its own sword icon, read from your game
-  files) with a Roman numeral **II** in the corner (setting `sheet_slot`).
-  Click it with a weapon on the cursor (picked up from the inventory or a
-  hand) to put it in; a weapon already there goes to the inventory. Click
+  the game's empty weapon slot (its stone, highlights and sword icon, read
+  from your game files) with a Roman numeral **II** in the corner (setting
+  `sheet_slot`). Click it with a weapon on the cursor (picked up from the
+  inventory or a hand) to put it in, or hold the button on a weapon and
+  let go over the slot; a weapon already there goes to the inventory. Click
   the filled slot to pick its weapon up, then click the inventory panel
   (moves it there) or the weapon slot (swaps); a click anywhere else puts
   it back. A right click moves it straight to the inventory. The slot shows
-  the stored weapon's initials (no item icons) and turns green or red while
-  an item that fits or doesn't is on the cursor.
+  the stored weapon's initials (no item icons) and is framed green, or
+  veiled red, while an item that fits or doesn't is on the cursor. The
+  game's cursor and the item it carries draw over the mod's widgets, as
+  over the game's own.
 - With a gamepad (no mouse cursor) the same is in the mod's section of the
   overlay menu: per hero, **Put the weapon in hand in the slot**, **Put
   *item* in the slot** (for each weapon in the inventory), **Swap now** and
