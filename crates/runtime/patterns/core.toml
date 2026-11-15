@@ -75,3 +75,33 @@ rip = { disp = 2, len = 6 }
 [g_interaction_mode]
 pattern = "83 3D ?? ?? ?? ?? 06 0F 85 ?? ?? ?? ?? 48 8D 0D ?? ?? ??"
 rip = { disp = 2, len = 7 }
+
+# ---- Overlay (runtime::overlay) ----
+
+# UiContext_DrawLayers(UiContext*): submits the game UI's three layers to
+# the render device: panels (+0x638), popups (+0x6d8), and the top layer
+# (+0x778: the item being dragged), the last as a tail jump to the device's
+# list submission. Called while the frame is drawn offscreen, before it's
+# copied to the window and the game draws its software cursor
+# (`cursor1`..`cursor3`). The overlay draws the mods' HUD widgets right
+# before the top layer, so the carried item and the cursor stay on top
+# (runtime::overlay::layer reads the top layer's offset and the submit
+# target from this code).
+[ui_layers_draw]
+pattern = "40 53 48 83 EC 20 80 B9 ?? ?? ?? ?? 00 48 8B D9 74 ?? 48 8B 81 ?? ?? ?? ?? C6 00 00 48 8B 81 ?? ?? ?? ?? C6 00 00 48 8B 81 ?? ?? ?? ?? C6 00 00 C6 81 ?? ?? ?? ?? 00 48 8B 91 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 93 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 48 8B 93 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ?? 48 83 C4 20 5B E9"
+
+# The game's `cursor` setting (0..2: sprites cursor1..cursor3, 3: the
+# system cursor): a cvar index and the cvar table (0x80 bytes per cvar,
+# the value at +0x70). From the cursor pass, which picks the sprite:
+# `movsxd rax, [cursor1 id]; movsxd rdx, [cvar]; shl rdx, 7; ...;
+# mov rcx, [cvars]; mov r8d, [rdx+rcx+0x70]`. Only used when
+# ui_layers_draw is missing, to redraw the right cursor over HUD widgets.
+[g_cursor_cvar]
+pattern = "48 63 05 ?? ?? ?? ?? 48 63 15 ?? ?? ?? ?? 48 C1 E2 07 48 89 9C 24 ?? ?? ?? ?? 48 8D 0C 80 49 8B 1C CF 48 8B 0D ?? ?? ?? ?? 44 8B 44 0A 70 45 85 C0"
+offset = 7
+rip = { disp = 3, len = 7 }
+
+[g_cvars]
+pattern = "48 63 05 ?? ?? ?? ?? 48 63 15 ?? ?? ?? ?? 48 C1 E2 07 48 89 9C 24 ?? ?? ?? ?? 48 8D 0C 80 49 8B 1C CF 48 8B 0D ?? ?? ?? ?? 44 8B 44 0A 70 45 85 C0"
+offset = 34
+rip = { disp = 3, len = 7 }

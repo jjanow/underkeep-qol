@@ -103,6 +103,10 @@ static WINDOW: AtomicUsize = AtomicUsize::new(0);
 static SWALLOWED: AtomicU64 = AtomicU64::new(0);
 /// Set once the overlay has been shut down after a failure.
 static FORCED_CLOSED: AtomicBool = AtomicBool::new(false);
+/// The HUD was drawn inside this frame (see [`hud_in_frame`]).
+static HUD_IN_FRAME: AtomicBool = AtomicBool::new(false);
+/// The in-frame target has been logged.
+static LOGGED_TARGET: AtomicBool = AtomicBool::new(false);
 /// Last logged game text-input state (0 unknown, 1 off, 2 on).
 static GAME_TEXT: AtomicU8 = AtomicU8::new(0);
 
@@ -504,10 +508,48 @@ fn frame(window: Window) {
             }
         }
         g.hud_was_on = hud;
-        if open || hud || crate::toast::any() {
-            draw(api, window, g, open, hud);
+        // The HUD and toasts were drawn inside the frame already (under the
+        // game's cursor); this frame's egui pass is done.
+        let in_frame = HUD_IN_FRAME.swap(false, Ordering::Relaxed);
+        if open || (!in_frame && (hud || crate::toast::any())) {
+            draw(api, window, g, open, hud, false);
         }
         super::capture::maybe(&g.gl, pw, ph);
+    });
+}
+
+/// Called right before the game submits its top UI layer (see `layer`):
+/// draws the mods' HUD widgets and toasts into the game's frame, so the
+/// item on the cursor and the cursor itself are drawn over them. Only with
+/// the menu closed and the HUD up; otherwise everything waits for swap time.
+pub(super) fn hud_in_frame() {
+    guard::call_or(GUARD_ID, in_frame, force_close);
+}
+
+fn in_frame() {
+    if OPEN.load(Ordering::Relaxed) || HUD_IN_FRAME.load(Ordering::Relaxed) {
+        return;
+    }
+    let Some(api) = API.get() else { return };
+    let window = WINDOW.load(Ordering::Relaxed) as Window;
+    if window.is_null() {
+        return;
+    }
+    // SAFETY: called by the game while it draws, with its context current.
+    let context = unsafe { (api.gl_get_current_context)() } as usize;
+    GFX.with_borrow_mut(|slot| {
+        // Set up at swap time (first frame, new context); until then the
+        // HUD draws there.
+        let Some(g) = slot.as_mut().filter(|g| g.context == context) else {
+            return;
+        };
+        // Same rule as at swap time (where `hud_was_on` is kept).
+        if !g.hud_was_on || !hud_wanted() {
+            return;
+        }
+        if draw(api, window, g, false, true, true) {
+            HUD_IN_FRAME.store(true, Ordering::Relaxed);
+        }
     });
 }
 
@@ -531,7 +573,11 @@ fn hud_layer() -> egui::LayerId {
 /// Draws the menu (if `open`), the mods' HUD widgets (if `hud`) and any
 /// toasts. Only the menu changes text-input or cursor state; the HUD gets
 /// mouse input through the router's hit test.
-fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
+///
+/// `in_frame`: called inside the game's frame (see [`hud_in_frame`]), so
+/// it draws into the framebuffer the game has bound, at its viewport's
+/// size; else into the window. Returns whether it drew.
+fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool, in_frame: bool) -> bool {
     let (mut w, mut h, mut pw, mut ph) = (0, 0, 0, 0);
     // SAFETY: the game's window.
     unsafe {
@@ -539,14 +585,33 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
         (api.get_window_size_in_pixels)(window, &mut pw, &mut ph);
     }
     if w <= 0 || h <= 0 || pw <= 0 || ph <= 0 {
-        return;
+        return false;
     }
     let ppp = pixels_per_point(ph);
     let to_points = (pw as f32 / w as f32) / ppp;
     let now = START.get_or_init(Instant::now).elapsed().as_secs_f64();
 
     // SAFETY: the context is current; the scope restores everything it changes.
-    let saved = unsafe { Saved::save(&g.gl, g.caps) };
+    let saved = unsafe { Saved::save(&g.gl, g.caps, in_frame) };
+    // The target's size in pixels, and egui's scale for it: the window's
+    // points (where input and the HUD layout live) mapped onto it.
+    let (tw, th) = if in_frame {
+        let [x, y, vw, vh] = saved.viewport();
+        if !LOGGED_TARGET.swap(true, Ordering::Relaxed) {
+            crate::log(&format!(
+                "overlay: drawing the HUD inside the game's frame (framebuffer {}, viewport {x},{y} {vw}x{vh}, window {pw}x{ph})",
+                saved.draw_fb()
+            ));
+        }
+        if x != 0 || y != 0 || vw <= 0 || vh <= 0 {
+            // Not a whole-target viewport: leave it to swap time.
+            return false;
+        }
+        (vw, vh)
+    } else {
+        (pw, ph)
+    };
+    let ppp_target = ppp * tw as f32 / pw as f32;
     if g.painter.is_none() {
         match egui_glow::Painter::new(g.gl.clone(), "", None, false) {
             Ok(p) => g.painter = Some(p),
@@ -555,7 +620,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
                 crate::log(&format!("overlay: can't create the renderer: {e}"));
                 guard::fail(GUARD_ID, format!("renderer: {e}"));
                 force_close();
-                return;
+                return false;
             }
         }
     }
@@ -575,7 +640,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
     let mut raw = egui::RawInput {
         screen_rect: Some(egui::Rect::from_min_size(
             egui::Pos2::ZERO,
-            egui::vec2(pw as f32 / ppp, ph as f32 / ppp),
+            egui::vec2(tw as f32 / ppp_target, th as f32 / ppp_target),
         )),
         max_texture_side: Some(painter.max_texture_side()),
         time: Some(now),
@@ -586,9 +651,17 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
     raw.viewports
         .entry(egui::ViewportId::ROOT)
         .or_default()
-        .native_pixels_per_point = Some(ppp);
+        .native_pixels_per_point = Some(ppp_target);
     let host = host();
     let mut close = false;
+    // Without the in-frame hook the HUD covers the game's cursor; draw a
+    // copy of it on top while it's over a HUD widget.
+    let redraw_cursor = hud && !in_frame && {
+        // SAFETY: plain SDL query on the render thread.
+        let system = unsafe { (api.cursor_visible)() };
+        !system
+    };
+    let hits = st.router.hud_hits.clone();
     let out = g.egui.run_ui(raw, |ui| {
         if open {
             close = ui::menu(ui.ctx(), host.as_deref(), &mut st.router, &mut g.ui);
@@ -612,6 +685,9 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
                 });
         }
         crate::toast::draw(ui.ctx());
+        if redraw_cursor {
+            paint_game_cursor(ui.ctx(), &hits);
+        }
     });
     if hud {
         // What the router lets the HUD have next: the widgets that take
@@ -653,10 +729,41 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool) {
         .egui
         .tessellate(std::mem::take(&mut out.shapes), out.pixels_per_point);
     painter.paint_and_update_textures(
-        [pw as u32, ph as u32],
+        [tw as u32, th as u32],
         out.pixels_per_point,
         &prims,
         &mut out.textures_delta,
     );
     drop(saved);
+    true
+}
+
+/// Fallback when the HUD draws at swap time, over the game's software
+/// cursor: draws the game's cursor sprite (read from the install) at the
+/// pointer, at the HUD's GUI scale and with its pivot, while the pointer
+/// is over one of `hits` (the HUD widgets).
+fn paint_game_cursor(ctx: &egui::Context, hits: &[egui::Rect]) {
+    let Some(p) = ctx.input(|i| i.pointer.latest_pos()) else {
+        return;
+    };
+    if !hits.iter().any(|r| r.contains(p)) {
+        return;
+    }
+    let Some(name) = super::layer::cursor_sprite() else {
+        return;
+    };
+    let (Some((tex, size)), Some(sprite)) =
+        (crate::sprite::texture(ctx, name), crate::sprite::get(name))
+    else {
+        return;
+    };
+    let ppu = crate::hud::points_per_unit();
+    let min = p - egui::vec2(sprite.pivot[0], sprite.pivot[1]) * ppu;
+    let rect = egui::Rect::from_min_size(min, size * ppu);
+    let uv = egui::Rect::from_min_max(egui::Pos2::ZERO, egui::pos2(1.0, 1.0));
+    ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Debug,
+        egui::Id::unique("uk_qol_game_cursor"),
+    ))
+    .image(tex.id(), rect, uv, egui::Color32::WHITE);
 }
