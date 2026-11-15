@@ -44,7 +44,6 @@ mod slot;
 mod state;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use uk_qol_runtime::egui;
 use uk_qol_runtime::host::{FrameCtx, LoadCtx, Mod, ModSaveState};
@@ -58,15 +57,10 @@ use state::{HEROES, Loaded, Parked, State, StoredItem};
 
 const ID: &str = "weapon-swap";
 
-/// Shown before first use, in the README and by the manager.
-pub const NOTICE: &str = "A weapon in a second weapon slot is kept by the mod, not by the game.
-If you remove the mod, reinstall the game, play the save on another computer,
-or the mod's file next to your save is lost, that weapon is gone for good.
-Before uninstalling, move every second-slot weapon back to your inventory.";
-
-/// File in `uk_qol/` that records the notice was acknowledged (once per
-/// install: uninstalling removes the folder).
-const ACK_FILE: &str = "weapon-swap.notice-acknowledged";
+/// The slot's tooltip line about losing its weapon (the full warning is in
+/// the README).
+const LOSS_HINT: &str = "Kept by the mod, not the game: move it to the inventory before \
+                         uninstalling.";
 
 const HERO_KEYS: [&str; HEROES] = ["swap_hero_1", "swap_hero_2", "swap_hero_3", "swap_hero_4"];
 const SELECTED_KEY: &str = "swap_selected";
@@ -164,7 +158,6 @@ struct Inner {
     state: State,
     queue: Vec<Action>,
     costs_turn: bool,
-    acknowledged: bool,
     messages: Vec<String>,
     /// For the menu: whether the last loaded sidecar didn't match its save.
     mismatch: bool,
@@ -200,10 +193,6 @@ pub struct WeaponSwap {
 
 fn log(msg: &str) {
     uk_qol_runtime::log(&format!("{ID}: {msg}"));
-}
-
-fn ack_path() -> Option<PathBuf> {
-    uk_qol_runtime::data_dir().map(|d| d.join(ACK_FILE))
 }
 
 fn costs_turn(settings: &toml::Table) -> bool {
@@ -300,7 +289,6 @@ impl Inner {
                 self.swap(i, r)
             }
             Action::StoreEquipped(i) => {
-                self.need_ack()?;
                 self.need_empty(*i)?;
                 let s = self.game.store_equipped(*i)?;
                 let msg = format!(
@@ -312,7 +300,6 @@ impl Inner {
                 Ok(msg)
             }
             Action::StoreFromInventory(i, ptr, def) => {
-                self.need_ack()?;
                 self.need_empty(*i)?;
                 let s = self.game.store_from_inventory(*ptr as game::Item, def)?;
                 let msg = format!(
@@ -375,7 +362,6 @@ impl Inner {
         src: (i32, i32),
         r: &Readiness,
     ) -> Result<String, String> {
-        self.need_ack()?;
         if h >= HEROES || !self.game.hero_valid(h) {
             return Err("no hero there".into());
         }
@@ -416,14 +402,6 @@ impl Inner {
         Ok(msg)
     }
 
-    fn need_ack(&self) -> Result<(), String> {
-        if self.acknowledged {
-            Ok(())
-        } else {
-            Err("read and acknowledge the second-slot warning in the mod menu first".into())
-        }
-    }
-
     fn need_empty(&self, i: usize) -> Result<(), String> {
         if !self.game.hero_valid(i) {
             return Err("no hero there".into());
@@ -438,7 +416,6 @@ impl Inner {
 
     fn swap(&mut self, i: usize, r: &Readiness) -> Result<String, String> {
         // A swap puts the weapon in hand into the slot.
-        self.need_ack()?;
         if i >= HEROES || !self.game.hero_valid(i) {
             return Err("no hero there".into());
         }
@@ -532,7 +509,6 @@ impl Mod for WeaponSwap {
                     .ok_or_else(|| format!("pattern {n} not resolved"))
             })
         }?;
-        let acknowledged = ack_path().is_some_and(|p| p.exists());
         // Turning the mod off and on again keeps the slots of this session,
         // unless the party changed meanwhile (e.g. another save was loaded
         // while the mod was off, which it isn't told about): then they
@@ -553,7 +529,6 @@ impl Mod for WeaponSwap {
             state,
             queue: Vec::new(),
             costs_turn: costs_turn(cx.settings),
-            acknowledged,
             messages: Vec::new(),
             mismatch: parked_on_load,
             refocus: None,
@@ -678,7 +653,7 @@ impl Mod for WeaponSwap {
 
     fn has_hud(&self) -> bool {
         self.inner.as_ref().is_some_and(|i| {
-            (i.hud_button && i.acknowledged && i.state.heroes.iter().any(|h| h.stored.is_some()))
+            (i.hud_button && i.state.heroes.iter().any(|h| h.stored.is_some()))
                 || (i.sheet_slot && i.game.playing() && i.game.ui_mode() == UI_SHEET)
         })
     }
@@ -689,7 +664,7 @@ impl Mod for WeaponSwap {
         if !inner.game.playing() {
             return;
         }
-        if inner.hud_button && inner.acknowledged {
+        if inner.hud_button {
             hand_buttons(inner, ui, &t);
         }
         sheet_slot(inner, ui, &t);
@@ -888,12 +863,13 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
         (_, Some(false)) => "Weapon slot II: only weapons fit.".into(),
         (Some(s), _) => format!(
             "Weapon slot II: {}. Click to pick it up, then click the inventory or the weapon \
-             slot (swap). Right-click: move it to the inventory.",
+             slot (swap). Right-click: move it to the inventory.\n{LOSS_HINT}",
             item_label(s)
         ),
-        (None, _) => {
-            "Weapon slot II: put a spare weapon here (click it with a weapon on the cursor).".into()
-        }
+        (None, _) => format!(
+            "Weapon slot II: put a spare weapon here (click it with a weapon on the cursor).\n\
+             {LOSS_HINT}"
+        ),
     });
 
     if r.clicked() {
@@ -1031,23 +1007,6 @@ const WARN: egui::Color32 = egui::Color32::from_rgb(230, 180, 80);
 
 fn menu(inner: &mut Inner, ui: &mut egui::Ui) {
     ui.add_space(6.0);
-    if !inner.acknowledged {
-        ui.colored_label(WARN, NOTICE);
-        if ui.button("I understand").clicked() {
-            let ok = ack_path().is_some_and(|p| std::fs::write(&p, "acknowledged\n").is_ok());
-            if !ok {
-                log("couldn't write the acknowledgement file; asking again next time");
-            }
-            inner.acknowledged = true;
-            inner.refocus = Some(FOCUS_FIRST);
-        }
-        return;
-    }
-    egui::CollapsingHeader::new("About the second weapon slot (read before uninstalling)")
-        .id_salt("ws-notice")
-        .show(ui, |ui| {
-            ui.colored_label(WARN, NOTICE);
-        });
     for m in &inner.messages {
         ui.weak(m);
     }
@@ -1186,12 +1145,6 @@ mod tests {
         assert_eq!(pats.patterns.len(), 19);
     }
 
-    #[test]
-    fn notice_matches_readme() {
-        let readme = include_str!("../../../README.md");
-        assert!(readme.contains(NOTICE), "README's player notice changed");
-    }
-
     /// Resolves every pattern against the game's exe when it's installed
     /// (skipped otherwise) and checks the addresses found in 1.0.5.
     #[test]
@@ -1201,8 +1154,8 @@ mod tests {
         let Some(home) = std::env::var_os("HOME") else {
             return;
         };
-        let exe =
-            PathBuf::from(home).join(".local/share/Steam/steamapps/common/Underkeep/underkeep.exe");
+        let exe = std::path::PathBuf::from(home)
+            .join(".local/share/Steam/steamapps/common/Underkeep/underkeep.exe");
         let Ok(file) = std::fs::read(&exe) else {
             return;
         };

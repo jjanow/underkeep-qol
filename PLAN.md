@@ -77,6 +77,15 @@ Check items off as they land; add findings under the item they belong to.
     `uk_qol.log` from a build with these lines, the drag source and style
     (click-click or held), whether slot II turns green, and the display
     scale and window mode.
+  - 2026-11-14, debugged on the user's Windows PC (3dd841a built there with
+    the GNU toolchain + WinLibs MinGW; first native Windows build, imports
+    unchanged): the drops reached the slot and were **refused because the
+    second-slot notice wasn't acknowledged** (`uk_qol/` was fresh, so no
+    `weapon-swap.notice-acknowledged`; the Proton install had one). The
+    slot showed green and the refusal was a long, brief toast, so it looked
+    like a bounce. The gate is gone (the user's decision: the warning lives
+    in the README and slot II's tooltip only). Geometry was right
+    (2560x1440, scale 4, presses on the sheet's weapon slot and on slot II).
   - Every module in the process that imports winmm binds to the proxy
     (Steam overlay, Discord, GPU driver DLLs, MangoHud). Check the Steam
     overlay still works, and diff our export list against a real
@@ -473,12 +482,11 @@ In order of difficulty; each ships when done, with settings and tests.
     slot, showing the stored weapon's initials; click swaps (`hud_button`,
     default on). Seen in game (a sling stored for Kabam: "Sl"); its click
     wasn't pushed (the same path as the other mods' buttons).
-- [x] Ranged-slot loss warning: in README, as a first-use notice in game
-      (acknowledged once per install, reopenable from the overlay) and in
-      the manager before uninstall. The player handles emptying slots.
-  - The notice is the mod section's first content until acknowledged
-    (`uk_qol/weapon-swap.notice-acknowledged`); putting a weapon into a
-    slot or swapping is refused until then.
+- [x] Slot II loss warning: in the README, plus a one-line reminder in
+      slot II's tooltip. The player handles emptying slots.
+  - 2026-11-14: the first-use notice that had to be acknowledged before the
+    slot worked, the menu's notice and the manager's pre-uninstall text are
+    removed (the user's decision: README and tooltip only, no blocker).
 - [x] `weapon-swap`: turn the ranged slot into a second weapon slot that
       takes any weapon (decided 2026-11-14), so the swap covers sword and
       shield ↔ two-hander and melee ↔ melee as well as melee ↔ ranged. Drop
@@ -535,7 +543,8 @@ In order of difficulty; each ships when done, with settings and tests.
     conserved. Only a press and release within a frame or two bounced back
     (the press is never seen; no human drag is that fast). The HUD hand
     slot takes no clicks while the sheet is open (game behaviour), so it
-    can't be a drag source there. Waiting on the user's log (§1).
+    can't be a drag source there. Cause found on Windows: the unacknowledged
+    notice gate (§1), now removed.
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).

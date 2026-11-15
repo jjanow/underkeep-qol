@@ -366,8 +366,8 @@ keyboard):
   them with a **Move to inventory** button, warning that they may already
   be in the party.
 
-**What players are told** (in the README, on the mod's first use in game,
-and in the manager before uninstalling):
+**What players are told** (here; slot II's tooltip has a one-line
+reminder):
 
 ```
 A weapon in a second weapon slot is kept by the mod, not by the game.
@@ -375,9 +375,6 @@ If you remove the mod, reinstall the game, play the save on another computer,
 or the mod's file next to your save is lost, that weapon is gone for good.
 Before uninstalling, move every second-slot weapon back to your inventory.
 ```
-
-The first-use notice must be acknowledged once per install; it can be
-reopened from the overlay.
 
 ### `extra-skill-slots`
 

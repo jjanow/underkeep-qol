@@ -533,7 +533,6 @@ fn cmd_uninstall(a: &Args) -> Result<(), String> {
     if manifest.is_none() && install::dll_state(&g.dir, None) == DllState::Missing {
         return Err(tr!("err_not_installed"));
     }
-    println!("{}\n", tr!("weapon_warning"));
     if !a.has("--yes") && !confirm(&tr!("confirm_uninstall", g.dir.display())) {
         return Err(tr!("err_not_confirmed"));
     }

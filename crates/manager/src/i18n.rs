@@ -279,13 +279,6 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ),
     ("done_set", "{}: {} = {}"),
     ("done_reset", "{}: {} is back to its default"),
-    (
-        "weapon_warning",
-        "A weapon in a second weapon slot is kept by the mod, not by the game.
-If you remove the mod, reinstall the game, play the save on another computer,
-or the mod's file next to your save is lost, that weapon is gone for good.
-Before uninstalling, move every second-slot weapon back to your inventory.",
-    ),
     ("confirm_uninstall", "Remove Underkeep QoL from {}?"),
     ("removed", "removed {}"),
     (

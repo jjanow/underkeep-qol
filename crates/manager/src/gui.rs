@@ -987,8 +987,6 @@ impl App {
             ui.set_max_width(520.0);
             ui.heading(tr!("gui_uninstall_title"));
             ui.add_space(6.0);
-            ui.label(RichText::new(tr!("weapon_warning")).color(WARN_AMBER));
-            ui.add_space(6.0);
             ui.label(tr!("gui_uninstall_keeps"));
             ui.checkbox(&mut self.purge, tr!("gui_purge"));
             ui.add_space(6.0);
