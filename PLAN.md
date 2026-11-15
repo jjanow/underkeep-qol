@@ -135,6 +135,10 @@ Check items off as they land; add findings under the item they belong to.
   - `runtime::hook` (`HookSet`): detours through a relay within ±2 GB, with
     a 14-byte absolute jump as fallback; byte patches restore the originals.
     A hook overwritten by another tool is left in place on disable.
+  - Code writes are serialized (2026-11-14, first native Windows build):
+    two writers on one page raced on `VirtualProtect`, one restoring
+    read-execute mid-store of the other, and parallel `cargo test` died with
+    0xc0000005 in about half the runs. 10/10 parallel runs pass since.
 - [x] Panic and SEH containment around every hook and callback; failing
       mod is disabled for the session.
   - `runtime::guard`: Rust panics are contained (`call`, `call_or` falls

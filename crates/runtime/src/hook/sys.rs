@@ -138,6 +138,10 @@ mod win {
     /// aligned qword is a single atomic store, so another thread executing
     /// there sees the old or the new bytes, never a mix.
     ///
+    /// Writes are serialized: two writers on one page would otherwise race
+    /// on its protection, the first restoring read-execute while the second
+    /// is still storing, and the second faults.
+    ///
     /// # Safety
     /// `addr..addr+bytes.len()` must be mapped and safe to change.
     pub(in crate::hook) unsafe fn write(addr: usize, bytes: &[u8]) -> Result<(), HookError> {
@@ -145,6 +149,7 @@ mod win {
         if len == 0 {
             return Ok(());
         }
+        let _serial = WRITE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         let mut old = 0u32;
         // SAFETY: the caller guarantees the range is mapped.
         unsafe {
@@ -181,6 +186,9 @@ mod win {
         }
         Ok(())
     }
+
+    /// Held across protect, store and restore in `write`.
+    static WRITE_LOCK: Mutex<()> = Mutex::new(());
 
     struct Slab {
         base: usize,
