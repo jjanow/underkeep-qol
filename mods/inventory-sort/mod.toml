@@ -1,6 +1,6 @@
 id = "inventory-sort"
 name = "Inventory sort"
-version = "0.1.0"
+version = "1.0.0"
 author = "underkeep-qol"
 description = "Sorts the party inventory with one key press or the Sort button on the inventory panel."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).

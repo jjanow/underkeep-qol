@@ -526,14 +526,16 @@ In order of difficulty; each ships when done, with settings and tests.
     the DLL's imports are system DLLs only, the CI-built Linux manager runs
     (`update --check`: no release yet). The macOS job failed at once:
     `macos-14` images are retired; now `macos-15`, and the rerun (run
-    43648802829) passed every job. The `release` job (tags only) hasn't
-    run yet.
+    43648802829) passed every job.
+  - 2026-11-14: version 1.0.0 (workspace and every `mod.toml`), tag `v1.0.0`
+    pushed for the first release; Windows testing (§1, §6) is done from
+    that build.
 - [ ] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
-- [ ] README: replace "planned" with real install steps and screenshots.
+- [x] README: replace "planned" with real install steps and screenshots.
   - 2026-11-14: *Installing* section (Windows, Linux, Deck, macOS, by hand,
     update, uninstall, safe mode), checked against the manager's labels.
-    Drop "(none published yet)" at the release.
+    "(none published yet)" dropped for 1.0.0.
   - 2026-11-14: *Screenshots* section with `docs/screenshots/` (HUD widgets,
     slot II on the character sheet, the F10 menu, the manager). In-game
     shots are cropped and credited; the user decided they are the one

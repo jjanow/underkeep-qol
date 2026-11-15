@@ -54,11 +54,11 @@ publishers, used here only to show what the mods do.
 
 ## Installing
 
-Downloads are on the [releases page](https://github.com/jjanow/underkeep-qol/releases)
-(none published yet). Each release has the manager for Windows, Linux and
-macOS, the loader (`uk-qol-runtime-windows-x64.zip`, one `winmm.dll`) and
-`SHA256SUMS`. You only need the manager: it downloads the matching loader
-itself, or uses a `winmm.dll` placed next to it.
+Downloads are on the [releases page](https://github.com/jjanow/underkeep-qol/releases).
+Each release has the manager for Windows, Linux and macOS, the loader
+(`uk-qol-runtime-windows-x64.zip`, one `winmm.dll`) and `SHA256SUMS`. You
+only need the manager: it downloads the matching loader itself, or uses a
+`winmm.dll` placed next to it.
 
 Close the game first; the manager won't change files while it runs.
 
@@ -317,7 +317,7 @@ rebindable.
 - The game's save format has no room for this slot, so the weapon in it is
   stored in the save's sidecar file (see *Save safety*), not in the save.
 
-How it works now (0.1.0; tested in game 1.0.5 with a gamepad, mouse and
+How it works now (1.0.0; tested in game 1.0.5 with a gamepad, mouse and
 keyboard):
 
 - On the character sheet the slot sits left of the helmet slot, drawn like
