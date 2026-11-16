@@ -1,0 +1,17 @@
+id = "melee-accuracy"
+name = "Melee accuracy"
+version = "1.0.5"
+author = "underkeep-qol"
+description = "Melee attacks get a hit chance bonus from the weapon's stat, as ranged attacks do from Dexterity: Strength, or Dexterity for weapons that scale with it. Off by default: it changes the game's balance."
+# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+enabled = false
+
+[[settings]]
+key = "per_point"
+type = "int"
+default = 2
+min = 0
+max = 10
+label = "Hit chance per point"
+description = "Melee hit chance added per point of the weapon's stat (Strength, or Dexterity for weapons that scale with it; Strength when unarmed). 2: a hero with 6 Strength gets +12. Never lowers the game's chance."

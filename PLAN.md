@@ -638,6 +638,26 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-15: released in 1.0.2 (tag `v1.0.2`). The shader anchor (one
     statement of the game's GLSL, kept verbatim in the mod as its search
     string) was approved by the user.
+- [x] `melee-accuracy` (asked 2026-11-16): melee hit chance gets
+      `max(0, stat x per_point)` (default 2), the stat being the one the
+      attack's damage scales on (DEX for `uses_dexterity` items, else STR,
+      also unarmed). Off by default (balance change).
+  - The rules (1.0.5): melee hit = `100 + Hero+0x160 - Monster+0x134 -
+    Monster+0x130` in the hero melee attack 0x14012f830; ranged uses
+    `Hero+0x164`, which `RecalcStats` (0x14017a8b0) fills with DEX x 10 +
+    bonuses. Only that function, ranged (0x140133160), thrown (0x140132230)
+    and `SkillAddStatusEffectToEnemy` (0x140182910, a status chance)
+    subtract monster evasion, so weapon skills share the melee roll.
+  - How: detour of the melee attack (7 arguments); for the call it raises
+    `Hero+0x160` by the bonus and puts it back unless `RecalcStats` rebuilt
+    it meanwhile; party heroes only, no nesting. The mod checks the hit
+    computation sits at attack+0x134, so a changed formula turns it off.
+  - [x] Proton, 2026-11-16, game 1.0.5, rats in Fangroot Forest: a STR 13
+    Warrior with a sword got +26, a DEX 5 Voidcaller with a dagger +10, a
+    STR 6 Wizard's staff swing +12; the Ranger's sling shot didn't go
+    through the hook; the Warrior's next attack started from the game's 0
+    again.
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -686,6 +706,8 @@ In order of difficulty; each ships when done, with settings and tests.
     buttons turn red while their skill is on cooldown (a player's request).
   - 2026-11-15: version 1.0.4, tag `v1.0.4`: weapon-swap takes quest
     weapons (a player couldn't put J'Axe in the slot).
+  - 2026-11-16: version 1.0.5, tag `v1.0.5`: the new `melee-accuracy`
+    mod (off by default).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

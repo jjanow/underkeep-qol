@@ -1,0 +1,25 @@
+# Patterns for melee-accuracy. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.5 (Steam) VAs.
+
+# A hero's melee attack, 0x14012f830: (Result* out, Hero* hero,
+# Monster* target, Item* weapon, 3 more on the stack) -> out. Called by the
+# hero attack routine (0x1401313a0, plain attacks and weapon skills; it
+# passes the weapon or, for a second hit, another item). Rolls the hit,
+# then the damage through 0x140185680, which scales on effective STR
+# (Hero+0x10c) unless the weapon has uses_dexterity (Item+0x124), then on
+# DEX (Hero+0x110). Found from the evasion fields it subtracts
+# (Monster+0x130 evasion, +0x134 melee evasion); the only other functions
+# that do are the ranged attack (0x140133160, uses Hero+0x164 = DEX x 10 +
+# bonuses), thrown items (0x140132230, ignores hero stats) and
+# Hero::SkillAddStatusEffectToEnemy (a status chance, not a hit roll).
+[melee_attack]
+pattern = "48 89 5C 24 08 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 00 F7 FF FF 48 81 EC 00 0A 00 00 0F 29 B4 24 F0 09 00 00"
+
+# The hit chance inside it, 0x14012f964 (= melee_attack + 0x134):
+# `mov r10d, [rbx+0x160]` (the hero's melee hit bonus); `sub r10d,
+# [r8+0x134]; sub r10d, [r8+0x130]` (the target's melee and plain
+# evasion); `add r10d, 100`. Not hooked: the mod checks that it sits at
+# the expected place in melee_attack, so a game patch that changes the
+# formula turns the mod off instead of stacking on a different rule.
+[melee_hit_chance]
+pattern = "44 8B 93 60 01 00 00 45 2B 90 34 01 00 00 45 2B 90 30 01 00 00 41 83 C2 64"

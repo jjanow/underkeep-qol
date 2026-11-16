@@ -12,10 +12,11 @@ members = [
     "mods/extra-skill-slots",
     "mods/borderless-compat",
     "mods/item-highlight",
+    "mods/melee-accuracy",
 ]
 
 [workspace.package]
-version = "1.0.4"
+version = "1.0.5"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/jjanow/underkeep-qol"
@@ -30,6 +31,7 @@ uk-qol-mod-inventory-sort = { path = "mods/inventory-sort" }
 uk-qol-mod-extra-skill-slots = { path = "mods/extra-skill-slots" }
 uk-qol-mod-borderless-compat = { path = "mods/borderless-compat" }
 uk-qol-mod-item-highlight = { path = "mods/item-highlight" }
+uk-qol-mod-melee-accuracy = { path = "mods/melee-accuracy" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs

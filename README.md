@@ -15,10 +15,10 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.4](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.5](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
-only on Linux with Proton so far. Steam Deck and macOS bottles are
+only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5). Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -33,6 +33,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
 | `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
+| `melee-accuracy` | Melee hit chance grows with Strength (or Dexterity for weapons that scale with it), as ranged hit chance does with Dexterity. **Off by default**: it changes the game's balance. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -476,6 +477,32 @@ colors them, bright green by default, in the dungeon view.
   compiled: things are then tinted with the game's plain white glow until
   the next start.
 
+### `melee-accuracy`
+
+In the game, a ranged hit chance is **DEX × 10** + ranged hit bonuses −
+the enemy's evasion, but a melee hit chance is a flat **100** + melee hit
+bonuses − evasion: no stat counts. This mod adds the weapon's stat to melee.
+
+- Melee hit chance = **100 + stat × 2** + melee hit bonuses − evasion −
+  melee evasion. The stat is the one the game scales the attack's damage
+  on: **Strength**, or **Dexterity** for weapons that scale with it
+  (Scimitar, Embersand Saber, daggers); Strength when unarmed. A 6 STR
+  Warrior gets +12, a 5 DEX Thief with a dagger +10.
+- It only ever adds: the game's own chance is the floor (a stat lowered
+  below 0 by a mutation adds nothing).
+- Covers plain melee attacks and weapon skills, which use the same roll.
+  Ranged attacks, thrown items and spells are unchanged; so are enemies'
+  attacks.
+- Setting: **hit chance per point** (0 to 10, default 2).
+- **Off by default**, because it changes the game's balance: turn it on in
+  the overlay or the manager.
+- The bonus isn't shown on the character sheet (the game doesn't show a
+  melee hit chance there either); the runtime log has one line per attack
+  with the stat and bonus used.
+- How: the mod detours the game's hero melee attack and raises the hero's
+  melee hit bonus for that one call, putting it back afterwards. Nothing in
+  the game's files or saves changes.
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -513,7 +540,7 @@ crates/
   manager/      Manager app and uk-qol CLI
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
-  borderless-compat/  item-highlight/
+  borderless-compat/  item-highlight/  melee-accuracy/
 ```
 
 ## Building

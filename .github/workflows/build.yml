@@ -32,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-mingw-w64-x86-64
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo clippy --target x86_64-pc-windows-gnu -p uk-qol-proxy -p uk-qol-runtime -p uk-qol-dft -p uk-qol-mod-bloodmage-cost -p uk-qol-mod-skip-logos -p uk-qol-mod-weapon-swap -p uk-qol-mod-inventory-sort -p uk-qol-mod-extra-skill-slots -p uk-qol-mod-borderless-compat -p uk-qol-mod-item-highlight -p uk-qol-manager --all-targets -- -D warnings
+      - run: cargo clippy --target x86_64-pc-windows-gnu -p uk-qol-proxy -p uk-qol-runtime -p uk-qol-dft -p uk-qol-mod-bloodmage-cost -p uk-qol-mod-skip-logos -p uk-qol-mod-weapon-swap -p uk-qol-mod-inventory-sort -p uk-qol-mod-extra-skill-slots -p uk-qol-mod-borderless-compat -p uk-qol-mod-item-highlight -p uk-qol-mod-melee-accuracy -p uk-qol-manager --all-targets -- -D warnings
       - run: cargo test --workspace
 
   runtime:
