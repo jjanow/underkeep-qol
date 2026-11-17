@@ -623,6 +623,22 @@ In order of difficulty; each ships when done, with settings and tests.
     no count; its tooltip prints the def's cooldown as a bare number, so the
     unit of what's left wasn't settled and no count is shown. Static RE
     only; not yet seen in game.
+  - 2026-11-17 (player request): hovering a button with a skill shows the
+    game's own skill tooltip (`tooltip.rs`), in the place the game's skill
+    slot shows it, with two lines added: which slot and the clicks, and
+    "On cooldown." while it is. The HUD skill slot (0x14021dd40, once per
+    hero per frame, before the tooltip pass) builds its text with
+    0x140246580 (out, hero, skill state, 1 class / 3 item skill, 1) and
+    arms it at (dung_view.x - GuiLayout+0x40c - 6, dung_view.y). The mod
+    detours that slot function and does the same for the hovered extra
+    slot's hero (weapon-swap already holds the tooltip pass). All new
+    patterns optional; without them the buttons keep their own text.
+    Empty slots and skills the hero lost keep the mod's text. The added
+    lines are English only. Proton, game 1.0.5: a class skill (Lay on
+    Hands) showed the game's tooltip beside the dungeon view, where the
+    game's own slot shows it; 10 hover cycles between the extra slot and
+    the game's slot, no errors, nothing left behind. Not tried: an item
+    skill, a slot on cooldown, Windows.
 - [x] `borderless-compat`: borderless fullscreen always takes the game's
       Compatibility ("emulated borderless") path; one on/off setting, on
       by default, nothing saved.
@@ -807,6 +823,8 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-17: version 1.0.9, tag `v1.0.9`: weapon-swap's `messages`
     setting (`all` / `problems` / `none`) for its popups; a player's
     request (the swap report covered the character sheet).
+  - 2026-11-17: version 1.0.10, tag `v1.0.10`: extra-skill-slots' buttons
+    show the game's own skill tooltip (a player's request).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

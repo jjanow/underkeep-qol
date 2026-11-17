@@ -15,14 +15,15 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.9](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.10](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
-(new in 1.0.8); weapon-swap's `messages` setting (new in 1.0.9) hasn't been
-tried in game yet. Steam Deck and macOS bottles are
+(new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10);
+weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
+yet. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -417,7 +418,8 @@ adds 3 more (configurable 1–5).
 
 - New slots appear as small buttons in a column right of the hero's skill
   slot on the HUD, drawn by the overlay at the game's own layout positions
-  and labelled with the skill's initials (the full name on hover). The
+  and labelled with the skill's initials (the game's skill tooltip on
+  hover). The
   game's layout can't take new slots (its code reads a fixed set of rects).
 - Each new slot gets its own key binding (unbound by default, set in the
   overlay) for the selected hero, and its button casts it for that hero on a
@@ -430,7 +432,13 @@ adds 3 more (configurable 1–5).
   yet!").
 - A button turns red while its skill is on cooldown, and grey if the hero
   no longer has the skill, so you can see every option before you act. The
-  hover text and the menu list say "on cooldown" too.
+  menu list says "on cooldown" too.
+- Hovering a button with a skill shows the game's own skill tooltip (the
+  one its skill slot shows, in the same place), with a line under it about
+  the slot and its clicks, and "On cooldown." while it is. Empty slots and
+  skills the hero no longer has show the mod's short hover text. If the
+  game's tooltip can't be found (a game update), every button falls back
+  to that short text. The added lines are in English.
 - The buttons show text labels, not the game's skill icons (setting
   `hud_buttons` turns them off).
 

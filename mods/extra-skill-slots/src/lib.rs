@@ -25,9 +25,11 @@
 //! of the hero's skill slot, labelled with the skill's initials: left-click
 //! casts it for that hero (as its key does for the selected hero),
 //! right-click (or left-click on an empty slot) assigns it with the game's
-//! skill panel.
+//! skill panel. Hovering a button with a skill shows the game's own skill
+//! tooltip, with a line about the slot added ([`tooltip`]).
 
 mod game;
+mod tooltip;
 
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::sync::Mutex;
@@ -493,7 +495,23 @@ impl ExtraSkillSlots {
                 } else {
                     fill
                 };
-                let r = hud::button(ui, t.rect_to_points(cell), &text, fill).on_hover_text(tip);
+                // A skill the hero has gets the game's own tooltip (with
+                // the slot's line under it); the rest keep the mod's text.
+                let game_tip = tooltip::active()
+                    .then_some(current.as_ref())
+                    .flatten()
+                    // SAFETY: as above.
+                    .filter(|s| unsafe { game::resolve(h, s) }.is_some());
+                let r = hud::button(ui, t.rect_to_points(cell), &text, fill);
+                let r = match game_tip {
+                    Some(s) => {
+                        if r.hovered() {
+                            tooltip::want(hero, slot, s);
+                        }
+                        r
+                    }
+                    None => r.on_hover_text(tip),
+                };
                 if r.secondary_clicked() || (r.clicked() && current.is_none()) {
                     self.start_panel_pick(key.clone(), hero, slot);
                 } else if r.clicked() {
@@ -676,6 +694,9 @@ impl Mod for ExtraSkillSlots {
         }
         .map_err(|e| e.to_string())?;
         ORIG_ROUND_ACTION.store(tramp, Ordering::Relaxed);
+        // SAFETY: the resolved addresses of the tooltip patterns.
+        unsafe { tooltip::install(cx.hooks, |n| at(n).ok()) };
+        tooltip::set_game(Some(g));
         self.apply_settings(cx.settings);
         let mut sh = shared();
         sh.game = Some(g);
@@ -707,6 +728,7 @@ impl Mod for ExtraSkillSlots {
         }
         sh.game = None;
         sh.pending.clear();
+        tooltip::set_game(None);
         self.presses.clear();
         self.picker = None;
     }
@@ -747,6 +769,7 @@ impl Mod for ExtraSkillSlots {
         // The load rewrote the heroes.
         sh.targeting = None;
         self.picker = None;
+        tooltip::clear();
     }
 
     fn menu(&mut self, ui: &mut egui::Ui) {
@@ -945,7 +968,49 @@ mod tests {
             assert!(manifest.setting(k).is_some(), "{k}");
         }
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 11);
+        assert_eq!(pats.patterns.len(), 17);
+    }
+
+    /// Resolves every pattern against the game's exe when it's installed
+    /// (skipped otherwise) and checks the tooltip addresses found in 1.0.5.
+    #[test]
+    fn patterns_resolve_on_installed_game() {
+        use uk_qol_runtime::host::resolve_pattern;
+        use uk_qol_runtime::pattern::Image;
+        let Some(home) = std::env::var_os("HOME") else {
+            return;
+        };
+        let exe = std::path::PathBuf::from(home)
+            .join(".local/share/Steam/steamapps/common/Underkeep/underkeep.exe");
+        let Ok(file) = std::fs::read(&exe) else {
+            return;
+        };
+        let mapped = uk_qol_runtime::pe::map_file(&file).unwrap();
+        let img = Image::new(&mapped).unwrap();
+        let build = uk_qol_runtime::build::detect_from_file(&exe)
+            .unwrap()
+            .sha256_hex();
+        if build != "d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4" {
+            return; // another game version
+        }
+        let expected: BTreeMap<&str, u32> = [
+            ("hud_skill_slot", 0x21dd40),
+            ("tooltip_show", 0x167270),
+            ("skill_tooltip", 0x246580),
+            ("g_skill_tooltip_width", 0x43ce7c),
+            ("string_concat", 0x27de0),
+            ("string_free", 0x3000),
+        ]
+        .into_iter()
+        .collect();
+        let pats = PatternFile::parse(include_str!("../patterns.toml")).unwrap();
+        for p in &pats.patterns {
+            let r = resolve_pattern(&img, p, Some(&build))
+                .unwrap_or_else(|e| panic!("{}: {e}", p.name));
+            if let Some(want) = expected.get(p.name.as_str()) {
+                assert_eq!(r.rva, *want, "{}", p.name);
+            }
+        }
     }
 
     #[test]

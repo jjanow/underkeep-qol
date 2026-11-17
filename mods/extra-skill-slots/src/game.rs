@@ -419,6 +419,26 @@ pub unsafe fn cooldown(h: usize, p: u64) -> i32 {
     }
 }
 
+/// What the game's skill tooltip builder takes for a selected-skill pair:
+/// the skill state and the tooltip kind (1 = class skill, 3 = item skill),
+/// as the HUD skill slot passes them. `None` if the hero doesn't have it.
+///
+/// # Safety
+/// `h` must point at a valid hero; game thread only.
+pub unsafe fn tooltip_args(h: usize, p: u64) -> Option<(usize, i32)> {
+    let (index, equip_slot) = (p as u32 as i32, (p >> 32) as u32 as i32);
+    // SAFETY: as in `assignable_skills`.
+    unsafe {
+        let (arr, n) = skill_states(h);
+        if (0..n).contains(&index) {
+            let state = arr + index as usize * SKILL_STATE_SIZE;
+            return (rd::<usize>(state) != 0).then_some((state, 1));
+        }
+        let item = skill_item(h, equip_slot)?;
+        Some((item + ITEM_SKILL_STATE, 3))
+    }
+}
+
 /// "skill_fire_spark" -> "Fire spark": a readable name when the game's text
 /// isn't available.
 pub fn pretty(name: &str) -> String {

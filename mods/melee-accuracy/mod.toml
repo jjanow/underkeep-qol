@@ -1,6 +1,6 @@
 id = "melee-accuracy"
 name = "Melee accuracy"
-version = "1.0.9"
+version = "1.0.10"
 author = "underkeep-qol"
 description = "Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat (default), a ranged-style formula from Strength and Dexterity, or your own formula. Off by default: it changes the game's balance."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).

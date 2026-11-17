@@ -79,3 +79,53 @@ pattern = "48 8D 4D F0 E8 ?? ?? ?? ?? 48 8D 4D F0 C7 45 F0 1A 00 00 00 89 75 00 
 offset = 32
 call = true
 optional = true
+
+# --- The game's skill tooltip on the extra slots' buttons (`tooltip`; all
+# optional: without them the buttons keep their own hover text) -----------
+
+# The HUD skill slot of one hero, 0x14021dd40 (1.0.5): (?, ?, int hero).
+# Called once per hero per frame by the portrait HUD (0x14021b1a0, from the
+# inventory panel), before the tooltip pass; while its slot is hovered it
+# arms the game's skill tooltip. The first two arguments are left over from
+# the call before (unused). Found from the HUD's skill slot rects
+# (face_hand_slot_2, 4, ...).
+[hud_skill_slot]
+pattern = "4C 8B DC 55 53 56 57 41 55 49 8D AB E8 F9 FF FF 48 81 EC F0 06 00 00"
+optional = true
+
+# Arms the tooltip for this frame, 0x140167270: (const String* text,
+# const float pos[2], bool delay). As in weapon-swap.
+[tooltip_show]
+pattern = "48 89 5C 24 08 57 48 83 EC 20 F3 0F 10 02 48 8B D9 48 8B 0D ?? ?? ?? ?? 41 0F B6 F8 F3 0F 11 05"
+optional = true
+
+# Skill tooltip text, 0x140246580: (String* out, Hero* hero, SkillState*
+# state, int kind, bool) -> out; kind 1 = class skill (the hero's skill
+# state), 3 = item skill (the item's state at Item+0xd8); the HUD slot
+# passes 1 for the bool. Called from the HUD skill slot:
+# `mov byte [rsp+0x20], 1; mov rdx, rbx; call skill_tooltip; movss xmm0,
+# [width]`.
+[skill_tooltip]
+pattern = "C6 44 24 20 01 48 8B D3 E8 ?? ?? ?? ?? F3 0F 10 05"
+offset = 8
+call = true
+optional = true
+
+# The width the HUD slot keeps between its skill tooltip and the dungeon
+# view (float, GuiLayout+0x40c, 0x14043ce7c): the tooltip goes at
+# (dung_view.x - width - 6, dung_view.y). Same site as skill_tooltip.
+[g_skill_tooltip_width]
+pattern = "C6 44 24 20 01 48 8B D3 E8 ?? ?? ?? ?? F3 0F 10 05"
+offset = 13
+rip = { disp = 4, len = 8 }
+optional = true
+
+# String_Concat(String* out, const String* a, const String* b) -> out,
+# 0x140027de0 (as in weapon-swap and learned-recipes).
+[string_concat]
+pattern = "4C 89 44 24 18 41 54 41 55 41 56 41 57 48 83 EC 28 4C 63 62 10 4C 8B EA"
+optional = true
+
+# String_Free(String*), 0x140003000 (as in weapon-swap).
+[string_free]
+pattern = "40 53 48 83 EC 20 48 8B D9 48 8B 09 48 85 C9 74 1B B8 FF FF FF FF F0 0F C1 01 83 F8 01 75 0D 48 8B 0B 48 85 C9 74 05 E8 ?? ?? ?? ?? 33 C9 48 8D 05 ?? ?? ?? ?? 48 89 0B 48 89 43 08 89 4B 10 48 83 C4 20 5B C3 CC CC CC CC CC CC CC CC CC CC CC 48 83 EC 38"
