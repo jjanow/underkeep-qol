@@ -1,6 +1,6 @@
 id = "skip-logos"
 name = "Skip logos"
-version = "1.0.5"
+version = "1.0.6"
 author = "underkeep-qol"
 description = "Starts the game on the main menu without the startup logos."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).

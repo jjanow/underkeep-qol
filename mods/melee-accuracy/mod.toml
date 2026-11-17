@@ -1,11 +1,19 @@
 id = "melee-accuracy"
 name = "Melee accuracy"
-version = "1.0.5"
+version = "1.0.6"
 author = "underkeep-qol"
-description = "Melee attacks get a hit chance bonus from the weapon's stat, as ranged attacks do from Dexterity: Strength, or Dexterity for weapons that scale with it. Off by default: it changes the game's balance."
+description = "Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat (default), a ranged-style formula from Strength and Dexterity, or your own formula. Off by default: it changes the game's balance."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
 game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
 enabled = false
+
+[[settings]]
+key = "formula"
+type = "enum"
+choices = ["stat_bonus", "ranged_mirror", "custom"]
+default = "stat_bonus"
+label = "Formula"
+description = "The melee hit chance before melee hit bonuses and evasion (the game's is a flat 100). stat_bonus: 100 + the weapon's stat x hit chance per point, never below the game's. ranged_mirror: (STR + DEX + 5) / 2 x 10, like ranged's DEX x 10: 15 points give the game's 100, fewer give less; plus the Righteous Strike bonus. custom: your own formula, below."
 
 [[settings]]
 key = "per_point"
@@ -13,5 +21,21 @@ type = "int"
 default = 2
 min = 0
 max = 10
-label = "Hit chance per point"
+label = "Hit chance per point (stat_bonus)"
 description = "Melee hit chance added per point of the weapon's stat (Strength, or Dexterity for weapons that scale with it; Strength when unarmed). 2: a hero with 6 Strength gets +12. Never lowers the game's chance."
+
+[[settings]]
+key = "righteous_strike"
+type = "int"
+default = 10
+min = 0
+max = 50
+label = "Righteous Strike hit bonus (ranged_mirror)"
+description = "Flat melee hit chance added to an attack Righteous Strike empowers, at every rank, so Paladins aren't left behind by a formula that wants STR and DEX. 0 turns it off."
+
+[[settings]]
+key = "custom_formula"
+type = "string"
+default = "(STR + DEX + 5) / 2 * 10 + RS * 10"
+label = "Custom formula (custom)"
+description = "The base melee hit chance that replaces the game's 100. Numbers, + - * / (or x), parentheses, min(a, b, ...), max(a, b, ...). Variables: STR, DEX, END, WIS (the hero's current stats), WSTAT (the weapon's stat: DEX for weapons that scale with it, else STR), RS (1 on an attack Righteous Strike empowers, else 0). Rounded at the end. Example: max(100, 50 + STR * 8). A formula with an error leaves melee to the game until fixed."

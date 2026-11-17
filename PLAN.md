@@ -658,6 +658,28 @@ In order of difficulty; each ships when done, with settings and tests.
     through the hook; the Warrior's next attack started from the game's 0
     again.
   - [ ] Windows.
+- [ ] `melee-accuracy` formulas (a player's request, 2026-11-17): setting
+      `formula` picks the base chance that replaces the game's 100;
+      the mod adds `base - 100` to `Hero+0x160` (now possibly negative).
+  - `stat_bonus` (default, the 1.0.5 rule): `100 + max(0, WSTAT x
+    per_point)`. `ranged_mirror` (the player's): `(STR + DEX + 5) / 2 x 10
+    + RS x righteous_strike` (default 10, flat at every rank, the player's
+    suggestion for Paladins). `custom`: `custom_formula`, a string parsed
+    by `src/formula.rs` (+ - * / x, parentheses, min, max; STR DEX END WIS
+    WSTAT RS; f64, rounded at the end). A parse error turns the effect off
+    with a toast and a log line; a non-finite result leaves that attack to
+    the game.
+  - Effective END/WIS are `Hero+0x114`/`+0x118` (`RecalcStats` copies them
+    beside STR `+0x10c` and DEX `+0x110`).
+  - RS = `Hero+0x20a != 0 && a6 == 0`: the melee attack's own condition for
+    Righteous Strike's damage (a6 = the weapon skill, null on a plain
+    attack); the hero attack routine 0x1401313a0 clears the flag after the
+    attack. The cast sets it for skill effect 0x18 when the class is 1 or 3
+    (Paladin, or Archer?); unchecked which Archer skill, if any, uses it.
+  - [ ] Proton: `ranged_mirror` on forest rats (a hero with STR + DEX < 15
+    gets a negative change), a broken custom formula shows the toast. No
+    Paladin in the test party, so RS is untested in game.
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -708,6 +730,8 @@ In order of difficulty; each ships when done, with settings and tests.
     weapons (a player couldn't put J'Axe in the slot).
   - 2026-11-16: version 1.0.5, tag `v1.0.5`: the new `melee-accuracy`
     mod (off by default).
+  - 2026-11-17: version 1.0.6, tag `v1.0.6`: `melee-accuracy` formula
+    choices (`stat_bonus`, `ranged_mirror`, `custom`), a player's request.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

@@ -15,10 +15,11 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.5](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.6](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
-only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5). Steam Deck and macOS bottles are
+only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
+formula choices, new in 1.0.6, haven't been tried in game yet). Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -33,7 +34,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
 | `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
-| `melee-accuracy` | Melee hit chance grows with Strength (or Dexterity for weapons that scale with it), as ranged hit chance does with Dexterity. **Off by default**: it changes the game's balance. |
+| `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -481,27 +482,58 @@ colors them, bright green by default, in the dungeon view.
 
 In the game, a ranged hit chance is **DEX × 10** + ranged hit bonuses −
 the enemy's evasion, but a melee hit chance is a flat **100** + melee hit
-bonuses − evasion: no stat counts. This mod adds the weapon's stat to melee.
+bonuses − evasion: no stat counts. This mod replaces that 100 with a
+formula of the hero's stats; melee hit bonuses and evasion still apply as
+in the game. Setting **formula** picks one:
 
-- Melee hit chance = **100 + stat × 2** + melee hit bonuses − evasion −
-  melee evasion. The stat is the one the game scales the attack's damage
-  on: **Strength**, or **Dexterity** for weapons that scale with it
-  (Scimitar, Embersand Saber, daggers); Strength when unarmed. A 6 STR
-  Warrior gets +12, a 5 DEX Thief with a dagger +10.
-- It only ever adds: the game's own chance is the floor (a stat lowered
-  below 0 by a mutation adds nothing).
+- **`stat_bonus`** (default): **100 + stat × 2**. The stat is the one the
+  game scales the attack's damage on: **Strength**, or **Dexterity** for
+  weapons that scale with it (Scimitar, Embersand Saber, daggers);
+  Strength when unarmed. A 6 STR Warrior gets +12, a 5 DEX Thief with a
+  dagger +10. It only ever adds: the game's own chance is the floor (a stat
+  lowered below 0 by a mutation adds nothing). Setting: **hit chance per
+  point** (0 to 10, default 2).
+- **`ranged_mirror`**: **(STR + DEX + 5) / 2 × 10**, the ranged rule with
+  the average of Strength and Dexterity, so Thieves aren't left out.
+  15 points of STR + DEX give the game's 100, 14 give 95, 20 give 125:
+  **heroes with less than 15 hit less often than in the game.** An attack
+  that Righteous Strike empowers gets a flat **+10** on top, at every rank,
+  so Paladins, who also want END and WIS, keep up. Setting: **Righteous
+  Strike hit bonus** (0 to 50, default 10).
+- **`custom`**: your own formula, in setting **custom formula**. It gives
+  the base chance that replaces the 100. You can use numbers, `+ - * /`
+  (`x` works for times), parentheses, `min(a, b, …)`, `max(a, b, …)` and
+  these variables:
+  - `STR`, `DEX`, `END`, `WIS`: the hero's current stats, gear and
+    mutations included;
+  - `WSTAT`: the weapon's stat (DEX for weapons that scale with it, else
+    STR);
+  - `RS`: 1 on an attack Righteous Strike empowers, else 0.
+
+  The result is rounded at the end, so `/ 2` doesn't lose half points.
+  Examples:
+  - `100 + max(0, WSTAT * 2)` is `stat_bonus`;
+  - `(STR + DEX + 5) / 2 * 10 + RS * 10` is `ranged_mirror`;
+  - `max(100, 50 + STR * 8)` never goes below the game's chance.
+
+  A formula with a mistake leaves melee to the game until it is fixed: a
+  message says what is wrong, and so does the runtime log. A formula that
+  divides by zero for some hero leaves that attack to the game.
+
+Righteous Strike counts for the plain attack it empowers, as in the game,
+not for weapon skills.
+
 - Covers plain melee attacks and weapon skills, which use the same roll.
   Ranged attacks, thrown items and spells are unchanged; so are enemies'
   attacks.
-- Setting: **hit chance per point** (0 to 10, default 2).
 - **Off by default**, because it changes the game's balance: turn it on in
   the overlay or the manager.
-- The bonus isn't shown on the character sheet (the game doesn't show a
+- The chance isn't shown on the character sheet (the game doesn't show a
   melee hit chance there either); the runtime log has one line per attack
-  with the stat and bonus used.
-- How: the mod detours the game's hero melee attack and raises the hero's
-  melee hit bonus for that one call, putting it back afterwards. Nothing in
-  the game's files or saves changes.
+  with the stats and the base chance used.
+- How: the mod detours the game's hero melee attack and changes the hero's
+  melee hit bonus by (formula − 100) for that one call, putting it back
+  afterwards. Nothing in the game's files or saves changes.
 
 ## Reliability (for a public release)
 

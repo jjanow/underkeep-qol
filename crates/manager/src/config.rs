@@ -361,6 +361,11 @@ default = 1.0
 min = 0.5
 max = 2.0
 label = "Speed"
+[[settings]]
+key = "formula"
+type = "string"
+default = "100"
+label = "Formula"
 "#,
             "m",
         )
@@ -374,6 +379,12 @@ label = "Speed"
         assert!(coerce(s("hotkey"), "Hyper+S").is_err());
         assert_eq!(coerce(s("speed"), "1.5").unwrap().as_float(), Some(1.5));
         assert!(coerce(s("speed"), "3").is_err());
+        // A string setting stays a string, even when it looks like a number.
+        assert_eq!(coerce(s("formula"), "100").unwrap().as_str(), Some("100"));
+        let f = "max(100, \"50\" + STR * 8)";
+        let v = coerce(s("formula"), f).unwrap();
+        assert_eq!(v.as_str(), Some(f));
+        assert_eq!(show_value(&v), f);
     }
 
     #[test]
