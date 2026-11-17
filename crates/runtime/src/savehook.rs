@@ -134,6 +134,16 @@ pub struct PartyHero {
 /// pattern missed.
 static G_PARTY: AtomicUsize = AtomicUsize::new(0);
 
+/// Address of the game's party struct (`g_party`), or `None` before the save
+/// hooks are installed or when the pattern missed. Read its fields from the
+/// game's thread.
+pub fn party() -> Option<usize> {
+    match G_PARTY.load(Ordering::Acquire) {
+        0 => None,
+        p => Some(p),
+    }
+}
+
 /// The party's heroes that are in use, in party order. Empty before the save
 /// hooks are installed, when the party pattern missed, or before a game is
 /// started or loaded. Call from the game's thread (`on_save`,

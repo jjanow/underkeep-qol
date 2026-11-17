@@ -680,6 +680,36 @@ In order of difficulty; each ships when done, with settings and tests.
     gets a negative change), a broken custom formula shows the toast. No
     Paladin in the test party, so RS is untested in game.
   - [ ] Windows.
+- [x] `learned-recipes` (a player's request, 2026-11-16; built 2026-11-17):
+      learned recipes get a check mark on their icon and a tooltip line.
+  - Learned = the recipe id is in `Party+0xb30` (count) / `+0xb38`
+    (`String` array), saved as `unlocked_recipes`; only a successful
+    mortar craft (0x1402228f0 → unlock 0x140189490) and the debug command
+    `unlock_all_recipes` add to it. Recipe items' `recipe` (ItemParams
+    +0x2f0, so `Item+0x410`) match the 25 `alchemy_recipes` ids 1:1.
+  - Tooltip: detour of the item tooltip function 0x140248ed0 (wraps the
+    builder 0x140249150; the builder lists ingredients only when its 9th
+    argument is 0, the shop's item panel passes 1). After it, the mod
+    appends `Text_Get` of `uk_qol_recipe_learned` / `_not_learned` with
+    `String_Concat` / `String_Assign` / `String_Free`. The keys come from
+    the mod's patches on `text/text_common_<lang>.txt` (7 languages);
+    a missing key falls back to built-in English.
+  - Icon: detour of the item grid's slot drawing 0x140199f80 (inventory
+    panel 0x1401fc2c0 and both shop lists in 0x14019c920 go through it).
+    After it, for each slot (grid+0x38, 0x30 bytes: rect +0x10, Item*
+    +0x20) holding a learned recipe, `DrawSprite` 0x1400730f0 queues
+    `hud_icon_quest_completed` (found by name in the sprite table
+    0x140379440, count 0x1404426c4) on the HUD batch `**(ui+0x630)` at
+    the icon square's top-right corner (`min(w, h)`: shop rows are wide).
+    Rows scrolled out of a list are clipped like the icons.
+  - Runtime: `savehook::party()` exposes the resolved `g_party`.
+  - [x] Proton, 2026-11-17, game 1.0.5: a test save with Healing learned
+    and Minor Mana not; inventory marks and both tooltip lines; Barlo's
+    shop (opened through a test-only encounter patch, with two extra
+    recipes) marks the merchant's Healing row and the party's list; the
+    shop panel shows the line; nothing drawn for rows scrolled out.
+    English only; other languages and chest panels not checked.
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -732,6 +762,8 @@ In order of difficulty; each ships when done, with settings and tests.
     mod (off by default).
   - 2026-11-17: version 1.0.6, tag `v1.0.6`: `melee-accuracy` formula
     choices (`stat_bonus`, `ranged_mirror`, `custom`), a player's request.
+  - 2026-11-17: version 1.0.7, tag `v1.0.7`: the new `learned-recipes`
+    mod (a player's request).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

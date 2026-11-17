@@ -1,0 +1,11 @@
+# learned-recipes: the tooltip lines, as text keys the mod reads through
+# the game's text lookup, so they follow the game's language.
+file = "text/text_common_pl.txt"
+
+[[op]]
+add = "text_common_pl.uk_qol_recipe_learned"
+value = "{a:center}{color_msg_success}{sprite:hud_icon_quest_completed} Poznany\n"
+
+[[op]]
+add = "text_common_pl.uk_qol_recipe_not_learned"
+value = "{a:center}{color_text_darker}Jeszcze nie poznany\n"

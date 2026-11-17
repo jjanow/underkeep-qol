@@ -1,0 +1,66 @@
+# Patterns for learned-recipes. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.5 (Steam) VAs. The party (g_party, with the
+# learned-recipe list at +0xb30/+0xb38) comes from the runtime's own pattern.
+
+# Item tooltip text, 0x140248ed0: (String* out, Item* item, Item* compare,
+# int mode, bool, bool) -> out. Wraps the tooltip builder (0x140249150), which
+# lists a recipe's ingredients for item_type 19. Called for the inventory,
+# shop, chest and equipment tooltips. Found as the builder's caller that
+# passes Item+0x120 (the item's params).
+[item_tooltip]
+pattern = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 98 F4 FF FF 48 81 EC 68 0C 00 00"
+
+# An item grid's slots, 0x140199f80: (Grid* grid, int* hover_out, int mode,
+# int hero, void* cb). Draws every slot: its background, then the item icon
+# through the slot widget (0x140209ac0). Slots at grid+0x38 (count +0x30),
+# 0x30 bytes each: +0x10 the slot's rect on screen (x, y, w, h, GUI units,
+# set by this function), +0x20 the Item* or null. The inventory panel and
+# both shop lists (shop_merchant_inventory, shop_inventory) draw through it.
+[grid_draw_slots]
+pattern = "48 8B C4 44 89 48 20 44 89 40 18 48 89 50 10 48 89 48 08 55 53 56 57 41 54"
+
+# Queues a sprite on a draw batch, 0x1400730f0: (Batch*, Sprite*, float pos[2],
+# float rotation, float scale[2], float rgba[4], float depth). The sprite's
+# pivot goes to pos. The slot widget draws item icons with it.
+[draw_sprite]
+pattern = "48 89 5C 24 08 48 89 74 24 10 57 48 83 EC 30 48 8B FA 0F 29 74 24 20 BA 0A 00 00 00"
+
+# The UI context pointer, 0x140442bc8; its +0x630 points at the HUD's sprite
+# batch pointer (what the grid and the slot widget draw with). From the slot
+# loop in grid_draw_slots: `mov rax, [ctx]; mov rcx, [rax+0x630]`.
+[g_ui]
+pattern = "48 8B 05 ?? ?? ?? ?? 48 8B 88 30 06 00 00 48 8B 19 41 B8 48 00 00 00 48 8B CB"
+rip = { disp = 3, len = 7 }
+
+# The sprite table, 0x140379440: 0x28 bytes a sprite, +0x00 the loaded Sprite*
+# (null until loaded), +0x08 its name (String). The grid indexes it with the
+# item's icon id. `lea r13, [table]` in grid_draw_slots.
+[g_sprites]
+pattern = "4C 8D 2D ?? ?? ?? ?? 66 90 F3 45 0F 10 0F F3 45 0F 10 47 04 41 0F 28 FA"
+rip = { disp = 3, len = 7 }
+
+# Number of sprites in the table (i32), 0x1404426c4, from the sprite
+# registration (0x1400a8560): `mov eax, [count]; ...; inc eax; mov [count],
+# eax; cmp ecx, 20000`.
+[g_sprite_count]
+pattern = "8B 05 ?? ?? ?? ?? 8B C8 89 44 24 34 FF C0 89 05 ?? ?? ?? ?? 81 F9 20 4E 00 00"
+rip = { disp = 2, len = 6 }
+
+# Text_Get(String* out, const String* key) -> out: a text key in the game's
+# language (same function as extra-skill-slots' text_get), 0x1400ecd00.
+[text_get]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC D0 00 00 00 83 7A 10 00 48 8B FA 48 8B F1 75"
+
+# String_Concat(String* out, const String* a, const String* b) -> out,
+# 0x140027de0; the tooltip builder appends each part with it.
+[string_concat]
+pattern = "4C 89 44 24 18 41 54 41 55 41 56 41 57 48 83 EC 28 4C 63 62 10 4C 8B EA"
+
+# String_Assign(String* dst, const String* src), 0x140027a00 (takes a
+# reference to src's buffer, releases dst's).
+[string_assign]
+pattern = "48 89 5C 24 08 57 48 83 EC 20 48 8B FA 48 8B D9 48 3B CA 74 54 48 8B 09"
+
+# String_Free(String*), 0x140003000: releases the buffer reference and empties it.
+[string_free]
+pattern = "40 53 48 83 EC 20 48 8B D9 48 8B 09 48 85 C9 74 1B B8 FF FF FF FF F0 0F C1 01 83 F8 01 75 0D 48 8B 0B 48 85 C9 74 05 E8 ?? ?? ?? ?? 33 C9 48 8D 05 ?? ?? ?? ?? 48 89 0B 48 89 43 08 89 4B 10 48 83 C4 20 5B C3 CC CC CC CC CC CC CC CC CC CC CC 48 83 EC 38"

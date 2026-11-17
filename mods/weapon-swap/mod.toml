@@ -1,6 +1,6 @@
 id = "weapon-swap"
 name = "Weapon swap"
-version = "1.0.6"
+version = "1.0.7"
 author = "underkeep-qol"
 description = "A second weapon slot per hero and a key that swaps it with the weapon in hand (any two weapons: sword and bow, sword and shield and a two-hander)."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).

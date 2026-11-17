@@ -15,11 +15,12 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.6](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.7](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
-formula choices, new in 1.0.6, haven't been tried in game yet). Steam Deck and macOS bottles are
+formula choices, new in 1.0.6, haven't been tried in game yet) and
+`learned-recipes` (new in 1.0.7). Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -35,6 +36,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
 | `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
 | `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
+| `learned-recipes` | Recipes you have already learned get a green check mark on their icon in the inventory and in shops, and every recipe's tooltip says **Learned** or **Not learned yet**. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -535,6 +537,36 @@ not for weapon skills.
   melee hit bonus by (formula − 100) for that one call, putting it back
   afterwards. Nothing in the game's files or saves changes.
 
+### `learned-recipes`
+
+To see whether you know a recipe, the game makes you find the mortar, open
+the crafting menu and look through it. This mod shows it where you meet the
+recipe:
+
+- A **green check mark** on the icon of every recipe you have learned, in
+  the inventory and in shops (your list and the merchant's).
+- A line at the bottom of every recipe's tooltip, and in the shop's item
+  panel: **✓ Learned** or **Not learned yet**, in the game's language.
+- Settings: **check mark on learned recipes** and **learned line in the
+  tooltip**, both on by default.
+
+What counts as learned is what the game counts: a recipe is learned once
+it's in the mortar's recipe list, and the game adds it there **the first
+time you craft it**. Buying, finding or carrying the recipe item doesn't
+teach it; the item shows the ingredients, so you can craft it and learn it.
+
+- How: the mod reads the party's learned-recipe list (the one the save
+  keeps as `unlocked_recipes`). It detours the game's item tooltip
+  function and appends the line with the game's own text functions; the
+  two lines are text keys the mod adds to the game's text tables in
+  memory (`uk_qol_recipe_learned`, `uk_qol_recipe_not_learned`), so a
+  player's own data patch can reword them. It detours the drawing of item
+  lists and queues the game's quest check-mark sprite on each learned
+  recipe's icon, in the same batch as the icons, so the list's scrolling
+  and clipping apply to it. Nothing in the game's files or saves changes.
+- Turned on after the game has started, the tooltip lines are in English
+  until the next start (the game reads its texts once).
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -572,7 +604,7 @@ crates/
   manager/      Manager app and uk-qol CLI
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
-  borderless-compat/  item-highlight/  melee-accuracy/
+  borderless-compat/  item-highlight/  melee-accuracy/  learned-recipes/
 ```
 
 ## Building

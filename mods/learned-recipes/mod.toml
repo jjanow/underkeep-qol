@@ -1,0 +1,21 @@
+id = "learned-recipes"
+name = "Learned recipes"
+version = "1.0.7"
+author = "underkeep-qol"
+description = "Shows which recipes the party has already learned: a check mark on the recipe's icon in the inventory and in shops, and a Learned / Not learned yet line in its tooltip. A recipe counts as learned once it's in the mortar's recipe list, which happens when you craft it."
+# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
+game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+
+[[settings]]
+key = "icon_mark"
+type = "bool"
+default = true
+label = "Check mark on learned recipes"
+description = "A small green check mark in the corner of a learned recipe's icon, in the inventory and in shops (both your list and the merchant's)."
+
+[[settings]]
+key = "tooltip"
+type = "bool"
+default = true
+label = "Learned line in the tooltip"
+description = "A line at the bottom of every recipe's tooltip: Learned, or Not learned yet. The text follows the game's language."
