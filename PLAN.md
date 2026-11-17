@@ -804,6 +804,9 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-17: version 1.0.8, tag `v1.0.8`: weapon-swap's slot II shows
     the game's own item tooltip (a player's request); README explains the
     same-named recipe pairs (a player's learned-recipes report).
+  - 2026-11-17: version 1.0.9, tag `v1.0.9`: weapon-swap's `messages`
+    setting (`all` / `problems` / `none`) for its popups; a player's
+    request (the swap report covered the character sheet).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

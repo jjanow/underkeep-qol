@@ -1,6 +1,6 @@
 id = "weapon-swap"
 name = "Weapon swap"
-version = "1.0.8"
+version = "1.0.9"
 author = "underkeep-qol"
 description = "A second weapon slot per hero and a key that swaps it with the weapon in hand (any two weapons: sword and bow, sword and shield and a two-hander)."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
@@ -59,3 +59,11 @@ type = "bool"
 default = true
 label = "Second weapon slot on the character sheet"
 description = "Shows the second weapon slot (a sword icon marked II) on the character sheet, left of the helmet slot: click it with a weapon on the cursor to put the weapon in; click it to pick its weapon up, then click the inventory or the weapon slot. Right-click moves it to the inventory."
+
+[[settings]]
+key = "messages"
+type = "enum"
+choices = ["all", "problems", "none"]
+default = "all"
+label = "Messages over the game"
+description = "all: every weapon-swap message pops up at the bottom of the screen. problems: only refusals and warnings (not now, doesn't fit, a quest took the weapon), not the report of a swap or a move that worked. none: no popups. The mod's section of the overlay menu always lists the last messages."

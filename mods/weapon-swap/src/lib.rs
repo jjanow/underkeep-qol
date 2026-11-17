@@ -161,6 +161,8 @@ struct Inner {
     queue: Vec<Action>,
     costs_turn: bool,
     messages: Vec<String>,
+    /// Setting `messages`: which of them are toasts too.
+    toasts: Toasts,
     /// For the menu: whether the last loaded sidecar didn't match its save.
     mismatch: bool,
     /// For the menu: focus this hero's first button (after a click), or
@@ -197,6 +199,23 @@ fn log(msg: &str) {
     uk_qol_runtime::log(&format!("{ID}: {msg}"));
 }
 
+/// Which weapon-swap messages are also shown over the game (setting
+/// `messages`). The mod menu and the log always get all of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Toasts {
+    All,
+    Problems,
+    None,
+}
+
+fn toasts_setting(settings: &toml::Table) -> Toasts {
+    match settings.get("messages").and_then(toml::Value::as_str) {
+        Some("problems") => Toasts::Problems,
+        Some("none") => Toasts::None,
+        _ => Toasts::All,
+    }
+}
+
 fn costs_turn(settings: &toml::Table) -> bool {
     settings
         .get("swap_costs_turn")
@@ -205,10 +224,24 @@ fn costs_turn(settings: &toml::Table) -> bool {
 }
 
 impl Inner {
+    /// A refusal, a problem or a notice the player didn't ask for.
     fn say(&mut self, msg: String) {
+        self.tell(msg, false);
+    }
+
+    /// `done`: the report of an action that worked ("X swapped ...").
+    fn tell(&mut self, msg: String, done: bool) {
         log(&msg);
-        // Over the game too (key presses happen with the menu closed).
-        uk_qol_runtime::toast::show(format!("Weapon swap: {msg}"));
+        // Over the game too (key presses happen with the menu closed),
+        // unless the player turned that off.
+        let toast = match self.toasts {
+            Toasts::All => true,
+            Toasts::Problems => !done,
+            Toasts::None => false,
+        };
+        if toast {
+            uk_qol_runtime::toast::show(format!("Weapon swap: {msg}"));
+        }
         self.messages.push(msg);
         if self.messages.len() > MAX_MESSAGES {
             self.messages.remove(0);
@@ -286,7 +319,7 @@ impl Inner {
         let result = self.apply(&a, &r);
         let after = self.total();
         match result {
-            Ok(msg) => self.say(msg),
+            Ok(msg) => self.tell(msg, true),
             Err(e) => self.say(format!("{}: {e}", describe(&a))),
         }
         if before == after {
@@ -568,6 +601,7 @@ impl Mod for WeaponSwap {
             queue: Vec::new(),
             costs_turn: costs_turn(cx.settings),
             messages: Vec::new(),
+            toasts: toasts_setting(cx.settings),
             mismatch: parked_on_load,
             refocus: None,
             off_identity: None,
@@ -607,6 +641,7 @@ impl Mod for WeaponSwap {
     fn on_settings(&mut self, settings: &toml::Table) {
         if let Some(i) = &mut self.inner {
             i.costs_turn = costs_turn(settings);
+            i.toasts = toasts_setting(settings);
             i.hud_button = bool_setting(settings, "hud_button");
             i.sheet_slot = bool_setting(settings, "sheet_slot");
             if !i.sheet_slot {
@@ -1198,6 +1233,20 @@ mod tests {
     use uk_qol_runtime::host::{Manifest, PatternFile};
 
     #[test]
+    fn toasts_choice() {
+        let t = |v: &str| {
+            let mut m = toml::Table::new();
+            m.insert("messages".into(), toml::Value::String(v.into()));
+            toasts_setting(&m)
+        };
+        assert_eq!(t("all"), Toasts::All);
+        assert_eq!(t("problems"), Toasts::Problems);
+        assert_eq!(t("none"), Toasts::None);
+        assert_eq!(t("bogus"), Toasts::All);
+        assert_eq!(toasts_setting(&toml::Table::new()), Toasts::All);
+    }
+
+    #[test]
     fn hud_labels() {
         assert_eq!(hud_label("item_sling"), "Sl");
         assert_eq!(hud_label("item_short_bow"), "SB");
@@ -1217,6 +1266,7 @@ mod tests {
         }
         assert!(manifest.setting("swap_costs_turn").is_some());
         assert!(manifest.setting("sheet_slot").is_some());
+        assert!(manifest.setting("messages").is_some());
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 29);
     }

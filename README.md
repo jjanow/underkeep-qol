@@ -15,13 +15,14 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.8](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.9](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
-(new in 1.0.8). Steam Deck and macOS bottles are
+(new in 1.0.8); weapon-swap's `messages` setting (new in 1.0.9) hasn't been
+tried in game yet. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -331,6 +332,10 @@ rebindable.
   two-handed weapon, and the swap handles that (below).
 - **In combat, a swap costs the hero's turn** by default. Setting:
   `swap_costs_turn = true | false`. Outside combat it's always free.
+- Messages pop up at the bottom of the screen (setting `messages`): `all`
+  (default), `problems` (only refusals and warnings, not the "swapped"
+  report of a swap that worked) or `none`. The mod's section of the
+  overlay menu always lists the last few.
 - The game's save format has no room for this slot, so the weapon in it is
   stored in the save's sidecar file (see *Save safety*), not in the save.
 
