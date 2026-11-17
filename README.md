@@ -15,12 +15,13 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.7](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.8](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
-`learned-recipes` (new in 1.0.7). Steam Deck and macOS bottles are
+`learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
+(new in 1.0.8). Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -350,6 +351,17 @@ keyboard):
   veiled red, while an item that fits or doesn't is on the cursor. The
   game's cursor and the item it carries draw over the mod's widgets, as
   over the game's own.
+- Hovering a filled slot II shows the game's own tooltip for that weapon,
+  as an inventory weapon gets on the sheet: its stats with the arrows
+  comparing it to the weapon in hand, requirements in red if the hero
+  falls short, and the weapon in hand in the **Equipped** panel beside it.
+  Two lines at the bottom are the slot's (click to pick it up and swap,
+  right-click to move it to the inventory, and the reminder below). How: the stored weapon isn't a game
+  item, so the mod has the game build a temporary copy, write its tooltip
+  text, and take the copy away again at once; the text is shown through
+  the game's own tooltip, in the same place and with the same delay. If
+  that part can't be set up (a pattern not found), the slot shows a plain
+  text tooltip instead.
 - With a gamepad (no mouse cursor) the same is in the mod's section of the
   overlay menu: per hero, **Put the weapon in hand in the slot**, **Put
   *item* in the slot** (for each weapon in the inventory), **Swap now** and
@@ -384,7 +396,7 @@ keyboard):
   be in the party.
 
 **What players are told** (here; slot II's tooltip has a one-line
-reminder):
+reminder at the bottom):
 
 ```
 A weapon in a second weapon slot is kept by the mod, not by the game.
@@ -554,6 +566,15 @@ What counts as learned is what the game counts: a recipe is learned once
 it's in the mortar's recipe list, and the game adds it there **the first
 time you craft it**. Buying, finding or carrying the recipe item doesn't
 teach it; the item shows the ingredients, so you can craft it and learn it.
+
+Some potions have **two recipes with the same name** and different
+ingredients: Healing, Mana and Endurance potions (from herbs, or from two
+of the minor potion), Minor Mana (a second Moonpetal, or Ectoplasm) and
+Cure Poison (Red Mushroom, or Spider Eye). The game learns each recipe on
+its own, so after brewing one, the other recipe item of the same name
+still says **Not learned yet**. The inventory tooltip lists the
+ingredients, which tells the two apart; the shop's item panel doesn't
+show them.
 
 - How: the mod reads the party's learned-recipe list (the one the save
   keeps as `unlocked_recipes`). It detours the game's item tooltip

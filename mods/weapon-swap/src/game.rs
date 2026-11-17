@@ -437,7 +437,7 @@ impl Game {
 
     /// Builds an item from its saved form, like `Item::RestoreState`. The
     /// new item belongs to nobody until it's equipped or added.
-    fn create(&self, s: &StoredItem) -> Result<Item, String> {
+    pub(crate) fn create(&self, s: &StoredItem) -> Result<Item, String> {
         if !valid_def(&s.def) {
             return Err(format!("bad item name {:?}", s.def));
         }
@@ -468,7 +468,7 @@ impl Game {
     /// # Safety
     /// `it` must be a live item that the game owns (on a hero, in the
     /// inventory) or one from [`Game::create`] not handed over yet.
-    unsafe fn take(&self, it: Item) {
+    pub(crate) unsafe fn take(&self, it: Item) {
         // SAFETY: forwarded; `all` ignores the count.
         unsafe { (self.item_take)(it, 1, 0) };
     }

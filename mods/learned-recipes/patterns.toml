@@ -56,8 +56,10 @@ pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 
 [string_concat]
 pattern = "4C 89 44 24 18 41 54 41 55 41 56 41 57 48 83 EC 28 4C 63 62 10 4C 8B EA"
 
-# String_Assign(String* dst, const String* src), 0x140027a00 (takes a
-# reference to src's buffer, releases dst's).
+# String_Assign(String* dst, const String* src), 0x140027a00: a move. It
+# releases dst's buffer, gives dst src's buffer and empties src (the mod
+# frees the emptied temporary after). For a copy that leaves src as it is,
+# see weapon-swap's string_copy (0x140027970).
 [string_assign]
 pattern = "48 89 5C 24 08 57 48 83 EC 20 48 8B FA 48 8B D9 48 3B CA 74 54 48 8B 09"
 

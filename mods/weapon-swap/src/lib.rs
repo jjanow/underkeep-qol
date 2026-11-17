@@ -43,6 +43,7 @@ mod game;
 mod quest;
 mod slot;
 mod state;
+mod tooltip;
 
 use std::collections::BTreeMap;
 
@@ -544,6 +545,8 @@ impl Mod for WeaponSwap {
         };
         // SAFETY: the resolved function starts of these two patterns.
         unsafe { quest::install(cx.hooks, at("script_condition")?, at("script_command")?) }?;
+        // SAFETY: the resolved addresses of the tooltip patterns.
+        unsafe { tooltip::install(cx.hooks, |n| at(n).ok()) };
         // Turning the mod off and on again keeps the slots of this session,
         // unless the party changed meanwhile (e.g. another save was loaded
         // while the mod was off, which it isn't told about): then they
@@ -579,6 +582,7 @@ impl Mod for WeaponSwap {
         });
         quest::drain();
         quest::set_game(Some(game));
+        tooltip::set_game(Some(game));
         if let Some(i) = &self.inner {
             i.mirror();
         }
@@ -587,6 +591,7 @@ impl Mod for WeaponSwap {
 
     fn on_unload(&mut self) {
         quest::set_game(None);
+        tooltip::set_game(None);
         if let Some(i) = &mut self.inner {
             i.take_returned();
             let keys = i.keys();
@@ -909,18 +914,34 @@ fn sheet_slot(inner: &mut Inner, ui: &mut egui::Ui, t: &hud::Transform) {
             p.rect_stroke(rect, 0.0, s, egui::StrokeKind::Inside);
         }
     }
-    let r = r.on_hover_text(match (&stored, fits) {
-        (_, Some(false)) => "Weapon slot II: only weapons fit.".into(),
-        (Some(s), _) => format!(
-            "Weapon slot II: {}. Click to pick it up, then click the inventory or the weapon \
+    // A weapon in the slot gets the game's own tooltip (with the slot's
+    // hints appended), as the sheet's other slots do; the mod's own text
+    // stays for the empty slot, a weapon that doesn't fit, and as the
+    // fallback.
+    let game_tooltip = tooltip::active()
+        && fits.is_none()
+        && carried.is_none()
+        && inner.carry.is_none()
+        && inner.press.as_ref().is_none_or(|p| p.is_none());
+    if let (true, true, Some(s)) = (game_tooltip, r.hovered(), &stored) {
+        tooltip::want(h, s);
+    }
+    let r = if game_tooltip && stored.is_some() {
+        r
+    } else {
+        r.on_hover_text(match (&stored, fits) {
+            (_, Some(false)) => "Weapon slot II: only weapons fit.".into(),
+            (Some(s), _) => format!(
+                "Weapon slot II: {}. Click to pick it up, then click the inventory or the weapon \
              slot (swap). Right-click: move it to the inventory.\n{LOSS_HINT}",
-            item_label(s)
-        ),
-        (None, _) => format!(
-            "Weapon slot II: put a spare weapon here (click it with a weapon on the cursor).\n\
+                item_label(s)
+            ),
+            (None, _) => format!(
+                "Weapon slot II: put a spare weapon here (click it with a weapon on the cursor).\n\
              {LOSS_HINT}"
-        ),
-    });
+            ),
+        })
+    };
 
     if r.clicked() {
         match (carried, carried_info) {
@@ -1197,7 +1218,7 @@ mod tests {
         assert!(manifest.setting("swap_costs_turn").is_some());
         assert!(manifest.setting("sheet_slot").is_some());
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 21);
+        assert_eq!(pats.patterns.len(), 29);
     }
 
     /// Resolves every pattern against the game's exe when it's installed
@@ -1238,6 +1259,14 @@ mod tests {
             ("ui_context", 0x43ca68),
             ("script_condition", 0xda910),
             ("script_command", 0xdbc20),
+            ("tooltip_draw", 0x166850),
+            ("tooltip_show", 0x167270),
+            ("tooltip_compare", 0x371750),
+            ("item_tooltip", 0x248ed0),
+            ("tooltip_layout_point", 0x11e950),
+            ("string_concat", 0x27de0),
+            ("string_copy", 0x27970),
+            ("string_free", 0x3000),
         ]
         .into_iter()
         .collect();

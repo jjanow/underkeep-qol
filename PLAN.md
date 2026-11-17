@@ -581,6 +581,29 @@ In order of difficulty; each ships when done, with settings and tests.
     slot takes no clicks while the sheet is open (game behaviour), so it
     can't be a drag source there. Cause found on Windows: the unacknowledged
     notice gate (§1), now removed.
+  - 2026-11-17 (player request: slot II showed no game tooltip): a filled
+    slot II shows the game's own item tooltip (`tooltip.rs`). The game has
+    one tooltip, armed per frame by `tooltip_show` 0x140167270 (text, pos,
+    delay; clears the compare text 0x140371750) and drawn, then disarmed,
+    by `tooltip_draw` 0x140166850 near the end of the frame (after the
+    inventory panel 0x1401fc2c0). The HUD pass records the hovered slot;
+    a detour of `tooltip_draw` arms the tooltip just before the original,
+    at the layout point `inventory_item_tooltip_position` (lookup
+    0x14011e950), with the compare text set to the weapon in hand, as the
+    panel does for an inventory weapon. Texts come from `item_tooltip`
+    0x140248ed0 (out, item, compare, hero, 0, 0) on a temporary item
+    (`Item_Create`, then `Item_Take` at once), plus two appended lines (the
+    right-click hint and the loss warning); rebuilt when the hover starts
+    or the hero, weapon or hand weapon changes. The compare text must be
+    set with String_Copy 0x140027970: 0x140027a00 *moves* (empties its
+    source), which made the compare panel vanish after one frame. All
+    tooltip patterns are optional; without them the slot keeps its egui
+    text. In game (Proton, 1.0.5, uinput mouse, save 001): flail in
+    Ingwam's slot (bare hands) shows its tooltip, "Required strength" red;
+    in Kabam's slot it shows the arrows against her dagger and the
+    dagger's **Equipped** panel, like the inventory flail; 15 hovers in and
+    out with no flicker or stale tooltip; afterwards "items conserved" and
+    nothing extra in the inventory or on the floor. Windows not tried.
 - [x] `extra-skill-slots`: 3 extra slots (1–5), HUD layout data patch,
       right-click to assign, unbound keys, sidecar persistence.
   - Deviation: overlay HUD buttons instead of a layout data patch (§5).
@@ -716,6 +739,14 @@ In order of difficulty; each ships when done, with settings and tests.
     0x1404412c8 / the grid's `bVar10` case) the game skips its icon; the
     mark doesn't check that, so a learned recipe's check may show on an
     empty slot for a moment. Cosmetic; not seen in tests.
+  - 2026-11-17, player report "one Heiltrank recipe checked, the other
+    not": not a bug. Five potions have two recipe items with the same name
+    and their own recipe ids (`item_recipe_healing` → `item_heal_potion`,
+    flask + 2 Amberrose + Crimsonspire; `item_recipe_healing_dvojka` →
+    `item_heal_potion_dvojka`, flask + 2 Minor Healing; likewise Mana,
+    Endurance, Minor Mana, Cure Poison). Each is learned on its own. README
+    says so. Possible follow-up (not decided): show the ingredients in the
+    shop's item panel too, where the two look identical.
 
 ## 7. Manager
 
@@ -770,6 +801,9 @@ In order of difficulty; each ships when done, with settings and tests.
     choices (`stat_bonus`, `ranged_mirror`, `custom`), a player's request.
   - 2026-11-17: version 1.0.7, tag `v1.0.7`: the new `learned-recipes`
     mod (a player's request).
+  - 2026-11-17: version 1.0.8, tag `v1.0.8`: weapon-swap's slot II shows
+    the game's own item tooltip (a player's request); README explains the
+    same-named recipe pairs (a player's learned-recipes report).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
