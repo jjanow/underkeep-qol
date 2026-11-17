@@ -710,6 +710,12 @@ In order of difficulty; each ships when done, with settings and tests.
     shop panel shows the line; nothing drawn for rows scrolled out.
     English only; other languages and chest panels not checked.
   - [ ] Windows.
+  - [ ] The English fallback (mod turned on mid-session, keys missing) is
+    untested: in every test the keys were there.
+  - [ ] While an item is moving (bought, sold, moved: the list at
+    0x1404412c8 / the grid's `bVar10` case) the game skips its icon; the
+    mark doesn't check that, so a learned recipe's check may show on an
+    empty slot for a moment. Cosmetic; not seen in tests.
 
 ## 7. Manager
 
