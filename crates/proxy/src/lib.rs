@@ -150,6 +150,7 @@ static BUILTIN: &[uk_qol_runtime::host::ModCtor] = &[
     uk_qol_mod_item_highlight::new,
     uk_qol_mod_melee_accuracy::new,
     uk_qol_mod_learned_recipes::new,
+    uk_qol_mod_shop_sort::new,
 ];
 
 #[unsafe(no_mangle)]

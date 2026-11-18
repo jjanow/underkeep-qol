@@ -763,6 +763,43 @@ In order of difficulty; each ships when done, with settings and tests.
     Endurance, Minor Mana, Cure Poison). Each is learned on its own. README
     says so. Possible follow-up (not decided): show the ingredients in the
     shop's item panel too, where the two look identical.
+- [x] `shop-sort` (a player's request, 2026-11-18: "swords together, armor
+      types together"): the merchant's list in shops stays sorted. User's
+      choices: its own mod (not an inventory-sort setting), always on (no
+      key), category → item type → weapon kind → buy price **low to high**
+      → name, the party's side of the shop untouched.
+  - Shop panel global 0x1404415c8 (byte +0 open). Open 0x14019c4f0 copies
+    the stock list (+0x490, count +0x488, 0x20 each) into a temporary
+    merchant `Inventory` at +0x160 (Inventory::Add 0x140198b90) shown by the
+    grid at +0x188 (grid+0 = Inventory*, +0x100 changed flag, +0x10c
+    selected slot = panel+0x294); close 0x14019c6f0 frees it. The party's
+    grid is at +0x40 (on `g_partyInventory`).
+  - Every grid's layout update 0x140199920 → layout 0x140199ad0 / 0x140199da0
+    sorts the inventory's entries in place (0x140285440, comparator
+    0x140199040: category 0x1400ed4f0(item_type), then entry seq) and lays
+    out one slot per entry.
+  - Buy 0x1401a0fd0 takes the selected slot's Item*, removes it from the
+    temporary list by pointer and changes the stock by def name
+    (0x14019f2e0); sell 0x1401a0b10 adds to the temporary list
+    (0x140198d80), updates the grid, then finds the sold item's slot by
+    pointer. So the temporary list's order is display only.
+  - The mod detours 0x140199920; for the merchant grid with the changed
+    flag set (never set by the mod) it renumbers the entries' seqs to its
+    order (unique 0..n-1, next_seq raised to n) before the original runs.
+    Sorting key: buy price `Item+0x42c`; weapon kind `Item+0x120` read only
+    for item_type 1.
+  - [x] Proton, 2026-11-18, game 1.0.5: Barlo's shop (shop test recipe)
+    with 16 extra weapons and armor pieces added in mixed order. Sorted on
+    first open (before any trade): swords, dagger, axes 30 → 60, maces
+    24 → 60, crossbow; shields 35 → 80, body armor 30 → 55, helmet, gloves,
+    boots 6 → 20 → 50; potions cheapest first, equal prices by name. Bought
+    Chain Armor from the middle of its group: exactly that item, 55 coins.
+    Sold a Gravecleft Mace: it showed between Flail 24 and Maul 60 and the
+    list scrolled to it; buying it back took 35 coins and that item. No
+    errors in the log. Close and reopen not tried (the test encounter
+    opens the shop once; the stock counts are the game's own code, by
+    name).
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -825,6 +862,8 @@ In order of difficulty; each ships when done, with settings and tests.
     request (the swap report covered the character sheet).
   - 2026-11-17: version 1.0.10, tag `v1.0.10`: extra-skill-slots' buttons
     show the game's own skill tooltip (a player's request).
+  - 2026-11-18: version 1.0.11, tag `v1.0.11`: the new `shop-sort` mod
+    (a player's request).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

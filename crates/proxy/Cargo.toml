@@ -22,6 +22,7 @@ uk-qol-mod-borderless-compat.workspace = true
 uk-qol-mod-item-highlight.workspace = true
 uk-qol-mod-melee-accuracy.workspace = true
 uk-qol-mod-learned-recipes.workspace = true
+uk-qol-mod-shop-sort.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

@@ -15,13 +15,14 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.10](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.11](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
-(new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10);
+(new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10)
+and `shop-sort` (new in 1.0.11);
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
 yet. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
@@ -40,6 +41,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
 | `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
 | `learned-recipes` | Recipes you have already learned get a green check mark on their icon in the inventory and in shops, and every recipe's tooltip says **Learned** or **Not learned yet**. |
+| `shop-sort` | The merchant's list in every shop stays sorted: swords together, axes together, helmets together, boots together, and so on, cheapest first. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -598,6 +600,29 @@ show them.
   lists and queues the game's quest check-mark sprite on each learned
   recipe's icon, in the same batch as the icons, so the list's scrolling
   and clipping apply to it. Nothing in the game's files or saves changes.
+
+### `shop-sort`
+
+The game lists a merchant's goods by section (weapons, armor, jewelry,
+potions, ...) but, inside a section, in the order the shop got them, so
+swords, axes and bows are mixed, and so are helmets, boots and body armor.
+This mod keeps the merchant's list sorted, every time a shop opens and
+after every purchase or sale:
+
+- Order: the game's sections stay as they are; inside each, by item type
+  (shields, body armor, helmets, gloves, boots, cloaks each together), for
+  weapons by kind (swords together, axes together, bows together, ...),
+  then by price, **cheapest first**, then by name.
+- Only the merchant's list. Your own side of the shop stays as you left it
+  (sort it with `inventory-sort`).
+- No settings: turn the mod off to get the game's order back.
+- How: when a shop opens, the game copies the shop's stock into a temporary
+  list for the screen and sorts that list (section, then the order the
+  items came in) whenever it changes. The mod detours that step for the
+  merchant's list only and renumbers the items' order just before the game
+  sorts them. Buying and selling work on the item itself and change the
+  shop's real stock by item name, so only the order on screen changes.
+  Nothing in the game's files or saves changes.
 - Turned on after the game has started, the tooltip lines are in English
   until the next start (the game reads its texts once).
 
@@ -639,6 +664,7 @@ crates/
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
   borderless-compat/  item-highlight/  melee-accuracy/  learned-recipes/
+  shop-sort/
 ```
 
 ## Building

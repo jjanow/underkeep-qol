@@ -1,0 +1,25 @@
+# Patterns for shop-sort. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.5 (Steam) VAs.
+
+# An item grid's layout update, 0x140199920: (Grid* grid). Rebuilds the
+# grid's layout when its "inventory changed" flag (grid+0x100) is set or the
+# UI scale changed: the layout (0x140199ad0 / 0x140199da0, by grid+0x08)
+# first sorts the grid's inventory entries in place with the comparator
+# 0x140199040 (category of the item type, then entry seq), then lays out one
+# slot per entry. Grid+0x00 is its Inventory*. Called every frame for every
+# item grid (HUD inventory, both shop lists, ...), and by the shop's buy and
+# sell code right before it looks up the selected or sold item's slot.
+# Prologue: push rbx; sub rsp,0x20; cmp byte [rcx+0x100],0; mov rbx,rcx.
+[grid_update]
+pattern = "40 53 48 83 EC 20 80 B9 00 01 00 00 00 48 8B D9 F3 0F 10 0D ?? ?? ?? ?? 0F 95 C2 0F 2E 89 04 01 00 00"
+
+# The shop panel, 0x1404415c8 (a global; byte +0x00 open flag). +0x160 the
+# merchant's Inventory, filled from the shop's stock when the shop opens
+# (0x14019c4f0) and emptied when it closes (0x14019c6f0); +0x188 the
+# merchant list's grid (its Inventory* = panel+0x160). Buying and selling
+# find the item by pointer and change the shop's stock by item name
+# (0x14019f2e0), so the entries' order is display only. From the shop-open
+# command 0x1402053f0: `lea rcx, [panel]; mov dword [rbx+0xf54], 5`.
+[g_shop_panel]
+pattern = "48 8D 0D ?? ?? ?? ?? C7 83 54 0F 00 00 05 00 00 00"
+rip = { disp = 3, len = 7 }

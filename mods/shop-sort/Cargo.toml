@@ -1,0 +1,14 @@
+[package]
+name = "uk-qol-mod-shop-sort"
+description = "Underkeep QoL mod: keeps the merchant's list in shops sorted"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_mod_shop_sort"
+
+[dependencies]
+uk-qol-runtime.workspace = true
+toml = "1.2.1"
