@@ -5,7 +5,7 @@
 //! Syntax: numbers, `+ - * /`, parentheses, unary minus, `min(a, b, ...)`,
 //! `max(a, b, ...)` and the variables in [`Vars`] (any case). Math is done
 //! in floating point and rounded to the nearest whole number at the end, so
-//! `(STR + DEX + 5) / 2 * 10` is exact for odd sums.
+//! `(STR + DEX + 5) / 2 * 9` gives 86 for 14 points, not 85.
 
 /// What a formula can read, for one attack.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
@@ -358,10 +358,10 @@ mod tests {
 
     #[test]
     fn ranged_mirror_rounds_at_the_end() {
-        let f = "(STR + DEX + 5) / 2 * 10";
-        assert_eq!(ev(f, &v(8.0, 7.0)), Some(100));
-        assert_eq!(ev(f, &v(8.0, 6.0)), Some(95));
-        assert_eq!(ev(f, &v(3.0, 2.0)), Some(50));
+        let f = "(STR + DEX + 5) / 2 * 9";
+        assert_eq!(ev(f, &v(8.0, 7.0)), Some(90));
+        assert_eq!(ev(f, &v(8.0, 6.0)), Some(86));
+        assert_eq!(ev(f, &v(3.0, 2.0)), Some(45));
         // The player's own notation.
         assert_eq!(ev("(STR+DEX+5) / 2 x 10", &v(8.0, 6.0)), Some(95));
     }

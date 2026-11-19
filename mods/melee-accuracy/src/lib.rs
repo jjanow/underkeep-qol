@@ -2,7 +2,7 @@
 //! "Mod designs").
 //!
 //! The game's rules: a ranged hit chance is
-//! `DEX x 10 + ranged hit bonuses - evasion - ranged evasion`, but a melee
+//! `DEX x 9 + ranged hit bonuses - evasion - ranged evasion`, but a melee
 //! one is a flat `100 + melee hit bonuses - evasion - melee evasion`, with
 //! no stat in it. The melee bonus
 //! is a field of the hero (`Hero+0x160`, rebuilt by `Hero::RecalcStats`
@@ -16,9 +16,9 @@
 //!   the game's chance. WSTAT is the stat the game scales the attack's
 //!   damage on: effective Dexterity if the attacking item has
 //!   `uses_dexterity`, else effective Strength (also when unarmed).
-//! - `ranged_mirror`: `(STR + DEX + 5) / 2 x 10`, the ranged rule's
-//!   `DEX x 10` with the average of the two stats; 15 points give the
-//!   game's 100, fewer lower the chance. Plus a flat bonus while Righteous
+//! - `ranged_mirror`: `(STR + DEX + 5) / 2 x 9`, the ranged rule's
+//!   `DEX x 9` (game 1.0.6; `x 10` before) with the average of the two
+//!   stats; 15 points give 90, as 10 DEX does at range. Plus a flat bonus while Righteous
 //!   Strike is on, so Paladins don't need all four stats.
 //! - `custom`: a formula the player types in.
 //!
@@ -90,7 +90,7 @@ fn formula_text(settings: &toml::Table) -> (String, String) {
         "ranged_mirror" => (
             mode.into(),
             format!(
-                "(STR + DEX + 5) / 2 * 10 + RS * {}",
+                "(STR + DEX + 5) / 2 * 9 + RS * {}",
                 int(settings, RIGHTEOUS, DEFAULT_RIGHTEOUS)
             ),
         ),
@@ -386,14 +386,14 @@ mod tests {
             base(&with(&d, PER_POINT, 0), &v(8.0, 3.0, 8.0, 0.0)),
             Some(100)
         );
-        // ranged_mirror: 15 points = 100, fewer lower it; +10 with RS.
+        // ranged_mirror: x 9 like ranged; 15 points = 90; +10 with RS.
         let m = with(&d, FORMULA, "ranged_mirror");
-        assert_eq!(base(&m, &v(8.0, 7.0, 8.0, 0.0)), Some(100));
-        assert_eq!(base(&m, &v(8.0, 6.0, 8.0, 0.0)), Some(95));
-        assert_eq!(base(&m, &v(8.0, 6.0, 8.0, 1.0)), Some(105));
+        assert_eq!(base(&m, &v(8.0, 7.0, 8.0, 0.0)), Some(90));
+        assert_eq!(base(&m, &v(8.0, 6.0, 8.0, 0.0)), Some(86));
+        assert_eq!(base(&m, &v(8.0, 6.0, 8.0, 1.0)), Some(96));
         assert_eq!(
             base(&with(&m, RIGHTEOUS, 0), &v(8.0, 6.0, 8.0, 1.0)),
-            Some(95)
+            Some(86)
         );
         // Unknown mode: the default.
         assert_eq!(formula_text(&with(&d, FORMULA, "nope")).0, "stat_bonus");

@@ -9,7 +9,7 @@
 # (Hero+0x10c) unless the weapon has uses_dexterity (Item+0x124), then on
 # DEX (Hero+0x110). Found from the evasion fields it subtracts
 # (Monster+0x130 evasion, +0x134 melee evasion); the only other functions
-# that do are the ranged attack (0x140133160, uses Hero+0x164 = DEX x 10 +
+# that do are the ranged attack (0x140133160, uses Hero+0x164 = DEX x 9 (x 10 before 1.0.6) +
 # bonuses), thrown items (0x140132230, ignores hero stats) and
 # Hero::SkillAddStatusEffectToEnemy (a status chance, not a hit roll).
 [melee_attack]

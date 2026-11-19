@@ -1,6 +1,6 @@
 id = "melee-accuracy"
 name = "Melee accuracy"
-version = "1.0.11"
+version = "1.0.12"
 author = "underkeep-qol"
 description = "Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat (default), a ranged-style formula from Strength and Dexterity, or your own formula. Off by default: it changes the game's balance."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
@@ -13,7 +13,7 @@ type = "enum"
 choices = ["stat_bonus", "ranged_mirror", "custom"]
 default = "stat_bonus"
 label = "Formula"
-description = "The melee hit chance before melee hit bonuses and evasion (the game's is a flat 100). stat_bonus: 100 + the weapon's stat x hit chance per point, never below the game's. ranged_mirror: (STR + DEX + 5) / 2 x 10, like ranged's DEX x 10: 15 points give the game's 100, fewer give less; plus the Righteous Strike bonus. custom: your own formula, below."
+description = "The melee hit chance before melee hit bonuses and evasion (the game's is a flat 100). stat_bonus: 100 + the weapon's stat x hit chance per point, never below the game's. ranged_mirror: (STR + DEX + 5) / 2 x 9, like ranged's DEX x 9: 15 points give 90, as 10 DEX does at range; plus the Righteous Strike bonus. custom: your own formula, below."
 
 [[settings]]
 key = "per_point"
@@ -36,6 +36,6 @@ description = "Flat melee hit chance added to an attack Righteous Strike empower
 [[settings]]
 key = "custom_formula"
 type = "string"
-default = "(STR + DEX + 5) / 2 * 10 + RS * 10"
+default = "(STR + DEX + 5) / 2 * 9 + RS * 10"
 label = "Custom formula (custom)"
 description = "The base melee hit chance that replaces the game's 100. Numbers, + - * / (or x), parentheses, min(a, b, ...), max(a, b, ...). Variables: STR, DEX, END, WIS (the hero's current stats), WSTAT (the weapon's stat: DEX for weapons that scale with it, else STR), RS (1 on an attack Righteous Strike empowers, else 0). Rounded at the end. Example: max(100, 50 + STR * 8). A formula with an error leaves melee to the game until fixed."

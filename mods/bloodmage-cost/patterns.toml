@@ -14,9 +14,17 @@ pattern = "45 85 C0 0F 8E ?? ?? ?? ?? 48 89 6C 24 18 48 89 7C 24 20 41 56 48 83 
 # Hero::CanCastSkill(Hero*, u64 skill ref) -> int, 0x140180ed0 (0 = can
 # cast). Called by the HUD (button state), the round action and
 # Hero::UseSelectedSkill. For a Blood Mage: any bone in the party inventory
-# -> 0, else hp <= cost -> 8 ("not enough health").
+# -> 0, else hp <= cost -> 8 ("not enough health"). In 1.0.6 it's at
+# 0x140180fc0 with other registers (rsi/rdi), same callers, codes and offsets;
+# the new function just before it (0x140180f40) is only called by a new
+# script command.
 [can_cast_skill]
+[[can_cast_skill.candidates]]
 pattern = "48 89 5C 24 10 56 48 83 EC 20 33 DB 48 8B F1 85 D2 78 ?? 3B 91 68 02 00 00 7D"
+builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+[[can_cast_skill.candidates]]
+pattern = "48 89 74 24 10 57 48 83 EC 20 33 FF 48 8B F1 85 D2 78 ?? 3B 91 68 02 00 00 7D"
+builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 
 # Hero::LoseHP(Hero*, int), 0x14017c660: the call after PaySkillCost's bone
 # loop (its only caller in the exe). The match is that loop:

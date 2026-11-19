@@ -15,8 +15,9 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.11](https://github.com/jjanow/underkeep-qol/releases/latest), for game
-version 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
+[1.0.12](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+versions 1.0.6 and 1.0.5 (1.0.12 brought weapon-swap and bloodmage-cost back
+on 1.0.6, where the game update had turned them off). The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
@@ -509,7 +510,7 @@ colors them, bright green by default, in the dungeon view.
 
 ### `melee-accuracy`
 
-In the game, a ranged hit chance is **DEX × 10** + ranged hit bonuses −
+In the game, a ranged hit chance is **DEX × 9** + ranged hit bonuses −
 the enemy's evasion, but a melee hit chance is a flat **100** + melee hit
 bonuses − evasion: no stat counts. This mod replaces that 100 with a
 formula of the hero's stats; melee hit bonuses and evasion still apply as
@@ -522,10 +523,13 @@ in the game. Setting **formula** picks one:
   dagger +10. It only ever adds: the game's own chance is the floor (a stat
   lowered below 0 by a mutation adds nothing). Setting: **hit chance per
   point** (0 to 10, default 2).
-- **`ranged_mirror`**: **(STR + DEX + 5) / 2 × 10**, the ranged rule with
+- **`ranged_mirror`**: **(STR + DEX + 5) / 2 × 9**, the ranged rule with
   the average of Strength and Dexterity, so Thieves aren't left out.
-  15 points of STR + DEX give the game's 100, 14 give 95, 20 give 125:
-  **heroes with less than 15 hit less often than in the game.** An attack
+  15 points of STR + DEX give 90 (as 10 DEX does at range), 14 give 86,
+  17 give 99, 18 give 104, 20 give 113: **heroes with less than 18 hit less
+  often than in the game.** (Before game 1.0.6 ranged was DEX × 10 and so
+  was this formula; for the old numbers, use `custom` with
+  `(STR + DEX + 5) / 2 * 10 + RS * 10`.) An attack
   that Righteous Strike empowers gets a flat **+10** on top, at every rank,
   so Paladins, who also want END and WIS, keep up. Setting: **Righteous
   Strike hit bonus** (0 to 50, default 10).
@@ -542,7 +546,7 @@ in the game. Setting **formula** picks one:
   The result is rounded at the end, so `/ 2` doesn't lose half points.
   Examples:
   - `100 + max(0, WSTAT * 2)` is `stat_bonus`;
-  - `(STR + DEX + 5) / 2 * 10 + RS * 10` is `ranged_mirror`;
+  - `(STR + DEX + 5) / 2 * 9 + RS * 10` is `ranged_mirror`;
   - `max(100, 50 + STR * 8)` never goes below the game's chance.
 
   A formula with a mistake leaves melee to the game until it is fixed: a

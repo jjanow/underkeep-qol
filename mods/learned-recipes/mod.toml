@@ -1,6 +1,6 @@
 id = "learned-recipes"
 name = "Learned recipes"
-version = "1.0.11"
+version = "1.0.12"
 author = "underkeep-qol"
 description = "Shows which recipes the party has already learned: a check mark on the recipe's icon in the inventory and in shops, and a Learned / Not learned yet line in its tooltip. A recipe counts as learned once it's in the mortar's recipe list, which happens when you craft it."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).

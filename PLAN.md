@@ -121,6 +121,23 @@ Check items off as they land; add findings under the item they belong to.
     string. The exe has no VERSIONINFO resource. The runtime logs
     `exe sha256 <hex>, game version <v>` at start.
   - 1.0.5 (Steam, 2026-11-11): `d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4`.
+  - 1.0.6 (Steam, 2026-11-19, "Character Respec"): `556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba`.
+    Two required patterns missed, so weapon-swap and bloodmage-cost turned
+    themselves off (a player's report: "weapon swap isn't working").
+    `script_command` (still 0x1400dbc20) gained one command (switch bound
+    0xa5 -> 0xa6) and a 0x10 smaller frame; its ids (0x18
+    remove_party_item) and `script_condition`'s (0x10, 0x11) are unchanged.
+    `CanCastSkill` moved to 0x140180fc0, recompiled with rsi/rdi but with the
+    same five callers, return codes and offsets; the new function at
+    0x140180f40 before it is called only by the new script command. Every
+    other hooked function (mods and core) is the same code at a new address,
+    apart from the skill tooltip builder (bigger frame, same arguments).
+    `RecalcStats` now gives ranged DEX x 9 (was x 10). Globals moved +0x20.
+    Fixed in 1.0.12 with per-build candidates. Proton, 2026-11-19: all ten
+    mods active; Shift+1 swapped Odena's flail and sword; quicksave and
+    quickload kept the slot (no mismatch); extra-skill-slots' tooltip shows
+    the 1.0.6 text. Not tried on 1.0.6: a Blood Mage cast, quest-item
+    scripts, Windows.
   - Saves record the version they were made with (the log says "Game
     version: 1.0.3" when loading one).
   - Seen in game (Proton, 2026-11-14): the log shows the 1.0.5 hash above and
@@ -684,7 +701,7 @@ In order of difficulty; each ships when done, with settings and tests.
   - The rules (1.0.5): melee hit = `100 + Hero+0x160 - Monster+0x134 -
     Monster+0x130` in the hero melee attack 0x14012f830; ranged uses
     `Hero+0x164`, which `RecalcStats` (0x14017a8b0) fills with DEX x 10 +
-    bonuses. Only that function, ranged (0x140133160), thrown (0x140132230)
+    bonuses (DEX x 9 since game 1.0.6: `lea eax,[rcx+rcx*8]`). Only that function, ranged (0x140133160), thrown (0x140132230)
     and `SkillAddStatusEffectToEnemy` (0x140182910, a status chance)
     subtract monster evasion, so weapon skills share the melee roll.
   - How: detour of the melee attack (7 arguments); for the call it raises
@@ -701,8 +718,9 @@ In order of difficulty; each ships when done, with settings and tests.
       `formula` picks the base chance that replaces the game's 100;
       the mod adds `base - 100` to `Hero+0x160` (now possibly negative).
   - `stat_bonus` (default, the 1.0.5 rule): `100 + max(0, WSTAT x
-    per_point)`. `ranged_mirror` (the player's): `(STR + DEX + 5) / 2 x 10
-    + RS x righteous_strike` (default 10, flat at every rank, the player's
+    per_point)`. `ranged_mirror` (the player's): `(STR + DEX + 5) / 2 x 9
+    + RS x righteous_strike` (`x 10` until game 1.0.6 made ranged DEX x 9;
+    changed 2026-11-19 at the user's request) (default 10, flat at every rank, the player's
     suggestion for Paladins). `custom`: `custom_formula`, a string parsed
     by `src/formula.rs` (+ - * / x, parentheses, min, max; STR DEX END WIS
     WSTAT RS; f64, rounded at the end). A parse error turns the effect off
@@ -715,7 +733,7 @@ In order of difficulty; each ships when done, with settings and tests.
     attack); the hero attack routine 0x1401313a0 clears the flag after the
     attack. The cast sets it for skill effect 0x18 when the class is 1 or 3
     (Paladin, or Archer?); unchecked which Archer skill, if any, uses it.
-  - [ ] Proton: `ranged_mirror` on forest rats (a hero with STR + DEX < 15
+  - [ ] Proton: `ranged_mirror` on forest rats (a hero with STR + DEX < 18
     gets a negative change), a broken custom formula shows the toast. No
     Paladin in the test party, so RS is untested in game.
   - [ ] Windows.
@@ -864,6 +882,9 @@ In order of difficulty; each ships when done, with settings and tests.
     show the game's own skill tooltip (a player's request).
   - 2026-11-18: version 1.0.11, tag `v1.0.11`: the new `shop-sort` mod
     (a player's request).
+  - 2026-11-19: version 1.0.12, tag `v1.0.12`: patterns for game 1.0.6
+    (weapon-swap and bloodmage-cost were off on it); `ranged_mirror` follows
+    the game's new ranged rule (DEX x 9).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

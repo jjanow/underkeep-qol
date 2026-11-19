@@ -75,9 +75,16 @@ pattern = "48 89 5C 24 20 55 56 57 41 54 41 55 41 56 41 57 48 8D 6C 24 D0 48 81 
 
 # script_command(id, ctx): runs one encounter-script command. Command 0x18
 # is remove_party_item (inventory first, then the heroes' equipment; 0x17
-# is give_party_item). Same opcode table as script_condition.
+# is give_party_item). Same opcode table as script_condition. 1.0.6 added a
+# command (switch bound 0xa5 -> 0xa6) and shrank the frame by 0x10; the ids
+# above didn't change and the function is still at 0x1400dbc20.
 [script_command]
+[[script_command.candidates]]
 pattern = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 A0 DD FF FF B8 60 23 00 00 E8 ?? ?? ?? ?? 48 2B E0 0F 29 B4 24 50 23 00 00"
+builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+[[script_command.candidates]]
+pattern = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 DD FF FF B8 50 23 00 00 E8 ?? ?? ?? ?? 48 2B E0 0F 29 B4 24 40 23 00 00"
+builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 
 # --- Data ------------------------------------------------------------------
 
