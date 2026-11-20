@@ -1,0 +1,14 @@
+[package]
+name = "uk-qol-mod-enemy-health"
+description = "Underkeep QoL mod: enemy health numbers on the game's enemy health bars"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_mod_enemy_health"
+
+[dependencies]
+uk-qol-runtime.workspace = true
+toml = "1.2.1"

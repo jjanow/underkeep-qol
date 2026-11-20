@@ -92,10 +92,19 @@ pub trait Mod: Send {
     fn has_hud(&self) -> bool {
         false
     }
+    /// Whether the mod's HUD drawing only paints (text, bars, outlines)
+    /// and has no clickable widget. Such a mod's [`Mod::hud`] also runs
+    /// while the player picks a target with the portraits still on screen
+    /// ([`crate::hud::HudState::portraits_shown`]); the others only on the
+    /// plain HUD. Default false.
+    fn hud_display_only(&self) -> bool {
+        false
+    }
     /// Draws the mod's widgets on the game's HUD (see [`crate::hud`] and
     /// CONTRIBUTING, "HUD widgets"). Called once per frame on the game's
     /// render thread while the mod menu is closed, the plain HUD is up
-    /// ([`crate::hud::shown`]) and [`Mod::has_hud`] is true. `ui` covers the
+    /// ([`crate::hud::shown`]; for a [`Mod::hud_display_only`] mod, also
+    /// during a target pick) and [`Mod::has_hud`] is true. `ui` covers the
     /// whole window, in overlay points; place widgets with `ui.put` at
     /// [`crate::hud::rect`]s. A click on a widget that senses clicks is
     /// swallowed (the game doesn't see it); every other click goes to the
@@ -1361,17 +1370,21 @@ impl Host {
         });
     }
 
-    /// Whether any active mod draws on the HUD now ([`Mod::has_hud`]).
-    pub fn wants_hud(&self) -> bool {
+    /// Whether any active mod draws on the HUD now ([`Mod::has_hud`]) in
+    /// the HUD state `st` ([`crate::hud::HudState::draws`]).
+    pub fn wants_hud(&self, st: &crate::hud::HudState) -> bool {
         self.order.iter().map(|&i| &self.slots[i]).any(|s| {
-            s.status == Status::Active && guard::call(&s.id, || s.m.has_hud()).unwrap_or(false)
+            s.status == Status::Active
+                && guard::call(&s.id, || s.m.has_hud() && st.draws(s.m.hud_display_only()))
+                    .unwrap_or(false)
         })
     }
 
-    /// Calls `hud` on every active mod that has HUD widgets now.
-    pub fn hud(&mut self, ui: &mut egui::Ui) {
+    /// Calls `hud` on every active mod that has HUD widgets now and draws
+    /// in the HUD state `st`.
+    pub fn hud(&mut self, ui: &mut egui::Ui, st: &crate::hud::HudState) {
         self.each_active(|m, _, _| {
-            if m.has_hud() {
+            if m.has_hud() && st.draws(m.hud_display_only()) {
                 m.hud(ui);
             }
             false

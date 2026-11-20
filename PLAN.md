@@ -818,6 +818,82 @@ In order of difficulty; each ships when done, with settings and tests.
     opens the shop once; the stock counts are the game's own code, by
     name).
   - [ ] Windows.
+- [ ] `party-numbers` (a player's request, 2026-11-20: "display character
+      hit points, mana & stamina on screen"): numbers on the portrait bars.
+      User's choice: its own mod, separate from enemy health (a pattern miss
+      in one mustn't take the other down; enemy health is a balance choice).
+      Released together with `enemy-health` and `hidden-stats`.
+  - Bars (1.0.5 0x14021e6b0, same code in 1.0.6 with the hero array 0x20
+    later): at `face_rect_N` + `face_hp_mana_offset` (GuiLayout+0xe0), the
+    second 6 lower; sprite `hud_hero_hpbar` 60x5, pivot 0. HP `+0xfc`/`+0xec`;
+    by class `+0x94`: Paladin Zeal pips `+0x108`/`+0xf8`, classes 0/2/3
+    stamina `+0x100`/`+0xf0`, 4/5/6 mana `+0x104`/`+0xf4`; max 0 = no fill.
+    The portrait position is `face_rect_N` except while a portrait is
+    dragged.
+  - No patterns of its own (core `g_party`, `g_gui_layout`). New runtime
+    hook: `Mod::hud_display_only`, drawn also in interaction mode 1
+    (target pick); clickable widgets stay plain-HUD only.
+  - [x] Proton: numbers line up with the bars; Zeal 0/5 -> 1/5 after a
+    hit, mana 44 -> 37 after Void Mend, HP 32 -> 36/37 healed; shown during
+    the Void Mend target pick and on the character sheet.
+  - Proton, 2026-11-20, game 1.0.6, 3440x1440, Abandoned Caves autosave
+    (Paladin, Voidcaller, two Rangers) and a Fallen Swordsman fight; the
+    user also checked everything in game and found it fine.
+    Not tried: 720p / 1080p (the transform is unit-tested), a dead hero.
+  - [ ] Windows.
+- [ ] `enemy-health` (a player's request, 2026-11-20: "an enemy hit point
+      display ... where their current health is"): numbers on the game's own
+      enemy health bars. Off by default (balance choice). Released together
+      with `party-numbers` and `hidden-stats`.
+  - The game already draws enemy bars: enemy-bar HUD 0x1401ffc60 (1.0.6
+    0x1401ffd50), called each frame by the dungeon HUD; up to two faced
+    enemies (0x1401feaf0); skipped if Monster+0x128 (`invisible_hp_bar`);
+    size by +0x1f1 (`hpbar_size` 1..3); fill +0xd0 / +0x120; name centred in
+    the bar; y = dung_view.y + 12, x projected. Then the status row
+    0x1401ff4a0 (1.0.6 0x1401ff590; one caller) gets (monster, {x, y+h, w, h}).
+  - Monster: +0xd0 HP (TakeDamage 0x1401e4cf0 subtracts it), +0x120 max,
+    +0x108 def `health` (copied to +0x10c/+0x120/+0xd0 by Init 0x1401de310).
+  - Detours both; the status row records (hp, max, bar rect) while inside
+    the bar function, which publishes the frame's list; hud() paints lists
+    under 250 ms old. Display only (`hud_display_only`).
+  - Not covered: the `enemy_dragon_territory` bar (third path, no status row).
+  - [x] Proton: "79/79" above the Fallen Swordsman's bar, 69/79 after a
+    10-damage hit, shown during a target pick.
+  - Proton, 2026-11-20, game 1.0.6, 3440x1440, Abandoned Caves autosave
+    (Paladin, Voidcaller, two Rangers) and a Fallen Swordsman fight; the
+    user also checked everything in game and found it fine.
+    Not tried: other bar sizes, two enemies side by side, `on_bar`.
+  - [ ] Windows.
+- [ ] `hidden-stats` (2026-11-20, asked with party-numbers and
+      enemy-health): the hidden hero stats on the stats page. Own RE only
+      (not taken from the Nexus mod of the same idea). On by default,
+      setting `show_zero`.
+  - Stats page (1.0.5 / 1.0.6): row rebuild 0x140236f20 / 0x140237010
+    (page, hero), called every frame by the page draw 0x14023b290 /
+    0x14023b380. Row vector at page+0x28 {count, cap, data}, rows 0x140:
+    +0 kind (0 stat, 1 header, 2 effect), +8 key String, +0x20 value String;
+    label = text(key) with %1 = value; description = text(key + "_desc") if
+    it exists (Text_Exists 0x1400ecac0). Push 0x14027a860 / 0x14027af30
+    moves the strings in.
+  - Hero stat block: RecalcStats 0x14017a8b0 sums item/effect blocks
+    (0x1400cfe80) into Hero+0x10c..; names from the parser 0x1400c2880;
+    units from the item tooltip (0x140169cb0: 0 flat, 1 percent, 2 plain).
+    Melee hit 100 + 0x160; ranged 0x164; armor vs melee 0x134+0x140
+    (+0x13c animals), vs ranged 0x134+0x144 (0x14012e090); evasion cap
+    clamp(60 + 0x130); ranged evasion 0x12c; heals 0x1e0 / 0x1e8 / 0x1e4;
+    immunities bytes 0x200..0x206.
+  - Detours the rebuild; appends rows with the game's push, then moves
+    them bytewise to the end of Hero / Offense / Defense. Values made with
+    String_Concat so the game frees them. melee-accuracy on (read from the
+    config every 2 s): the melee row's description says so.
+  - [x] Proton: gray rows at the end of Offense and Defense, Void
+    Resistance in its color, descriptions in the side panel (Evasion Cap),
+    mouse-wheel scrolling; Ranged Hit Chance 27% for DEX 3 (x 9, 1.0.6).
+  - Proton, 2026-11-20, game 1.0.6, 3440x1440, Abandoned Caves autosave
+    (Paladin, Voidcaller, two Rangers) and a Fallen Swordsman fight; the
+    user also checked everything in game and found it fine.
+    Not tried: pad scrolling, `show_zero`, the mod turned on mid-game.
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -885,6 +961,9 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-19: version 1.0.12, tag `v1.0.12`: patterns for game 1.0.6
     (weapon-swap and bloodmage-cost were off on it); `ranged_mirror` follows
     the game's new ranged rule (DEX x 9).
+  - 2026-11-20: version 1.0.13, tag `v1.0.13`: three new mods from player
+    requests, `party-numbers`, `enemy-health` (off by default) and
+    `hidden-stats`; runtime `Mod::hud_display_only`.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

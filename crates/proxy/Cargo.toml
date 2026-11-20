@@ -23,6 +23,9 @@ uk-qol-mod-item-highlight.workspace = true
 uk-qol-mod-melee-accuracy.workspace = true
 uk-qol-mod-learned-recipes.workspace = true
 uk-qol-mod-shop-sort.workspace = true
+uk-qol-mod-party-numbers.workspace = true
+uk-qol-mod-enemy-health.workspace = true
+uk-qol-mod-hidden-stats.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [

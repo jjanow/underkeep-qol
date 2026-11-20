@@ -15,15 +15,15 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.12](https://github.com/jjanow/underkeep-qol/releases/latest), for game
-versions 1.0.6 and 1.0.5 (1.0.12 brought weapon-swap and bloodmage-cost back
-on 1.0.6, where the game update had turned them off). The loader, overlay (F10 / L3+R3), manager and the first six mods are
+[1.0.13](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+versions 1.0.6 and 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
 (new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10)
-and `shop-sort` (new in 1.0.11);
+and `shop-sort` (new in 1.0.11) and `party-numbers`, `enemy-health` and
+`hidden-stats` (new in 1.0.13, tested on game 1.0.6);
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
 yet. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
@@ -43,6 +43,9 @@ expected to work but haven't been tested; reports are welcome in the
 | `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
 | `learned-recipes` | Recipes you have already learned get a green check mark on their icon in the inventory and in shops, and every recipe's tooltip says **Learned** or **Not learned yet**. |
 | `shop-sort` | The merchant's list in every shop stays sorted: swords together, axes together, helmets together, boots together, and so on, cheapest first. |
+| `party-numbers` | Each hero's health and stamina, mana or Zeal as numbers on the portrait bars (34/50, 34 or 68%), so you don't have to open the character sheet to check them. |
+| `enemy-health` | Each enemy's health as numbers (23/40, 23 or 58%) with the game's own enemy health bar. **Off by default**: the game shows only the bar. |
+| `hidden-stats` | The stats the game keeps hidden, added to each hero's stats page: hit chances, damage bonuses, armor ignored, armor against melee and ranged attacks, evasion cap, void resistance, element and spell bonuses, healing bonuses, immunities and more, each with a description. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -630,6 +633,75 @@ after every purchase or sale:
 - Turned on after the game has started, the tooltip lines are in English
   until the next start (the game reads its texts once).
 
+### `party-numbers`
+
+The game shows each hero's health and second bar under the portrait as
+bars only; the numbers are on the character sheet. This mod writes them on
+the bars:
+
+- **Health** on the red bar, and on the second bar what the game shows
+  there for the class: **stamina** (Warrior, Thief, Ranger), **mana**
+  (Voidcaller, Wizard, Blood Mage) or **Zeal** (Paladin). A bar the game
+  leaves empty because its maximum is 0 (a Blood Mage without mana) gets
+  no number, and a fallen hero none at all.
+- Settings: **Format** `current_max` (34/50, the default), `current` (34)
+  or `percent` (68%); **Stamina, mana and Zeal too** (off: health only);
+  **Text size** (6 HUD pixels by default, the bars' spacing); **Numbers on**
+  with a toggle key and pad button, both unbound by default.
+- Also shown while you pick a target for a skill or spell (healing an ally,
+  say), when other mods' HUD buttons hide.
+- How: it reads the values the game's own bars are drawn from and paints
+  the numbers with the mod overlay. Nothing in the game's state, files or
+  saves changes.
+
+### `enemy-health`
+
+In a fight the game draws a health bar, with the enemy's name in it, for each
+enemy the party faces, but no numbers, so you can't tell a 12-health rat from
+a 120-health brute until the bar starts to move. This mod writes the numbers
+with the game's bar. **Off by default**: it shows what the game keeps vague.
+
+- Format `current_max` (23/40, the default), `current` (23) or `percent`
+  (58%); position `above` the bar (default) or `on_bar` (at its right end;
+  the name is in the middle); text size; **Numbers on** with a toggle key
+  and pad button, both unbound by default.
+- Only enemies the game shows a bar for get numbers: enemies whose bar the
+  game hides stay hidden.
+- Also shown while you pick a target for a skill or spell.
+- How: it detours the game's enemy-bar drawing to note each bar's position
+  and the enemy's health as the game draws it, and paints the numbers with
+  the mod overlay. Nothing in the game's state, files or saves changes.
+
+### `hidden-stats`
+
+The stats page shows a hero's main stats, but the game tracks many more
+that it never shows. This mod adds them at the end of the page's Hero,
+Offense and Defense sections, in the page's dim text color; select one
+and the panel beside the list says what it does, as for the game's own rows.
+
+- Always shown: melee and ranged hit chance (before the target's
+  evasion), melee and ranged damage (flat) and damage bonus (percent),
+  armor ignored (melee, ranged), armor against melee and against ranged
+  attacks, ranged evasion, the evasion cap and void resistance.
+- Shown when the hero has them: experience bonus; healing received, spell
+  healing and Void Mend healing; unarmed damage; damage to animals,
+  bleeding enemies and objects; fire, ice and lightning damage and bonus;
+  spell damage and bonus (all, fire, ice, lightning, blood); chance to
+  burn, burn duration, chance to freeze, ice spell freeze chance, bleed
+  damage; armor against animals; immunity to stun, critical hits, freeze,
+  blindness, paralysis, disease and fall damage. Setting **Show stats that
+  are 0** shows them all.
+- The numbers are the game's own, after gear, traits and active effects.
+  With `melee-accuracy` on, the melee hit chance shown is the game's; the
+  row's description says the mod's formula replaces it in attacks.
+- How: the game rebuilds the page's list of rows every frame; the mod
+  adds its rows to that list, with text keys of its own added to the game's
+  text tables in memory (English in every language for now, so a
+  translation can replace it). Nothing in the game's state, files or saves
+  changes.
+- Turned on after the game has started, it shows nothing until the next
+  start (the game reads its texts once).
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -668,7 +740,7 @@ crates/
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
   borderless-compat/  item-highlight/  melee-accuracy/  learned-recipes/
-  shop-sort/
+  shop-sort/  party-numbers/  enemy-health/  hidden-stats/
 ```
 
 ## Building

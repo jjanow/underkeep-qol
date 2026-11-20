@@ -1,0 +1,55 @@
+id = "enemy-health"
+name = "Enemy health"
+version = "1.0.13"
+author = "underkeep-qol"
+description = "Shows each enemy's health as numbers (23/40, 23 or 58%) with the game's enemy health bar, so you can tell how strong an enemy is and how close it is to dying. Off by default: the game shows only the bar."
+# Builds (exe SHA-256) the mod was tested on: 1.0.6 (Steam). Its patterns
+# also resolve on 1.0.5, where it runs marked "not tested".
+game_builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
+enabled = false
+
+[[settings]]
+key = "shown"
+type = "bool"
+default = true
+label = "Numbers on"
+description = "Whether the numbers are shown. The toggle key flips this, and the choice is kept for the next game."
+
+[[settings]]
+key = "toggle_key"
+type = "key"
+default = ""
+label = "Toggle key"
+description = "Turns the numbers on or off. Unbound by default."
+
+[[settings]]
+key = "toggle_pad"
+type = "key"
+default = ""
+label = "Toggle button (gamepad)"
+description = "Turns the numbers on or off. Unbound by default: every pad button already has a game action."
+
+[[settings]]
+key = "format"
+type = "enum"
+choices = ["current_max", "current", "percent"]
+default = "current_max"
+label = "Format"
+description = "current_max: 23/40. current: 23. percent: 58%."
+
+[[settings]]
+key = "position"
+type = "enum"
+choices = ["above", "on_bar"]
+default = "above"
+label = "Position"
+description = "above: centred just above the bar. on_bar: at the bar's right end (the enemy's name is centred in the bar)."
+
+[[settings]]
+key = "text_size"
+type = "float"
+default = 6.0
+min = 4.0
+max = 10.0
+label = "Text size"
+description = "Height of the numbers in the game's HUD pixels."

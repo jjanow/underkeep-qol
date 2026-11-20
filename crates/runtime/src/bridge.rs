@@ -231,10 +231,12 @@ impl OverlayHost for Bridge {
     }
 
     fn wants_hud(&self) -> bool {
-        host::with(|h| h.wants_hud()).unwrap_or(false)
+        let st = crate::hud::state();
+        host::with(|h| h.wants_hud(&st)).unwrap_or(false)
     }
 
     fn hud(&self, ui: &mut egui::Ui) {
-        host::with(|h| h.hud(ui));
+        let st = crate::hud::state();
+        host::with(|h| h.hud(ui, &st));
     }
 }

@@ -229,13 +229,21 @@ a skill slot, a button on the inventory panel). Implement two methods:
   the mod's panic guard. `ui` covers the window; place widgets with
   `ui.put(rect, ...)` or `hud::button(ui, rect, text, fill)` (a small
   label-button in the HUD's style).
+- `Mod::hud_display_only(&self) -> bool`: return true if the mod only
+  paints (text, bars, outlines) and has no clickable widget (default
+  false). Such a mod is also drawn while the player picks a target with
+  the portraits still on screen (`hud::HudState::portraits_shown`: game
+  interaction mode 1), where clickable widgets would get in the way of the
+  pick. Everyone else is drawn only on the plain HUD.
 
 Positions come from `uk_qol_runtime::hud`, in overlay points:
 
 - `hud::rect(name)`: a rect of the game's HUD layout by its `def_def` name
   (`hud::LAYOUT` lists them: `face_hand_slot_1..8`, `face_rect_1..4`,
   `inventory_rect`, `minimap_rect`, ...); `hud::skill_slot_name(i)` and
-  `hud::weapon_slot_name(i)` name hero `i`'s hand slots. `hud::gui_rect(name)`
+  `hud::weapon_slot_name(i)` name hero `i`'s hand slots, and
+  `hud::face_rect_name(i)` their portrait. `hud::bar_offset()` is where a
+  portrait's HP bar starts (the second bar is `hud::SECOND_BAR_DY` lower). `hud::gui_rect(name)`
   gives the same rect in the game's GUI space.
 - `hud::to_screen(p)` / `hud::rect_to_screen(r)` map GUI-space points and
   rects (640 x 360, y down) to points; `hud::points_per_unit()` sizes text

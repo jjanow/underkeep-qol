@@ -1,0 +1,54 @@
+id = "party-numbers"
+name = "Party numbers"
+version = "1.0.13"
+author = "underkeep-qol"
+description = "Shows each hero's health and their second bar (stamina, mana or Zeal) as numbers on the portrait bars, so you don't have to open the character sheet to check them."
+# Builds (exe SHA-256) the mod was tested on: 1.0.6 (Steam). Its patterns
+# also resolve on 1.0.5, where it runs marked "not tested".
+game_builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
+enabled = true
+
+[[settings]]
+key = "shown"
+type = "bool"
+default = true
+label = "Numbers on"
+description = "Whether the numbers are shown. The toggle key flips this, and the choice is kept for the next game."
+
+[[settings]]
+key = "toggle_key"
+type = "key"
+default = ""
+label = "Toggle key"
+description = "Turns the numbers on or off. Unbound by default."
+
+[[settings]]
+key = "toggle_pad"
+type = "key"
+default = ""
+label = "Toggle button (gamepad)"
+description = "Turns the numbers on or off. Unbound by default: every pad button already has a game action."
+
+[[settings]]
+key = "format"
+type = "enum"
+choices = ["current_max", "current", "percent"]
+default = "current_max"
+label = "Format"
+description = "current_max: 34/50. current: 34. percent: 68%."
+
+[[settings]]
+key = "second_bar"
+type = "bool"
+default = true
+label = "Stamina, mana and Zeal too"
+description = "Also show the number of each hero's second bar: stamina (Warrior, Thief, Ranger), mana (Voidcaller, Wizard, Blood Mage) or Zeal (Paladin). Off: health only."
+
+[[settings]]
+key = "text_size"
+type = "float"
+default = 6.0
+min = 4.0
+max = 10.0
+label = "Text size"
+description = "Height of the numbers in the game's HUD pixels (the bars are 6 apart)."

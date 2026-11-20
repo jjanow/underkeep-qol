@@ -173,6 +173,34 @@ pub const LAYOUT: &[(&str, usize)] = &[
     ("encounter_rect", 0x2fc),
 ];
 
+/// Offset in `GuiLayout` of `face_hp_mana_offset`, `{x, y}` (f32): where a
+/// portrait's HP bar starts, from the portrait's top-left corner
+/// (`face_rect_N`). The second bar (stamina, mana or Zeal) is
+/// [`SECOND_BAR_DY`] lower. Read by the game's bar drawing (1.0.5
+/// 0x14021e6b0).
+const HP_MANA_OFFSET: usize = 0xe0;
+/// How far below the HP bar the game draws a portrait's second bar (a
+/// constant of the bar drawing, GUI units).
+pub const SECOND_BAR_DY: f32 = 6.0;
+
+/// `face_hp_mana_offset` (see [`HP_MANA_OFFSET`]) in GUI units, if the
+/// layout was found and the value is sane.
+pub fn bar_offset() -> Option<Vec2> {
+    let base = GUI_LAYOUT.load(Ordering::Acquire);
+    if base == 0 {
+        return None;
+    }
+    // SAFETY: a static of the exe; the read is checked.
+    let [x, y]: [f32; 2] = unsafe { crate::game::read(base + HP_MANA_OFFSET)? };
+    let ok = |v: f32| (-200.0..=200.0).contains(&v);
+    (ok(x) && ok(y)).then_some(Vec2::new(x, y))
+}
+
+/// The portrait rect of party slot `i` (0..4).
+pub fn face_rect_name(i: usize) -> String {
+    format!("face_rect_{}", i + 1)
+}
+
 /// The weapon hand slot of hero `i` (0..4, party order).
 pub fn weapon_slot_name(i: usize) -> String {
     format!("face_hand_slot_{}", 2 * i + 1)
@@ -274,6 +302,24 @@ impl HudState {
             && self.hud_mode.is_some_and(|m| HUD_MODES.contains(&m))
             && self.menu == Some(0)
             && self.interaction == Some(0)
+    }
+
+    /// The hero portraits are on screen, maybe under a pick: as
+    /// [`HudState::shown`], but also while the player picks a target
+    /// (interaction 1: a skill or spell target, an ally portrait or an
+    /// enemy). Mods that only paint (no clickable widgets) may draw then;
+    /// see [`crate::host::Mod::hud_display_only`].
+    pub fn portraits_shown(&self) -> bool {
+        self.game_state == Some(4)
+            && self.hud_mode.is_some_and(|m| HUD_MODES.contains(&m))
+            && self.menu == Some(0)
+            && matches!(self.interaction, Some(0 | 1))
+    }
+
+    /// Whether a mod's HUD pass runs in this state: [`HudState::shown`],
+    /// or [`HudState::portraits_shown`] for a display-only mod.
+    pub fn draws(&self, display_only: bool) -> bool {
+        self.shown() || (display_only && self.portraits_shown())
     }
 }
 
@@ -552,5 +598,47 @@ mod tests {
         );
         assert!(!HudState { menu: None, ..play }.shown());
         assert!(!HudState::default().shown());
+    }
+
+    #[test]
+    fn display_only_also_during_target_pick() {
+        let play = HudState {
+            game_state: Some(4),
+            hud_mode: Some(1),
+            menu: Some(0),
+            interaction: Some(0),
+        };
+        let pick = HudState {
+            interaction: Some(1),
+            ..play
+        };
+        assert!(play.draws(false) && play.draws(true));
+        assert!(pick.portraits_shown());
+        assert!(
+            !pick.draws(false),
+            "clickable widgets stay off during a pick"
+        );
+        assert!(pick.draws(true));
+        // A shop or skill panel (5), a menu, the map: nobody draws.
+        for s in [
+            HudState {
+                interaction: Some(5),
+                ..play
+            },
+            HudState {
+                menu: Some(2),
+                ..play
+            },
+            HudState {
+                hud_mode: Some(11),
+                ..play
+            },
+            HudState {
+                interaction: None,
+                ..play
+            },
+        ] {
+            assert!(!s.portraits_shown() && !s.draws(true), "{s:?}");
+        }
     }
 }

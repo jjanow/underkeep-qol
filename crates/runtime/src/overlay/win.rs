@@ -586,10 +586,11 @@ fn pixels_per_point(ph: c_int) -> f32 {
     (ph as f32 / 1080.0).max(1.0)
 }
 
-/// Whether to run the HUD pass: some mod draws on the HUD (or the layout
-/// outlines are on) and the game's plain HUD is up.
+/// Whether to run the HUD pass: the layout outlines are on and the game's
+/// plain HUD is up, or some mod draws on the HUD in the current HUD state
+/// (the host checks the state per mod: `hud::HudState::draws`).
 fn hud_wanted() -> bool {
-    (crate::hud::debug() || host().is_some_and(|h| h.wants_hud())) && crate::hud::shown()
+    (crate::hud::debug() && crate::hud::shown()) || host().is_some_and(|h| h.wants_hud())
 }
 
 /// The egui layer of the mods' HUD widgets.
@@ -719,7 +720,7 @@ fn draw(api: &Api, window: Window, g: &mut Gfx, open: bool, hud: bool, in_frame:
                 .sense(egui::Sense::hover())
                 .show(ui.ctx(), |ui| {
                     ui.set_clip_rect(screen);
-                    if crate::hud::debug() {
+                    if crate::hud::debug() && crate::hud::shown() {
                         crate::hud::draw_debug(ui);
                     }
                     if let Some(h) = host.as_deref() {

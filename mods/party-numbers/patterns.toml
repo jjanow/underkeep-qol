@@ -1,0 +1,5 @@
+# Patterns for party-numbers. Format: CONTRIBUTING.md, "Adding a mod".
+#
+# None of its own: the mod reads the heroes through the runtime's `g_party`
+# (savehook) and places its text with the HUD layout (`g_gui_layout`), both
+# core patterns. The hero fields it reads are listed in src/lib.rs.

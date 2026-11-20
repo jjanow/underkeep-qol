@@ -1,0 +1,21 @@
+# Patterns for enemy-health. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments: 1.0.5 / 1.0.6 (Steam) VAs. Both functions are the
+# same code on the two builds; each pattern matches once on both.
+
+# The enemy health bars in the dungeon view, 0x1401ffc60 / 0x1401ffd50:
+# (Hud* hud). Called every frame by the dungeon HUD. Fills the (up to two)
+# enemies the party faces (0x1401feaf0), then for each one whose
+# Monster+0x128 (`invisible_hp_bar`) is clear draws the bar sized by
+# Monster+0x1f1 (`hpbar_size`), filled Monster+0xd0 / Monster+0x120, with
+# the enemy's name in it, and calls the status row below. Found from the
+# `hpbar_size` field's only reader. Prologue through `mov r12, rcx;
+# mov [rbp-0x50], rcx`.
+[enemy_bars]
+pattern = "4C 8B DC 49 89 5B 10 49 89 73 18 49 89 7B 20 55 41 54 41 55 41 56 41 57 49 8D AB 78 F8 FF FF 48 81 EC 60 08 00 00 45 0F 29 53 88 45 0F 29 A3 68 FF FF FF 45 0F 29 BB 38 FF FF FF 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 B0 06 00 00 4C 8B E1 48 89 4D B0"
+
+# The status-icon row under an enemy's bar, 0x1401ff4a0 / 0x1401ff590:
+# (Monster* m, float rect[4]) with rect = {bar x, bar y + bar h, bar w,
+# bar h}. Its only caller is the bar loop above. Prologue through
+# `mov edi, [rcx+0x208]; mov rbx, rdx; lea rdx, [rbp-0x18]; call`.
+[enemy_status_row]
+pattern = "40 55 53 57 48 8D AC 24 60 FE FF FF 48 81 EC A0 02 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 85 E0 00 00 00 8B B9 08 02 00 00 48 8B DA 48 8D 55 E8 E8"

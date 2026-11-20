@@ -1,6 +1,6 @@
 id = "shop-sort"
 name = "Shop sort"
-version = "1.0.12"
+version = "1.0.13"
 author = "underkeep-qol"
 description = "Keeps the merchant's list in every shop sorted: weapons by kind (swords together, axes together, ...), armor by slot (shields, body armor, helmets, gloves, boots, cloaks), and so on, cheapest first within each kind. Only the order on screen changes; your own side of the shop is left as it is."
 # Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
