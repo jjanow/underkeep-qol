@@ -772,15 +772,18 @@ impl App {
             let who = launch::short_account(&acc.account);
             let (text, color) = match &acc.state {
                 LaunchState::Set => (tr!("launch_state_set"), OK_GREEN),
-                LaunchState::Empty => {
-                    settable.push(acc.config.clone());
-                    (tr!("launch_state_empty"), WARN_AMBER)
+                LaunchState::Empty => (tr!("launch_state_empty"), WARN_AMBER),
+                LaunchState::Other(v) if launch::can_set(&acc.state) => {
+                    (tr!("launch_state_other_merge", v), WARN_AMBER)
                 }
                 LaunchState::Other(v) => (tr!("launch_state_other", v), WARN_AMBER),
                 LaunchState::NoApp => (tr!("launch_state_noapp"), WARN_AMBER),
                 LaunchState::Unreadable(e) => (tr!("launch_state_unreadable", e), BAD_RED),
             };
             ui.label(RichText::new(format!("{} {who}: {text}", tr!("gui_account"))).color(color));
+            if launch::can_set(&acc.state) {
+                settable.push(acc.config.clone());
+            }
         }
         if !settable.is_empty() {
             let ok = !self.steam_running && !self.game_running;

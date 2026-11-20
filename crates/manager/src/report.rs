@@ -43,6 +43,37 @@ fn os_info() -> String {
     s
 }
 
+/// DLLs the game doesn't ship (`version.dll` of another mod framework, a
+/// ReShade `dxgi.dll`...) and other loaders' folders next to the exe, sorted.
+/// Another loader can explain a crash or a mod that misbehaves.
+fn other_loaders(game: &Path) -> Vec<String> {
+    const SHIPPED: [&str; 6] = [
+        "bugsplat64.dll",
+        "bugsplatrc64.dll",
+        "fmod.dll",
+        "sdl3.dll",
+        "steam_api64.dll",
+        "winmm.dll",
+    ];
+    const FOLDERS: [&str; 1] = ["underkeepmodframework"];
+    let Ok(dir) = std::fs::read_dir(game) else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = dir
+        .flatten()
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let lower = name.to_ascii_lowercase();
+            let is_dir = e.file_type().is_ok_and(|t| t.is_dir());
+            let dll = !is_dir && lower.ends_with(".dll") && !SHIPPED.contains(&lower.as_str());
+            let loader_dir = is_dir && FOLDERS.contains(&lower.as_str());
+            (dll || loader_dir).then(|| if is_dir { format!("{name}/") } else { name })
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 pub fn build_report(st: &Status) -> String {
     let mut r = String::new();
     let _ = writeln!(r, "Underkeep QoL report");
@@ -75,6 +106,16 @@ pub fn build_report(st: &Status) -> String {
         DllState::Foreign => "present, not installed by uk-qol",
     };
     let _ = writeln!(r, "winmm.dll: {dll}");
+    let others = other_loaders(&st.install.dir);
+    let _ = writeln!(
+        r,
+        "other mod loaders or DLLs in the game folder: {}",
+        if others.is_empty() {
+            "none".to_string()
+        } else {
+            others.join(", ")
+        }
+    );
     let _ = writeln!(
         r,
         "abnormal exits in a row: {}{}",
@@ -202,5 +243,27 @@ mod tests {
         assert!(r.contains("winmm.dll: installed by uk-qol"));
         assert!(r.contains("[files]"));
         assert!(r.contains("loaded into x"));
+        assert!(r.contains("other mod loaders or DLLs in the game folder: none"));
+    }
+
+    #[test]
+    fn lists_other_loaders() {
+        let game = crate::install::tests::fake_game();
+        let g = game.path();
+        for f in [
+            "SDL3.dll",
+            "winmm.dll",
+            "version.dll",
+            "dxgi.DLL",
+            "notes.txt",
+        ] {
+            std::fs::write(g.join(f), b"x").unwrap();
+        }
+        std::fs::create_dir(g.join("UnderkeepModFramework")).unwrap();
+        std::fs::create_dir(g.join("mods")).unwrap();
+        assert_eq!(
+            other_loaders(g),
+            ["UnderkeepModFramework/", "dxgi.DLL", "version.dll"]
+        );
     }
 }

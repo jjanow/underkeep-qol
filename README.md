@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.13](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.14](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 versions 1.0.6 and 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
@@ -25,7 +25,8 @@ formula choices, new in 1.0.6, haven't been tried in game yet) and
 and `shop-sort` (new in 1.0.11) and `party-numbers`, `enemy-health` and
 `hidden-stats` (new in 1.0.13, tested on game 1.0.6);
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
-yet. Steam Deck and macOS bottles are
+yet, and the manager keeping other launch options when it sets ours (new in
+1.0.14) is unit-tested only. Steam Deck and macOS bottles are
 expected to work but haven't been tested; reports are welcome in the
 [issues](https://github.com/jjanow/underkeep-qol/issues).
 
@@ -127,6 +128,30 @@ later brings the mods' state back.
 **If the game misbehaves**: hold **Shift** while it starts to run it with
 every mod off. After a game update a mod may turn itself off until its
 patterns are updated; the mod menu says which one and why.
+
+**With other mod loaders**: this loader can be installed next to another
+one, such as the Underkeep Mod Framework (a `version.dll` that changes the
+game's data and loads mods from a `mods` folder). They use different DLL
+names, and the framework itself doesn't change the game code our mods
+hook. Its mods can bring their own DLLs, though: if one of those changes a
+function a mod here needs, that mod turns itself off and the mod menu says
+why. On Linux each needs its own DLL
+override, in one launch option:
+`WINEDLLOVERRIDES="version=n,b;winmm=n,b" %command%`. The manager's **Set
+it in Steam for me** adds ours to an override that is already there and
+keeps your other launch options. Two limits when both are installed:
+
+- The framework writes the game data its mods change as whole definitions
+  that load after the game's own. When one of its mods changes a
+  definition that a mod here also changes in memory (the text that
+  `learned-recipes` adds, or your own `uk_qol/patches`), the framework's
+  version wins. `learned-recipes` then shows its lines in English.
+- Items added by the framework's mods have no picture in `weapon-swap`'s
+  second slot; the slot shows the item's name instead.
+
+This was checked by reading the framework's documentation and its DLL, not
+by playing with both installed. `uk-qol report` lists other loaders it finds
+in the game folder; please include it if something goes wrong with both.
 
 ## How it works
 
@@ -741,6 +766,8 @@ mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
   borderless-compat/  item-highlight/  melee-accuracy/  learned-recipes/
   shop-sort/  party-numbers/  enemy-health/  hidden-stats/
+tools/
+  pattern-diff.py  every pattern on two game builds, and what changed (game updates)
 ```
 
 ## Building
@@ -787,6 +814,9 @@ from the Actions tab, not on pushes or pull requests.
 When the game updates:
 
 1. `uk-qol status` lists every pattern that no longer resolves.
+   `tools/pattern-diff.py <old exe> <new exe> --disasm` shows the same for
+   both builds side by side, and which of the functions the mods hook
+   changed.
 2. Find the moved function in the new exe (start from the old match) and
    update `patterns.toml`.
 3. Patterns are kept per build, so players still on an older build keep working.

@@ -112,6 +112,9 @@ Check items off as they land; add findings under the item they belong to.
 - [x] Fallback if winmm fails anywhere: `version.dll` (also imported by
       SDL3). Record the result here.
   - Not needed: winmm works on Proton and Windows (2026-11-14).
+  - Dropped (2026-11-20): `version.dll` is what the Underkeep Mod Framework
+    installs, so it is no longer free to use as a fallback. The two loaders
+    can be installed side by side (README, "With other mod loaders").
 
 ## 2. Runtime core
 
@@ -964,6 +967,12 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-20: version 1.0.13, tag `v1.0.13`: three new mods from player
     requests, `party-numbers`, `enemy-health` (off by default) and
     `hidden-stats`; runtime `Mod::hud_display_only`.
+  - 2026-11-20: version 1.0.14, tag `v1.0.14`: running next to the
+    Underkeep Mod Framework (its `version.dll`, analysed from its files, not
+    run): the manager adds `winmm=n,b` to an existing `WINEDLLOVERRIDES`
+    instead of refusing, `uk-qol report` lists other loaders' DLLs and
+    folders, README "With other mod loaders"; `tools/pattern-diff.py` for
+    game updates; CONTRIBUTING: data patches before code hooks.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

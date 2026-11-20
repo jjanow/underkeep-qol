@@ -204,7 +204,7 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ),
     (
         "launch_other",
-        "Account {} already has other launch options ({}); add the line below to them yourself.",
+        "Account {} has launch options that already set winmm ({}); change them by hand to load the mods.",
     ),
     (
         "launch_no_app",
@@ -221,6 +221,10 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ("launch_state_set", "set"),
     ("launch_state_empty", "not set"),
     ("launch_state_other", "not set (other options: {})"),
+    (
+        "launch_state_other_merge",
+        "not set (other options: {}; setting it keeps them)",
+    ),
     ("launch_state_noapp", "no Steam entry for the game yet"),
     ("launch_state_unreadable", "can't read Steam's config ({})"),
     ("launch_unknown", "can't check (Steam install not found)"),
@@ -376,7 +380,7 @@ On Linux / Steam Deck (Proton) the game needs this launch option in Steam
     ),
     (
         "err_launch_other",
-        "the game already has other launch options; add it by hand",
+        "the game's launch options already set winmm another way; change them by hand",
     ),
     ("err_update_reach", "couldn't reach GitHub: {}"),
     ("err_update_status", "GitHub answered with status {}"),

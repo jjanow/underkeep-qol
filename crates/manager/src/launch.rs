@@ -65,6 +65,90 @@ pub fn value_is_set(v: &str) -> bool {
     winmm_native && lower.contains("%command%")
 }
 
+/// The override we add, inside a `WINEDLLOVERRIDES` value.
+const WINMM_OVERRIDE: &str = "winmm=n,b";
+
+/// `v` with our override added, keeping every option already there, or
+/// `None` if `v` already names winmm with another mode (the player chose
+/// that; we don't override it).
+///
+/// - `WINEDLLOVERRIDES` already set (another loader, such as
+///   `version=n,b` for another mod framework): `;winmm=n,b` is appended
+///   inside its value, keeping its quotes.
+/// - No `WINEDLLOVERRIDES` but a `%command%`: ours goes in front.
+/// - No `%command%` (Steam then appends the options to the game's command
+///   line): ours and `%command%` go in front of them.
+pub fn merged_value(v: &str) -> Option<String> {
+    if value_is_set(v) {
+        return Some(v.to_string());
+    }
+    let lower = v.to_ascii_lowercase();
+    if let Some((start, end)) = overrides_span(&lower) {
+        let overrides = &v[start..end];
+        let names_winmm = overrides.split(';').any(|part| {
+            let dlls = part.split_once('=').map_or(part, |(d, _)| d);
+            dlls.split(',')
+                .any(|d| d.trim().eq_ignore_ascii_case("winmm"))
+        });
+        if names_winmm {
+            return None;
+        }
+        let sep = if overrides.trim().is_empty() || overrides.trim_end().ends_with(';') {
+            ""
+        } else {
+            ";"
+        };
+        let out = format!("{}{sep}{WINMM_OVERRIDE}{}", &v[..end], &v[end..]);
+        return if out.to_ascii_lowercase().contains("%command%") {
+            Some(out)
+        } else {
+            Some(format!("{out} %command%").trim_start().to_string())
+        };
+    }
+    let ours = format!("WINEDLLOVERRIDES=\"{WINMM_OVERRIDE}\"");
+    if lower.contains("%command%") {
+        Some(format!("{ours} {}", v.trim_start()))
+    } else {
+        Some(format!("{ours} %command% {}", v.trim()))
+    }
+}
+
+/// Byte range of the `WINEDLLOVERRIDES` value in `lower` (lowercased launch
+/// options), inside its quotes if it has any. The name must start a word.
+fn overrides_span(lower: &str) -> Option<(usize, usize)> {
+    const NAME: &str = "winedlloverrides=";
+    let mut from = 0;
+    while let Some(i) = lower[from..].find(NAME).map(|i| i + from) {
+        let starts_word = lower[..i]
+            .chars()
+            .next_back()
+            .is_none_or(char::is_whitespace);
+        if starts_word {
+            let mut start = i + NAME.len();
+            let rest = &lower[start..];
+            let end = match rest.chars().next() {
+                Some(q @ ('"' | '\'')) => {
+                    start += 1;
+                    start + lower[start..].find(q)?
+                }
+                _ => start + rest.find(char::is_whitespace).unwrap_or(rest.len()),
+            };
+            return Some((start, end));
+        }
+        from = i + NAME.len();
+    }
+    None
+}
+
+/// Whether [`set_in_text`] can set the option for an account in `state`.
+pub fn can_set(state: &LaunchState) -> bool {
+    match state {
+        LaunchState::Empty => true,
+        LaunchState::Other(v) => merged_value(v).is_some(),
+        _ => false,
+    }
+}
+
 pub fn state_of(text: &str) -> LaunchState {
     let doc = match vdf::parse(text) {
         Ok(d) => d,
@@ -131,8 +215,9 @@ pub fn short_account(id: &str) -> String {
 }
 
 /// Sets the launch option in a `localconfig.vdf` text, changing only that
-/// value. Refuses if the game has other launch options (they'd need merging
-/// by hand) or no entry.
+/// value. Other launch options the game has are kept ([`merged_value`]).
+/// Refuses if they already name winmm with another mode, or the game has no
+/// entry.
 pub fn set_in_text(text: &str) -> Result<String, String> {
     let doc = vdf::parse(text).map_err(|e| tr!("err_vdf", e))?;
     let app = vdf::find_path(&doc, &APP_PATH).ok_or_else(|| tr!("err_launch_no_app"))?;
@@ -141,15 +226,20 @@ pub fn set_in_text(text: &str) -> Result<String, String> {
     };
     let quoted = vdf::quote(LAUNCH_OPTION);
     if let Some(e) = vdf::find(children, "LaunchOptions") {
-        return match &e.value {
-            vdf::Value::Str(v) if value_is_set(v) => Ok(text.to_string()),
-            vdf::Value::Str(v) if v.trim().is_empty() => Ok(format!(
-                "{}{quoted}{}",
-                &text[..e.span.start],
-                &text[e.span.end..]
-            )),
-            _ => Err(tr!("err_launch_other")),
+        let new = match &e.value {
+            vdf::Value::Str(v) if value_is_set(v) => return Ok(text.to_string()),
+            vdf::Value::Str(v) if v.trim().is_empty() => quoted,
+            vdf::Value::Str(v) => match merged_value(v) {
+                Some(m) => vdf::quote(&m),
+                None => return Err(tr!("err_launch_other")),
+            },
+            _ => return Err(tr!("err_launch_other")),
         };
+        return Ok(format!(
+            "{}{new}{}",
+            &text[..e.span.start],
+            &text[e.span.end..]
+        ));
     }
     // Insert a new line before the app block's closing brace, indented one
     // level deeper than the brace.
@@ -295,10 +385,96 @@ mod tests {
             before.len() + vdf::quote(LAUNCH_OPTION).len() - 2
         );
 
-        // Already set: unchanged. Other options or no entry: refused.
+        // Already set: unchanged. No entry: refused.
         assert_eq!(set_in_text(&after).unwrap(), after);
-        assert!(set_in_text(&sample(&app("\t\t\t\t\t\t\"LaunchOptions\"\t\t\"-x\"\n"))).is_err());
         assert!(set_in_text(&sample("")).is_err());
+
+        // Other options: ours is merged in, only that value changes.
+        let other = |v: &str| {
+            sample(&app(&format!(
+                "\t\t\t\t\t\t\"LaunchOptions\"\t\t{}\n",
+                vdf::quote(v)
+            )))
+        };
+        let before = other("WINEDLLOVERRIDES=\"version=n,b\" %command%");
+        let after = set_in_text(&before).unwrap();
+        assert_eq!(state_of(&after), LaunchState::Set);
+        assert_eq!(
+            after,
+            other("WINEDLLOVERRIDES=\"version=n,b;winmm=n,b\" %command%")
+        );
+        assert_eq!(set_in_text(&after).unwrap(), after);
+        // winmm already named with another mode: the player's choice, refused.
+        assert!(set_in_text(&other("WINEDLLOVERRIDES=\"winmm=b\" %command%")).is_err());
+    }
+
+    #[test]
+    fn merges_with_other_options() {
+        let m = |v: &str| merged_value(v);
+        // Another loader's override (a version.dll mod framework).
+        assert_eq!(
+            m("WINEDLLOVERRIDES=\"version=n,b\" %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=\"version=n,b;winmm=n,b\" %command%")
+        );
+        assert_eq!(
+            m("PROTON_LOG=1 WINEDLLOVERRIDES='version=n,b' %command% -x").as_deref(),
+            Some("PROTON_LOG=1 WINEDLLOVERRIDES='version=n,b;winmm=n,b' %command% -x")
+        );
+        assert_eq!(
+            m("WINEDLLOVERRIDES=version=n,b %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=version=n,b;winmm=n,b %command%")
+        );
+        assert_eq!(
+            m("WINEDLLOVERRIDES=\"dxgi=n;\" %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=\"dxgi=n;winmm=n,b\" %command%")
+        );
+        assert_eq!(
+            m("WINEDLLOVERRIDES=\"\" %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=\"winmm=n,b\" %command%")
+        );
+        // An override without %command% gets one.
+        assert_eq!(
+            m("WINEDLLOVERRIDES=\"version=n,b\"").as_deref(),
+            Some("WINEDLLOVERRIDES=\"version=n,b;winmm=n,b\" %command%")
+        );
+        // No override yet.
+        assert_eq!(
+            m("PROTON_LOG=1 %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=\"winmm=n,b\" PROTON_LOG=1 %command%")
+        );
+        assert_eq!(
+            m("gamemoderun %command% -novid").as_deref(),
+            Some("WINEDLLOVERRIDES=\"winmm=n,b\" gamemoderun %command% -novid")
+        );
+        assert_eq!(
+            m("-novid").as_deref(),
+            Some("WINEDLLOVERRIDES=\"winmm=n,b\" %command% -novid")
+        );
+        // A variable whose name only ends in WINEDLLOVERRIDES isn't it.
+        assert_eq!(
+            m("MY_WINEDLLOVERRIDES=x %command%").as_deref(),
+            Some("WINEDLLOVERRIDES=\"winmm=n,b\" MY_WINEDLLOVERRIDES=x %command%")
+        );
+        // Every result loads our DLL.
+        for v in [
+            "WINEDLLOVERRIDES=\"version=n,b\" %command%",
+            "PROTON_LOG=1 %command%",
+            "-novid",
+            "WINEDLLOVERRIDES=\"version=n,b\"",
+        ] {
+            assert!(value_is_set(&m(v).unwrap()), "{v}");
+        }
+        // Already set: unchanged.
+        assert_eq!(m(LAUNCH_OPTION).as_deref(), Some(LAUNCH_OPTION));
+        // winmm named with another mode, or in a list: left to the player.
+        assert_eq!(m("WINEDLLOVERRIDES=\"winmm=b\" %command%"), None);
+        assert_eq!(m("WINEDLLOVERRIDES=\"d3d9,WinMM=\" %command%"), None);
+        assert!(can_set(&LaunchState::Empty));
+        assert!(can_set(&LaunchState::Other("-x".into())));
+        assert!(!can_set(&LaunchState::Other(
+            "WINEDLLOVERRIDES=winmm=b %command%".into()
+        )));
+        assert!(!can_set(&LaunchState::Set));
     }
 
     #[test]

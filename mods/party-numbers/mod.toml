@@ -1,6 +1,6 @@
 id = "party-numbers"
 name = "Party numbers"
-version = "1.0.13"
+version = "1.0.14"
 author = "underkeep-qol"
 description = "Shows each hero's health and their second bar (stamina, mana or Zeal) as numbers on the portrait bars, so you don't have to open the character sheet to check them."
 # Builds (exe SHA-256) the mod was tested on: 1.0.6 (Steam). Its patterns

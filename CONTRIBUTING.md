@@ -32,7 +32,17 @@ build test inputs by hand otherwise (see `crates/dft` for an example).
 ## Adding a mod
 
 Built-in mods live in `mods/<id>/`, each a crate named `uk-qol-mod-<id>`
-(see `mods/skip-logos`), and are compiled into the runtime:
+(see `mods/skip-logos`), and are compiled into the runtime. There is one
+DLL and one version for everything on purpose: players install one file,
+and Rust has no stable interface for loading mods built separately. A new
+mod comes in as a pull request.
+
+**Data first.** If what the mod changes is in the game's definition files
+(numbers, lists, shops, drop lists, text), make it a data patch
+([Data patches](#data-patches)) rather than a code hook. Definitions keep
+their names across game updates; code moves, and every pattern is
+something to check after each patch. Use code hooks for what data can't
+do: drawing, input, new UI, changing how the game computes something.
 
 1. `mod.toml`: the manifest (below).
 2. `patterns.toml`: every function or address the mod needs, as a named byte
@@ -323,6 +333,13 @@ remove = "old_record.unused"      # in a list, later items move up
   patches naming them are refused.
 - To see every document name the game parses, set `log_defs = true` under
   `[runtime]` in `uk_qol/config.toml`; the log lists them.
+- **Other loaders.** The Underkeep Mod Framework (a separate `version.dll`)
+  writes each definition its mods change as a whole copy, built from the
+  game's files, that loads after the game's own; the game keeps the last
+  definition of a name. A patch here on a definition one of its mods also
+  changes is then lost (it changes the game's copy, not the framework's).
+  A mod must still work, or fall back, when its patched values are missing,
+  as `learned-recipes` falls back to English text.
 
 ## Updating patterns after a game patch
 
@@ -330,6 +347,8 @@ remove = "old_record.unused"      # in a list, later items move up
    longer resolves.
 2. Find the moved code in the new exe (start from the old match), write a new
    pattern and check that it matches **exactly once**.
+   `python3 tools/pattern-diff.py <old exe> <new exe>` resolves every
+   pattern on both builds (see its `--help`).
 3. Patterns are per build: add the new one next to the old one instead of
    replacing it, so players still on the old build keep working.
 4. In the pull request, give the build (exe SHA-256 from `uk-qol report`) you
@@ -347,7 +366,12 @@ around without changing it, and need only new patterns, no code.
    reports as duplicates of it.
 2. **Check the new build**: `uk-qol status` on the updated install lists
    each mod and every pattern that no longer resolves; the runtime log
-   gives the exe SHA-256 and version.
+   gives the exe SHA-256 and version. Then, with a copy of the previous
+   exe, `python3 tools/pattern-diff.py <old exe> <new exe> --disasm`
+   resolves every pattern on both builds and counts the changed
+   instructions in each function a pattern finds. 0 means the code only
+   moved; anything else (`-v` prints the diff) needs a look before the
+   mod is trusted on the new build, even if its pattern still matches.
 3. **Fix the patterns** as in [Updating patterns](#updating-patterns-after-a-game-patch),
    keeping the old build's entries. If the code itself changed (a struct
    offset, a function's arguments), the mod needs a code fix and a new

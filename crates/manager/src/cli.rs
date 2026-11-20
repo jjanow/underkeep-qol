@@ -280,15 +280,18 @@ fn launch_option_step(g: &GameInstall, set: bool) -> Result<(), String> {
         } else {
             for acc in &accounts {
                 let who = launch::short_account(&acc.account);
-                match &acc.state {
-                    LaunchState::Set => {}
-                    LaunchState::Empty => match launch::set(&acc.config) {
+                if launch::can_set(&acc.state) {
+                    match launch::set(&acc.config) {
                         Ok(Some(backup)) => {
                             println!("{}", tr!("launch_set_done", who, backup.display()))
                         }
                         Ok(None) => {}
                         Err(e) => println!("{}", tr!("launch_set_failed", who, e)),
-                    },
+                    }
+                    continue;
+                }
+                match &acc.state {
+                    LaunchState::Set | LaunchState::Empty => {}
                     LaunchState::Other(v) => println!("{}", tr!("launch_other", who, v)),
                     LaunchState::NoApp => println!("{}", tr!("launch_no_app", who)),
                     LaunchState::Unreadable(e) => println!("{}", tr!("launch_set_failed", who, e)),
@@ -315,6 +318,7 @@ fn launch_state_text(s: &LaunchState) -> String {
     match s {
         LaunchState::Set => tr!("launch_state_set"),
         LaunchState::Empty => tr!("launch_state_empty"),
+        LaunchState::Other(v) if launch::can_set(s) => tr!("launch_state_other_merge", v),
         LaunchState::Other(v) => tr!("launch_state_other", v),
         LaunchState::NoApp => tr!("launch_state_noapp"),
         LaunchState::Unreadable(e) => tr!("launch_state_unreadable", e),
