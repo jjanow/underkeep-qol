@@ -1319,7 +1319,7 @@ mod tests {
     }
 
     /// Resolves every pattern against the game's exe when it's installed
-    /// (skipped otherwise) and checks the addresses found in 1.0.5.
+    /// (skipped otherwise) and checks the addresses found in 1.0.6.
     #[test]
     fn patterns_resolve_on_installed_game() {
         use uk_qol_runtime::host::resolve_pattern;
@@ -1335,37 +1335,37 @@ mod tests {
         let mapped = uk_qol_runtime::pe::map_file(&file).unwrap();
         let img = Image::new(&mapped).unwrap();
         let expected: BTreeMap<&str, u32> = [
-            ("hero_equip_item", 0x17ddb0),
-            ("hero_unequip", 0x17ebf0),
-            ("item_create", 0x140f00),
-            ("item_take", 0x141ed0),
-            ("inventory_add", 0x198b90),
-            ("in_battle", 0x191600),
-            ("round_action_push", 0x1c83c0),
-            ("turn_manager", 0x43f410),
-            ("party", 0x43f620),
-            ("party_inventory", 0x4402e8),
-            ("selected_hero", 0x44011c),
-            ("game_state", 0x43ca50),
-            ("ui_mode", 0x440430),
-            ("cursor", 0x442bc8),
-            ("target_mode", 0x441384),
-            ("drag_item", 0x1418a0),
-            ("drag_end", 0x165f90),
-            ("char_sheet", 0x440db0),
-            ("ui_context", 0x43ca68),
+            ("hero_equip_item", 0x17dea0),
+            ("hero_unequip", 0x17ece0),
+            ("item_create", 0x140fb0),
+            ("item_take", 0x141f80),
+            ("inventory_add", 0x198c80),
+            ("in_battle", 0x1916f0),
+            ("round_action_push", 0x1c84b0),
+            ("turn_manager", 0x43f430),
+            ("party", 0x43f640),
+            ("party_inventory", 0x440308),
+            ("selected_hero", 0x44013c),
+            ("game_state", 0x43ca70),
+            ("ui_mode", 0x440450),
+            ("cursor", 0x442be8),
+            ("target_mode", 0x4413a4),
+            ("drag_item", 0x141950),
+            ("drag_end", 0x166040),
+            ("char_sheet", 0x440dd0),
+            ("ui_context", 0x43ca88),
             ("script_condition", 0xda910),
             ("script_command", 0xdbc20),
-            ("tooltip_draw", 0x166850),
-            ("tooltip_show", 0x167270),
+            ("tooltip_draw", 0x166900),
+            ("tooltip_show", 0x167320),
             ("tooltip_compare", 0x371750),
-            ("item_tooltip", 0x248ed0),
-            ("tooltip_layout_point", 0x11e950),
+            ("item_tooltip", 0x249370),
+            ("tooltip_layout_point", 0x11e9a0),
             ("string_concat", 0x27de0),
             ("string_copy", 0x27970),
             ("string_free", 0x3000),
-            ("party_round_tick", 0x187cb0),
-            ("hero_rest_step", 0x17dac0),
+            ("party_round_tick", 0x187da0),
+            ("hero_rest_step", 0x17dbb0),
         ]
         .into_iter()
         .collect();
@@ -1373,7 +1373,7 @@ mod tests {
         let build = uk_qol_runtime::build::detect_from_file(&exe)
             .unwrap()
             .sha256_hex();
-        if build != "d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4" {
+        if build != "556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba" {
             return; // another game version
         }
         for p in &pats.patterns {

@@ -70,7 +70,9 @@ description = "..."           # optional
 # Exe SHA-256s (uk-qol report) the mod was tested on, or "any" for a mod
 # that doesn't depend on the exe. Informational: on other builds the mod
 # still loads when every required pattern resolves, marked "not tested".
-game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+# Only the current Steam build is supported (Steam has no version
+# branches), so after a game update this lists the new build only.
+game_builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 conflicts = ["other-mod"]     # optional: never active at the same time
 dependencies = ["core-mod"]   # optional: must be active first
 enabled = true                # optional (default true): on unless the user turns it off
@@ -145,7 +147,7 @@ optional = false              # optional: a missing optional pattern doesn't
 [[menu_state.candidates]]
 pattern = "48 89 05 ?? ?? ?? ?? C6 05"
 rip = { disp = 3, len = 7 }
-builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 [[menu_state.candidates]]
 pattern = "48 89 1D ?? ?? ?? ?? C6 05"
 rip = { disp = 3, len = 7 }
@@ -349,8 +351,9 @@ remove = "old_record.unused"      # in a list, later items move up
    pattern and check that it matches **exactly once**.
    `python3 tools/pattern-diff.py <old exe> <new exe>` resolves every
    pattern on both builds (see its `--help`).
-3. Patterns are per build: add the new one next to the old one instead of
-   replacing it, so players still on the old build keep working.
+3. Replace the old pattern with the new one. Only the current Steam build is
+   supported: Steam has no version branches, so every player gets the
+   update. Set each manifest's `game_builds` to the new build only.
 4. In the pull request, give the build (exe SHA-256 from `uk-qol report`) you
    tested on.
 
@@ -373,7 +376,7 @@ around without changing it, and need only new patterns, no code.
    moved; anything else (`-v` prints the diff) needs a look before the
    mod is trusted on the new build, even if its pattern still matches.
 3. **Fix the patterns** as in [Updating patterns](#updating-patterns-after-a-game-patch),
-   keeping the old build's entries. If the code itself changed (a struct
+   replacing the old build's entries. If the code itself changed (a struct
    offset, a function's arguments), the mod needs a code fix and a new
    loader instead.
 4. **Test in game** what each changed pattern does (the mod's own in-game

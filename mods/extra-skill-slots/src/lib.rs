@@ -972,7 +972,7 @@ mod tests {
     }
 
     /// Resolves every pattern against the game's exe when it's installed
-    /// (skipped otherwise) and checks the tooltip addresses found in 1.0.5.
+    /// (skipped otherwise) and checks the tooltip addresses found in 1.0.6.
     #[test]
     fn patterns_resolve_on_installed_game() {
         use uk_qol_runtime::host::resolve_pattern;
@@ -990,14 +990,14 @@ mod tests {
         let build = uk_qol_runtime::build::detect_from_file(&exe)
             .unwrap()
             .sha256_hex();
-        if build != "d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4" {
+        if build != "556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba" {
             return; // another game version
         }
         let expected: BTreeMap<&str, u32> = [
-            ("hud_skill_slot", 0x21dd40),
-            ("tooltip_show", 0x167270),
-            ("skill_tooltip", 0x246580),
-            ("g_skill_tooltip_width", 0x43ce7c),
+            ("hud_skill_slot", 0x21de30),
+            ("tooltip_show", 0x167320),
+            ("skill_tooltip", 0x246670),
+            ("g_skill_tooltip_width", 0x43ce9c),
             ("string_concat", 0x27de0),
             ("string_free", 0x3000),
         ]

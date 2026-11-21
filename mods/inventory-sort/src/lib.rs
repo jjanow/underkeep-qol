@@ -247,8 +247,8 @@ mod tests {
     use uk_qol_runtime::host::{Manifest, PatternFile, SettingKind, resolve_pattern};
     use uk_qol_runtime::pattern::Image;
 
-    /// Game 1.0.5 (Steam).
-    const BUILD_105: &str = "d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4";
+    /// Game 1.0.6 (Steam).
+    const BUILD_106: &str = "556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba";
 
     #[test]
     fn manifest_and_patterns_parse() {
@@ -275,11 +275,11 @@ mod tests {
         assert!(b.max.x > panel.max.x - 4.0 && b.min.y < panel.min.y + 4.0);
     }
 
-    /// With `UNDERKEEP_DIR` set to a 1.0.5 install: every pattern matches
+    /// With `UNDERKEEP_DIR` set to a 1.0.6 install: every pattern matches
     /// exactly once (the runtime's own scanner) and lands where the static
     /// analysis says. Skipped without the game or on another build.
     #[test]
-    fn patterns_resolve_on_105() {
+    fn patterns_resolve_on_106() {
         let Some(dir) = std::env::var_os("UNDERKEEP_DIR") else {
             return;
         };
@@ -290,20 +290,20 @@ mod tests {
         let bytes = uk_qol_runtime::pe::map_file(&file).unwrap();
         let img = Image::new(&bytes).unwrap();
         let expected = [
-            ("party_inventory", 0x4402e8),
-            ("hud_mode", 0x440430),
-            ("gui_ctx", 0x43ca68),
-            ("game_state", 0x43ca50),
-            ("menu_state", 0x43e680),
-            ("hud_modal", 0x441384),
+            ("party_inventory", 0x440308),
+            ("hud_mode", 0x440450),
+            ("gui_ctx", 0x43ca88),
+            ("game_state", 0x43ca70),
+            ("menu_state", 0x43e6a0),
+            ("hud_modal", 0x4413a4),
             ("input_blocked", 0x53c20),
-            ("inventory_add", 0x198b90),
-            ("inventory_remove", 0x198f80),
-            ("inventory_view", 0x440310),
+            ("inventory_add", 0x198c80),
+            ("inventory_remove", 0x199070),
+            ("inventory_view", 0x440330),
         ];
         let pats = PatternFile::parse(new().patterns()).unwrap();
         for def in &pats.patterns {
-            let r = resolve_pattern(&img, def, Some(BUILD_105));
+            let r = resolve_pattern(&img, def, Some(BUILD_106));
             let want = expected.iter().find(|(n, _)| *n == def.name).map(|e| e.1);
             match (r, want) {
                 (Ok(r), Some(w)) => assert_eq!(r.rva, w, "{}", def.name),

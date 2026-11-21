@@ -18,9 +18,11 @@
 //!   (hero melee attack 0x14012f830); ranged hit: `Hero+0x164` (DEX x 9 in
 //!   1.0.6, x 10 before, plus bonuses) minus the target's evasion and
 //!   ranged evasion (0x140133160).
-//! - armor against an enemy hit (0x14012e090): melee `armor + Hero+0x140`
-//!   (+ `Hero+0x13c` if the attacker is an animal), ranged `armor +
-//!   Hero+0x144`, minus the attacker's armor pierce.
+//! - armor against an enemy hit (1.0.6 0x14012e170): melee `armor +
+//!   Hero+0x140` (+ `Hero+0x13c` if the attacker is an animal), ranged
+//!   `armor + Hero+0x144`, minus the attacker's armor pierce, floored at 0.
+//!   The hit loses `ceil(that x hero_armor_damage_reduction / 100)`
+//!   (`global_params`, 60); 0 or less is a block.
 //! - an enemy's hit chance on the hero: `100 - evasion` (`Hero+0x128`,
 //!   capped at `60 + Hero+0x130`), minus `Hero+0x12c` too for a ranged
 //!   attack, minus 50 if the attacker is blind.

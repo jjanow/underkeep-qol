@@ -164,6 +164,6 @@ mod tests {
         let Some(p) = game_exe() else { return };
         let b = detect_from_file(&p).unwrap();
         println!("{b}");
-        assert_eq!(b.version.as_deref(), Some("1.0.5"));
+        assert_eq!(b.version.as_deref(), Some("1.0.6"));
     }
 }

@@ -15,8 +15,9 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.15](https://github.com/jjanow/underkeep-qol/releases/latest), for game
-versions 1.0.6 and 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
+[1.0.15](https://github.com/jjanow/underkeep-qol/releases/latest), for the
+current game version, 1.0.6. Older game versions aren't supported: Steam
+always updates the game to the latest version. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
@@ -186,7 +187,7 @@ override. In Steam, *Properties → Launch Options*:
 `WINEDLLOVERRIDES="winmm=n,b" %command%`
 
 This works on Windows with no extra setup, and under Steam (Flatpak) with
-Proton: the runtime loads in game version 1.0.5 and audio, gamepad,
+Proton: the runtime loads in game version 1.0.6 and audio, gamepad,
 save/load and quit work normally.
 
 The manager sets this up or prints the exact line to paste.
@@ -198,7 +199,7 @@ from Linux too).
 
 - **Build detection.** Identifies the game build by the exe's SHA-256, so each
   build is treated as its own binary, and reads the version string the title
-  screen shows (`version 1.0.5`). Both go into the log and bug reports.
+  screen shows (`version 1.0.6`). Both go into the log and bug reports.
 - **Byte-pattern scanning.** Each mod lists the functions it needs as patterns
   with wildcards (`48 8B ?? ?? 0F 85 ...`) plus how to get from the match to the
   target. Patterns are resolved once at startup. If a required pattern finds no

@@ -3,7 +3,7 @@ name = "Borderless compatibility"
 version = "1.0.15"
 author = "underkeep-qol"
 description = "Borderless fullscreen always uses the game's Compatibility mode, so it stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen."
-# Builds (exe SHA-256) the mod was tested on: 1.0.5 (Steam).
-game_builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
+# Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.
+game_builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 enabled = true
 # No [[settings]]: the mod's one on/off switch is `enabled`.

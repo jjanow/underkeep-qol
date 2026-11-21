@@ -141,6 +141,13 @@ Check items off as they land; add findings under the item they belong to.
     quickload kept the slot (no mismatch); extra-skill-slots' tooltip shows
     the 1.0.6 text. Not tried on 1.0.6: a Blood Mage cast, quest-item
     scripts, Windows.
+  - 2026-11-21: only the current Steam build is supported (Steam has no
+    version branches, so every player gets the latest). The 1.0.5 pattern
+    candidates are gone, every manifest lists the 1.0.6 build only, and the
+    installed-game tests (patterns, `build::tests::game_exe_build`) check
+    1.0.6. Enemy-hit armor re-checked in 1.0.6 (`0x14012e170`; the old
+    `0x14012e090` note was a wrong address). RE comments that cite
+    1.0.5 addresses are left as they are (each names its version).
   - Saves record the version they were made with (the log says "Game
     version: 1.0.3" when loading one).
   - Seen in game (Proton, 2026-11-14): the log shows the 1.0.5 hash above and
@@ -882,7 +889,7 @@ In order of difficulty; each ships when done, with settings and tests.
     (0x1400cfe80) into Hero+0x10c..; names from the parser 0x1400c2880;
     units from the item tooltip (0x140169cb0: 0 flat, 1 percent, 2 plain).
     Melee hit 100 + 0x160; ranged 0x164; armor vs melee 0x134+0x140
-    (+0x13c animals), vs ranged 0x134+0x144 (0x14012e090); evasion cap
+    (+0x13c animals), vs ranged 0x134+0x144 (1.0.5 0x14012e120, 1.0.6 0x14012e170); evasion cap
     clamp(60 + 0x130); ranged evasion 0x12c; heals 0x1e0 / 0x1e8 / 0x1e4;
     immunities bytes 0x200..0x206.
   - Detours the rebuild; appends rows with the game's push, then moves
