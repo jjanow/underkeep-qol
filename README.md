@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.14](https://github.com/jjanow/underkeep-qol/releases/latest), for game
+[1.0.15](https://github.com/jjanow/underkeep-qol/releases/latest), for game
 versions 1.0.6 and 1.0.5. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
 only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
@@ -408,6 +408,11 @@ keyboard):
   clicking it swaps (setting `hud_button`).
 - A swap is symmetric: after sword ⇄ bow the slot holds the sword, and the
   next swap brings it back. Only weapons go in, never items that stack.
+- A weapon with an ability (e.g. a staff) keeps counting its cooldown down
+  while it's in the slot, as it would in the inventory: one per turn and
+  one per rest step.
+- When heroes switch places in the party, each hero's second slot goes
+  with them.
 - Quest weapons (J'Axe, the Soulforge Axe) go in like any other. The game's
   quest scripts look for them in the party's inventory and equipment
   (`party_has_item`, `remove_party_item`), where the slot isn't, so when a

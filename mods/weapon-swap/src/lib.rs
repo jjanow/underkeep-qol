@@ -35,10 +35,15 @@
 //!   overlay menu has buttons for the same. On the HUD, a hero with a
 //!   filled slot gets a small button on their weapon hand slot; clicking it
 //!   swaps.
+//! - The game counts item cooldowns down once per turn and once per rest
+//!   step; a weapon in slot II counts down with them, like one in the
+//!   inventory (`cooldown`).
+//! - Heroes switching places in the party take their slot II with them.
 //! - Keys and buttons only queue an action; `on_frame` runs it on the game
 //!   thread between frames. Every action logs the item counts of the party
 //!   plus the slots before and after: they must stay equal.
 
+mod cooldown;
 mod game;
 mod quest;
 mod slot;
@@ -188,6 +193,9 @@ struct Inner {
     /// The item under a held button (see [`HeldPress`]), `None` inside if
     /// it isn't one the slot can take.
     press: Option<Option<HeldPress>>,
+    /// The party's hero keys as last seen, to follow heroes that switch
+    /// places (the slots are kept by place).
+    last_keys: [Option<String>; HEROES],
 }
 
 #[derive(Default)]
@@ -284,6 +292,26 @@ impl Inner {
 
     fn keys(&self) -> [Option<String>; HEROES] {
         std::array::from_fn(|i| self.game.hero_key(i))
+    }
+
+    /// Keeps the slots with their heroes when heroes switch places, and
+    /// counts the stored weapons' cooldowns down with the game's turns.
+    fn follow_game(&mut self) {
+        let now = self.keys();
+        if let Some(from) = state::reordered_heroes(&self.last_keys, &now) {
+            self.state.reorder(&from);
+            // Both hold hero places.
+            self.carry = None;
+            self.press = None;
+            log(&format!(
+                "heroes switched places ({from:?}); second slots follow them"
+            ));
+        }
+        self.last_keys = now;
+        let n = cooldown::take();
+        if n > 0 {
+            self.state.tick_cooldowns(n);
+        }
     }
 
     fn fingerprint(&self) -> String {
@@ -580,6 +608,15 @@ impl Mod for WeaponSwap {
         unsafe { quest::install(cx.hooks, at("script_condition")?, at("script_command")?) }?;
         // SAFETY: the resolved addresses of the tooltip patterns.
         unsafe { tooltip::install(cx.hooks, |n| at(n).ok()) };
+        // SAFETY: the resolved starts of the two tick functions (or none).
+        unsafe {
+            cooldown::install(
+                cx.hooks,
+                at("party_round_tick").ok(),
+                at("hero_rest_step").ok(),
+                game.hero(0),
+            )
+        };
         // Turning the mod off and on again keeps the slots of this session,
         // unless the party changed meanwhile (e.g. another save was loaded
         // while the mod was off, which it isn't told about): then they
@@ -613,6 +650,7 @@ impl Mod for WeaponSwap {
             sprite_missing_logged: false,
             seen_carried: None,
             press: None,
+            last_keys: keys,
         });
         quest::drain();
         quest::set_game(Some(game));
@@ -670,6 +708,9 @@ impl Mod for WeaponSwap {
     fn on_frame(&mut self, _cx: &mut FrameCtx) {
         let Some(inner) = &mut self.inner else { return };
         inner.take_returned();
+        // After take_returned: the quest detours' hero places are last
+        // frame's.
+        inner.follow_game();
         for a in std::mem::take(&mut inner.queue) {
             inner.run(a);
         }
@@ -695,6 +736,8 @@ impl Mod for WeaponSwap {
     fn on_save(&mut self, st: &mut ModSaveState) {
         let Some(inner) = &mut self.inner else { return };
         inner.take_returned();
+        inner.follow_game();
+        inner.mirror();
         *st = inner.state.to_save(&inner.keys(), &inner.fingerprint());
     }
 
@@ -703,9 +746,13 @@ impl Mod for WeaponSwap {
         // Weapons a script took out of the slots belonged to the game state
         // being replaced.
         quest::drain();
+        // Turns of the game state being replaced.
+        cooldown::take();
         inner.queue.clear();
         inner.carry = None;
+        inner.press = None;
         let keys = inner.keys();
+        inner.last_keys = keys.clone();
         let fp = inner.fingerprint();
         let mut warns = Vec::new();
         let loaded = State::from_save(st, &keys, &fp, &mut |w| warns.push(w));
@@ -1268,7 +1315,7 @@ mod tests {
         assert!(manifest.setting("sheet_slot").is_some());
         assert!(manifest.setting("messages").is_some());
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 29);
+        assert_eq!(pats.patterns.len(), 31);
     }
 
     /// Resolves every pattern against the game's exe when it's installed
@@ -1317,6 +1364,8 @@ mod tests {
             ("string_concat", 0x27de0),
             ("string_copy", 0x27970),
             ("string_free", 0x3000),
+            ("party_round_tick", 0x187cb0),
+            ("hero_rest_step", 0x17dac0),
         ]
         .into_iter()
         .collect();

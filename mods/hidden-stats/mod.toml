@@ -1,6 +1,6 @@
 id = "hidden-stats"
 name = "Hidden stats"
-version = "1.0.14"
+version = "1.0.15"
 author = "underkeep-qol"
 description = "Adds the stats the game keeps hidden to each hero's stats page: hit chances, flat and percent damage bonuses, armor ignored, armor against melee, ranged and animal attacks, ranged evasion and the evasion cap, void resistance, element and spell bonuses, burn and freeze chances, healing bonuses, the experience bonus and immunities. Select a row to read what it does."
 # Builds (exe SHA-256) the mod was tested on: 1.0.6 (Steam). Its patterns

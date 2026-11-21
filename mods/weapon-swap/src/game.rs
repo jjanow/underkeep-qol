@@ -307,7 +307,7 @@ impl Game {
         usize::try_from(i).ok().filter(|&i| i < 4)
     }
 
-    fn hero(&self, i: usize) -> usize {
+    pub(crate) fn hero(&self, i: usize) -> usize {
         assert!(i < 4);
         self.party + PARTY_HEROES + i * HERO_SIZE
     }

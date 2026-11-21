@@ -86,6 +86,25 @@ builds = ["d3158ad0f94d6770deb64b32d48aeb412a3c5ef3a0b2e37a0e092a7ce66bb4a4"]
 pattern = "48 89 5C 24 18 55 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 B0 DD FF FF B8 50 23 00 00 E8 ?? ?? ?? ?? 48 2B E0 0F 29 B4 24 40 23 00 00"
 builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 
+# --- Item cooldowns (`cooldown`; optional: without them a weapon in slot II
+# keeps its cooldown until it is back in the game) -------------------------
+
+# Party round tick, 0x140187da0 (1.0.6): (party). Once per game turn: counts
+# down the party's timers, every party-inventory item's cooldown (Item+0xe8)
+# by one, then each hero's skill and equipment cooldowns (0x140180370).
+# Found as the code that decrements Item+0xe8 over the inventory.
+[party_round_tick]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 4C 89 74 24 20 55 48 8D 6C 24 A9 48 81 EC E0 00 00 00 8B 81 00 0B 00 00 48 8B F1"
+optional = true
+
+# A hero's rest step, 0x14017dbb0 (1.0.6): (hero). The rest update
+# (0x140187040, every frame while resting) counts every party-inventory
+# item's cooldown down by one for each rest step and then calls this for the
+# four heroes in order; its only caller.
+[hero_rest_step]
+pattern = "48 89 5C 24 20 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC B0 00 00 00 45 33 ED 48 8B D9 45 8B E5 45 8B F5 45 8B FD 44 38 29"
+optional = true
+
 # --- Data ------------------------------------------------------------------
 
 # The TurnManager (+0 = phase, 1 while monsters act; +8 = queued actions).

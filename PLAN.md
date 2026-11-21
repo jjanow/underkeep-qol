@@ -973,6 +973,11 @@ In order of difficulty; each ships when done, with settings and tests.
     instead of refusing, `uk-qol report` lists other loaders' DLLs and
     folders, README "With other mod loaders"; `tools/pattern-diff.py` for
     game updates; CONTRIBUTING: data patches before code hooks.
+  - 2026-11-21: version 1.0.15, tag `v1.0.15`: weapon-swap fixes from a
+    player's report: a weapon in slot II counts its cooldown down (per turn
+    and per rest step, like the inventory; detours `party_round_tick` and
+    `hero_rest_step`), and slot II follows its hero when heroes switch
+    places. Tested in game 1.0.6 with Proton.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

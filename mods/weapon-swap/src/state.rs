@@ -259,6 +259,72 @@ impl State {
     }
 }
 
+/// Where each hero went if the party was only reordered (heroes switched
+/// places): `from[i]` is the old position of the hero now at `i`. `None`
+/// if nothing moved, or if the party changed in another way (a hero left
+/// or joined, another save, the main menu): then nothing is moved.
+pub fn reordered(
+    old: &[Option<String>; HEROES],
+    new: &[Option<String>; HEROES],
+) -> Option<[usize; HEROES]> {
+    if old == new || new.iter().all(Option::is_none) {
+        return None;
+    }
+    let mut from = [usize::MAX; HEROES];
+    let mut used = [false; HEROES];
+    // Heroes first (each key once in both lists), then empty places.
+    for want_some in [true, false] {
+        for (i, k) in new.iter().enumerate() {
+            if k.is_some() != want_some {
+                continue;
+            }
+            let j = (0..HEROES).find(|&j| !used[j] && old[j] == *k)?;
+            used[j] = true;
+            from[i] = j;
+        }
+    }
+    Some(from)
+}
+
+/// [`reordered`] by hero key, or failing that by name alone (in case the
+/// game keeps `hero_id`, the creation place, with the place rather than the
+/// hero when heroes switch places).
+pub fn reordered_heroes(
+    old: &[Option<String>; HEROES],
+    new: &[Option<String>; HEROES],
+) -> Option<[usize; HEROES]> {
+    let names = |k: &[Option<String>; HEROES]| -> [Option<String>; HEROES] {
+        k.clone()
+            .map(|k| k.map(|k| k.split_once(':').map_or(k.clone(), |(_, n)| n.to_owned())))
+    };
+    reordered(old, new).or_else(|| reordered(&names(old), &names(new)))
+}
+
+impl State {
+    /// Follows a reorder of the party ([`reordered`]).
+    pub fn reorder(&mut self, from: &[usize; HEROES]) {
+        let old = std::mem::take(&mut self.heroes);
+        let mut old = old.map(Some);
+        for (i, &j) in from.iter().enumerate() {
+            self.heroes[i] = old[j].take().unwrap_or_default();
+        }
+    }
+
+    /// Counts the cooldown of every stored weapon down by `n` turns (as the
+    /// game does for the items in the party inventory).
+    pub fn tick_cooldowns(&mut self, n: u32) {
+        let n = i32::try_from(n).unwrap_or(i32::MAX);
+        let items = self
+            .heroes
+            .iter_mut()
+            .filter_map(|h| h.stored.as_mut())
+            .chain(self.parked.iter_mut().map(|p| &mut p.item));
+        for it in items {
+            it.cooldown = it.cooldown.saturating_sub(n).max(0);
+        }
+    }
+}
+
 /// What the party looks like to the mod: hero keys and the item
 /// fingerprint. If it changed while the mod was off, the slots in memory
 /// may no longer belong to this party (another save was loaded).
@@ -466,5 +532,91 @@ mod tests {
         let mut t = BTreeMap::new();
         tally_stored(&s, &mut t);
         assert_eq!(t["item_bow"], 2);
+    }
+
+    #[test]
+    fn reordered_finds_switched_places() {
+        let k = keys();
+        assert_eq!(reordered(&k, &k), None);
+        // Ann and Bo switch places.
+        let swapped = [k[1].clone(), k[0].clone(), None, k[3].clone()];
+        assert_eq!(reordered(&k, &swapped), Some([1, 0, 2, 3]));
+        // Di moves into the empty place.
+        let moved = [k[0].clone(), k[1].clone(), k[3].clone(), None];
+        assert_eq!(reordered(&k, &moved), Some([0, 1, 3, 2]));
+        // A rotation.
+        let rot = [k[3].clone(), k[0].clone(), k[1].clone(), None];
+        assert_eq!(reordered(&k, &rot), Some([3, 0, 1, 2]));
+    }
+
+    #[test]
+    fn reordered_ignores_other_changes() {
+        let k = keys();
+        let mut gone = k.clone();
+        gone[0] = None;
+        assert_eq!(reordered(&k, &gone), None);
+        assert_eq!(reordered(&gone, &k), None);
+        let mut other = k.clone();
+        other[1] = Some("7:Ed".into());
+        assert_eq!(reordered(&k, &other), None);
+        assert_eq!(reordered(&k, &[None, None, None, None]), None);
+        assert_eq!(reordered(&[None, None, None, None], &k), None);
+        let dup = [k[0].clone(), k[0].clone(), None, k[3].clone()];
+        assert_eq!(reordered(&k, &dup), None);
+    }
+
+    #[test]
+    fn reordered_by_name_when_ids_stay() {
+        let k = keys();
+        // Ids stay with the places, names move.
+        let names_moved = [
+            Some("0:Bo".to_owned()),
+            Some("1:Ann".to_owned()),
+            None,
+            k[3].clone(),
+        ];
+        assert_eq!(reordered(&k, &names_moved), None);
+        assert_eq!(reordered_heroes(&k, &names_moved), Some([1, 0, 2, 3]));
+        let swapped = [k[1].clone(), k[0].clone(), None, k[3].clone()];
+        assert_eq!(reordered_heroes(&k, &swapped), Some([1, 0, 2, 3]));
+        let mut other = k.clone();
+        other[0] = Some("0:Ed".into());
+        assert_eq!(reordered_heroes(&k, &other), None);
+    }
+
+    #[test]
+    fn reorder_moves_slots_with_their_heroes() {
+        let mut s = State::default();
+        s.heroes[0].stored = Some(item("item_staff"));
+        s.heroes[0].shield = Some("item_shield".into());
+        s.heroes[1].stored = Some(item("item_bow"));
+        s.reorder(&[1, 0, 2, 3]);
+        assert_eq!(s.heroes[0].stored, Some(item("item_bow")));
+        assert_eq!(s.heroes[0].shield, None);
+        assert_eq!(s.heroes[1].stored, Some(item("item_staff")));
+        assert_eq!(s.heroes[1].shield.as_deref(), Some("item_shield"));
+        assert!(s.heroes[2].is_empty() && s.heroes[3].is_empty());
+    }
+
+    #[test]
+    fn cooldowns_count_down_to_zero() {
+        let mut s = State::default();
+        s.heroes[0].stored = Some(item("item_staff"));
+        s.heroes[2].stored = Some(StoredItem {
+            cooldown: 5,
+            ..item("item_bow")
+        });
+        s.parked.push(Parked {
+            key: "x".into(),
+            item: item("item_sling"),
+        });
+        s.tick_cooldowns(0);
+        assert_eq!(s.heroes[0].stored.as_ref().unwrap().cooldown, 2);
+        s.tick_cooldowns(3);
+        assert_eq!(s.heroes[0].stored.as_ref().unwrap().cooldown, 0);
+        assert_eq!(s.heroes[2].stored.as_ref().unwrap().cooldown, 2);
+        assert_eq!(s.parked[0].item.cooldown, 0);
+        s.tick_cooldowns(u32::MAX);
+        assert_eq!(s.heroes[2].stored.as_ref().unwrap().cooldown, 0);
     }
 }
