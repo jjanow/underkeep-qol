@@ -1,0 +1,17 @@
+[package]
+name = "uk-qol-mod-item-cooldowns"
+description = "Underkeep QoL mod: shows the cooldown left on an item's ability in its tooltip"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "uk_qol_mod_item_cooldowns"
+
+[dependencies]
+uk-qol-runtime.workspace = true
+toml = "1.2.1"
+
+[dev-dependencies]
+uk-qol-dft.workspace = true

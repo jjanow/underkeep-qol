@@ -904,6 +904,26 @@ In order of difficulty; each ships when done, with settings and tests.
     user also checked everything in game and found it fine.
     Not tried: pad scrolling, `show_zero`, the mod turned on mid-game.
   - [ ] Windows.
+- [ ] `item-cooldowns` (2026-11-21, a player's request: see a belt's
+      ability cooldown without equipping it): a line at the bottom of an
+      item's tooltip with the turns of cooldown left, or Ready. On by
+      default, setting `show_ready`.
+  - Game 1.0.6: an item's ability state is at Item+0xd8 (+0 SkillDef*,
+    +0xc level, +0x10 = Item+0xe8 turns left); has-ability flag
+    Item+0x598. Casting (0x140183ad0) sets turns left to SkillDef+0x4c;
+    the party tick 0x140187da0 counts every inventory item down and the
+    per-hero tick 0x140180370 every equipped one; equip/unequip don't touch
+    it. The game's skill tooltip (0x140243780) shows only SkillDef+0x4c.
+  - Detours the item tooltip builder 0x1402495f0 (9 arguments), since
+    learned-recipes owns the outer item tooltip 0x140249370 and a function
+    takes one detour. A real item is recognised by params == skill + 0x48
+    (the other caller, 0x14024daa0, builds from a def on its stack). Ready
+    only for party inventory and hero equipment items.
+  - [x] Proton, 2026-11-21, game 1.0.6, 3440x1440, edited quicksave
+    (Abandoned Caves): Belt of Second Wind "Cooldown left 37", 36 after one
+    waited turn; Ring of Lightning Bolt "Ready" in green; a plain sword has
+    no line. Not tried: an equipped item, slot II, other languages, shops.
+  - [ ] Windows.
 
 ## 7. Manager
 
@@ -985,6 +1005,8 @@ In order of difficulty; each ships when done, with settings and tests.
     and per rest step, like the inventory; detours `party_round_tick` and
     `hero_rest_step`), and slot II follows its hero when heroes switch
     places. Tested in game 1.0.6 with Proton.
+  - 2026-11-21: version 1.0.16, tag `v1.0.16`: the new `item-cooldowns`
+    mod (a player's request).
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

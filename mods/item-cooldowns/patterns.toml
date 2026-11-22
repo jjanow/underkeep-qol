@@ -1,0 +1,40 @@
+# Patterns for item-cooldowns. Format: CONTRIBUTING.md, "Adding a mod".
+# Addresses in comments are 1.0.6 (Steam) VAs. The party (heroes at +0x10)
+# comes from the runtime's own pattern.
+
+# Item tooltip builder, 0x1402495f0: (String* out, ItemInfo* info,
+# ItemParams* params, SkillState* skill, ...; 9 arguments) -> out. Writes
+# the whole item tooltip text. The item tooltip function (0x140249370,
+# which learned-recipes detours) calls it with params = Item+0x120 and
+# skill = Item+0xd8 (the item's ability: +0x00 SkillDef*, +0x0c level,
+# +0x10 turns of cooldown left). Its other caller (0x14024daa0) builds a
+# tooltip from an item definition with both on its stack, never 0x48 apart.
+[item_tooltip_builder]
+pattern = "40 55 53 56 57 41 54 41 55 41 56 41 57 48 8D AC 24 78 DF FF FF B8 88 21 00 00 E8"
+
+# The party inventory (+8 count, +0x10 entries of 0x18 bytes, item first).
+# Hero::EquipItem: `mov rdx, rbx; lea rcx, [inventory]; call Inventory::Remove`.
+# Same pattern as weapon-swap's party_inventory.
+[party_inventory]
+pattern = "48 8B D3 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? 44 8B F7 45 85 FF"
+offset = 3
+rip = { disp = 3, len = 7 }
+
+# Text_Get(String* out, const String* key) -> out, 0x1400ecd00 (as in
+# learned-recipes).
+[text_get]
+pattern = "48 89 5C 24 08 48 89 74 24 10 48 89 7C 24 18 55 41 54 41 55 41 56 41 57 48 8D 6C 24 C9 48 81 EC D0 00 00 00 83 7A 10 00 48 8B FA 48 8B F1 75"
+
+# String_Concat(String* out, const String* a, const String* b) -> out,
+# 0x140027de0 (as in learned-recipes).
+[string_concat]
+pattern = "4C 89 44 24 18 41 54 41 55 41 56 41 57 48 83 EC 28 4C 63 62 10 4C 8B EA"
+
+# String_Assign(String* dst, const String* src), 0x140027a00: a move (as in
+# learned-recipes).
+[string_assign]
+pattern = "48 89 5C 24 08 57 48 83 EC 20 48 8B FA 48 8B D9 48 3B CA 74 54 48 8B 09"
+
+# String_Free(String*), 0x140003000 (as in learned-recipes).
+[string_free]
+pattern = "40 53 48 83 EC 20 48 8B D9 48 8B 09 48 85 C9 74 1B B8 FF FF FF FF F0 0F C1 01 83 F8 01 75 0D 48 8B 0B 48 85 C9 74 05 E8 ?? ?? ?? ?? 33 C9 48 8D 05 ?? ?? ?? ?? 48 89 0B 48 89 43 08 89 4B 10 48 83 C4 20 5B C3 CC CC CC CC CC CC CC CC CC CC CC 48 83 EC 38"

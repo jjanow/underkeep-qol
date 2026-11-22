@@ -1,0 +1,12 @@
+# item-cooldowns: the tooltip line, as text keys the mod reads through the
+# game's text lookup, so it follows the game's language. %1 is the number of
+# turns left (the game's own "Cooldown" row shows a bare number too).
+file = "text/text_common_cs.txt"
+
+[[op]]
+add = "text_common_cs.uk_qol_item_cooldown_left"
+value = "{color_text}{a:left}Zbývá do obnovení{a:right}{color_msg_danger}%1\n"
+
+[[op]]
+add = "text_common_cs.uk_qol_item_cooldown_ready"
+value = "{color_text}{a:left}Zbývá do obnovení{a:right}{color_msg_success}Připraveno\n"

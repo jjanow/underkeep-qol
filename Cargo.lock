@@ -3394,7 +3394,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-dft"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "serde",
  "toml",
@@ -3402,7 +3402,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-manager"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "dirs",
  "eframe",
@@ -3422,7 +3422,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-bloodmage-cost"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3430,14 +3430,14 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-borderless-compat"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "uk-qol-runtime",
 ]
 
 [[package]]
 name = "uk-qol-mod-enemy-health"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3445,7 +3445,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-extra-skill-slots"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3453,7 +3453,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-hidden-stats"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-dft",
@@ -3462,15 +3462,24 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-inventory-sort"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
 ]
 
 [[package]]
+name = "uk-qol-mod-item-cooldowns"
+version = "1.0.16"
+dependencies = [
+ "toml",
+ "uk-qol-dft",
+ "uk-qol-runtime",
+]
+
+[[package]]
 name = "uk-qol-mod-item-highlight"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3478,7 +3487,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-learned-recipes"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-dft",
@@ -3487,7 +3496,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-melee-accuracy"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3495,7 +3504,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-party-numbers"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3503,7 +3512,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-shop-sort"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3511,14 +3520,14 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-mod-skip-logos"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "uk-qol-runtime",
 ]
 
 [[package]]
 name = "uk-qol-mod-weapon-swap"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "toml",
  "uk-qol-runtime",
@@ -3526,7 +3535,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-proxy"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "uk-qol-mod-bloodmage-cost",
  "uk-qol-mod-borderless-compat",
@@ -3534,6 +3543,7 @@ dependencies = [
  "uk-qol-mod-extra-skill-slots",
  "uk-qol-mod-hidden-stats",
  "uk-qol-mod-inventory-sort",
+ "uk-qol-mod-item-cooldowns",
  "uk-qol-mod-item-highlight",
  "uk-qol-mod-learned-recipes",
  "uk-qol-mod-melee-accuracy",
@@ -3547,7 +3557,7 @@ dependencies = [
 
 [[package]]
 name = "uk-qol-runtime"
-version = "1.0.15"
+version = "1.0.16"
 dependencies = [
  "egui",
  "egui_glow",

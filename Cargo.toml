@@ -18,10 +18,11 @@ members = [
     "mods/party-numbers",
     "mods/enemy-health",
     "mods/hidden-stats",
+    "mods/item-cooldowns",
 ]
 
 [workspace.package]
-version = "1.0.15"
+version = "1.0.16"
 edition = "2024"
 license = "MIT"
 repository = "https://github.com/jjanow/underkeep-qol"
@@ -42,6 +43,7 @@ uk-qol-mod-shop-sort = { path = "mods/shop-sort" }
 uk-qol-mod-party-numbers = { path = "mods/party-numbers" }
 uk-qol-mod-enemy-health = { path = "mods/enemy-health" }
 uk-qol-mod-hidden-stats = { path = "mods/hidden-stats" }
+uk-qol-mod-item-cooldowns = { path = "mods/item-cooldowns" }
 
 # Same as Underkeeper except `panic`: the runtime catches panics around every
 # hook (a failing mod is disabled, the game keeps running), which needs

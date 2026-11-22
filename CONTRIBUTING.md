@@ -176,6 +176,11 @@ rip = { disp = 3, len = 7 }
   `on_unload`; mods that depend on it are unloaded first. Turning it on again
   calls `on_load` again with a fresh hook set, so `on_load` must work more
   than once.
+- A function can be detoured by one mod only: a second detour of the same
+  address fails with "already hooked". Check the other mods' patterns
+  first; if the function is taken, detour a callee or caller instead
+  (`item-cooldowns` hooks the item tooltip builder because
+  `learned-recipes` has the item tooltip function).
 - Every callback runs inside `guard::call`; a panic turns the mod off for the
   session. Detours wrap their body in `guard::call_or(id, body, || original(...))`.
 - Statuses: active, off, off (safe mode), patterns not found, waiting (a

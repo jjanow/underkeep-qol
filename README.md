@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.15](https://github.com/jjanow/underkeep-qol/releases/latest), for the
+[1.0.16](https://github.com/jjanow/underkeep-qol/releases/latest), for the
 current game version, 1.0.6. Older game versions aren't supported: Steam
 always updates the game to the latest version. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
@@ -24,7 +24,8 @@ formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
 (new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10)
 and `shop-sort` (new in 1.0.11) and `party-numbers`, `enemy-health` and
-`hidden-stats` (new in 1.0.13, tested on game 1.0.6);
+`hidden-stats` (new in 1.0.13, tested on game 1.0.6) and `item-cooldowns`
+(new in 1.0.16);
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
 yet, and the manager keeping other launch options when it sets ours (new in
 1.0.14) is unit-tested only. Steam Deck and macOS bottles are
@@ -48,6 +49,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `party-numbers` | Each hero's health and stamina, mana or Zeal as numbers on the portrait bars (34/50, 34 or 68%), so you don't have to open the character sheet to check them. |
 | `enemy-health` | Each enemy's health as numbers (23/40, 23 or 58%) with the game's own enemy health bar. **Off by default**: the game shows only the bar. |
 | `hidden-stats` | The stats the game keeps hidden, added to each hero's stats page: hit chances, damage bonuses, armor ignored, armor against melee and ranged attacks, evasion cap, void resistance, element and spell bonuses, healing bonuses, immunities and more, each with a description. |
+| `item-cooldowns` | An item's tooltip shows how many turns its ability still needs before you can use it again (or **Ready**), so you can check a belt or ring in your bag without equipping it. |
 
 Details for each are in [Mod designs](#mod-designs).
 
@@ -733,6 +735,30 @@ and the panel beside the list says what it does, as for the game's own rows.
 - Turned on after the game has started, it shows nothing until the next
   start (the game reads its texts once).
 
+### `item-cooldowns`
+
+Some items have an ability: the Belt of Second Wind heals 8 health every
+100 turns, a Ring of Lightning Bolt casts Lightning every 20. The game keeps
+counting that cooldown down while the item sits in your inventory, but its
+tooltip only shows the full cooldown; to see how much is left you had to
+equip the item. This mod adds a line at the bottom of the tooltip:
+
+- **Cooldown left: 37** while the ability is recharging (the number of
+  turns left), wherever the item is shown, including a weapon in
+  weapon-swap's second slot.
+- **Cooldown left: Ready** when it can be used again, for items in your
+  inventory or equipped by a hero (not for shop or chest items, and not
+  for a weapon in the second slot).
+- Setting **Show Ready**, on by default; off, the line appears only while
+  the ability is recharging.
+- In the game's language (Czech, German, Spanish, French, Polish and
+  Russian texts included).
+- How: the mod detours the game's item tooltip builder and appends the line
+  with the game's own text functions, using text keys it adds to the game's
+  text tables in memory. It only reads the item's cooldown; nothing in the
+  game's state, files or saves changes. Turned on after the game has
+  started, it uses English until the next start.
+
 ## Reliability (for a public release)
 
 - **Safe mode.** If the game exits abnormally twice in a row after the mods
@@ -771,7 +797,7 @@ crates/
 mods/
   bloodmage-cost/  inventory-sort/  weapon-swap/  extra-skill-slots/  skip-logos/
   borderless-compat/  item-highlight/  melee-accuracy/  learned-recipes/
-  shop-sort/  party-numbers/  enemy-health/  hidden-stats/
+  shop-sort/  party-numbers/  enemy-health/  hidden-stats/  item-cooldowns/
 tools/
   pattern-diff.py  every pattern on two game builds, and what changed (game updates)
 ```
