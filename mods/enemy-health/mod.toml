@@ -1,6 +1,6 @@
 id = "enemy-health"
 name = "Enemy health"
-version = "1.0.16"
+version = "1.0.17"
 author = "underkeep-qol"
 description = "Shows each enemy's health as numbers (23/40, 23 or 58%) with the game's enemy health bar, so you can tell how strong an enemy is and how close it is to dying. Off by default: the game shows only the bar."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.

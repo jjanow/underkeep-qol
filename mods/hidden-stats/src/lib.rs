@@ -127,6 +127,21 @@ impl Hero for GameHero {
         // SAFETY: checked read.
         unsafe { game::read(self.0 + off) }
     }
+    fn at_i32(&self, addr: usize) -> Option<i32> {
+        // SAFETY: checked read.
+        unsafe { game::read(addr) }
+    }
+    fn at_u8(&self, addr: usize) -> Option<u8> {
+        // SAFETY: checked read.
+        unsafe { game::read(addr) }
+    }
+    fn at_ptr(&self, addr: usize) -> Option<usize> {
+        // SAFETY: checked read.
+        unsafe { game::read(addr) }
+    }
+    fn base(&self) -> usize {
+        self.0
+    }
 }
 
 /// A counted game String holding `text` (the game frees it with the row).

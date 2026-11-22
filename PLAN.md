@@ -904,6 +904,19 @@ In order of difficulty; each ships when done, with settings and tests.
     user also checked everything in game and found it fine.
     Not tried: pad scrolling, `show_zero`, the mod turned on mid-game.
   - [ ] Windows.
+  - 2026-11-21 (1.0.17, a player's report: "-x mana cost for spells" was
+    missing): row Spell Mana Cost in Offense, Voidcaller/Wizard only. It's
+    not in the stat block: PaySkillCost (1.0.6 0x140184940), classes 4/5,
+    pays cost + 1 with effect 0xa0 (Arcane Appetite) minus the bonuses of
+    item feature 9 (`cloak_of_the_spells`: Archmage Hat 2, Cloak of the
+    Archmage 1, Archmage's Seal 1, Staff of the Archmage 1) over the 11
+    equipped items that pass CanUseItem (0x14017ba30, pure: race 3 no
+    armor, class, STR/DEX/WIS/END), counted only when feature 9 is the
+    item's first, a two-handed item not again in slot 5; at least 1. The
+    mod mirrors that in Rust (no new pattern).
+    - [ ] In game: Archmage items on a Wizard or Voidcaller.
+    The Blood Mage's equivalent (`red_mask`, feature 0x13, HP cost) isn't
+    shown yet.
 - [ ] `item-cooldowns` (2026-11-21, a player's request: see a belt's
       ability cooldown without equipping it): a line at the bottom of an
       item's tooltip with the turns of cooldown left, or Ready. On by
@@ -1007,6 +1020,8 @@ In order of difficulty; each ships when done, with settings and tests.
     places. Tested in game 1.0.6 with Proton.
   - 2026-11-21: version 1.0.16, tag `v1.0.16`: the new `item-cooldowns`
     mod (a player's request).
+  - 2026-11-21: version 1.0.17, tag `v1.0.17`: hidden-stats shows the
+    spell mana cost change (a player's report). Unit-tested only.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):

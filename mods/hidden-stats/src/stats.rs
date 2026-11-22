@@ -31,6 +31,9 @@
 //!   (0x1401839e0).
 //! - immunities: bytes `Hero+0x200..0x206` (stun, critical hits, freeze,
 //!   blindness, paralysis, disease, fall damage).
+//!
+//! The spell mana cost isn't in that block: `Hero::PaySkillCost` (1.0.6
+//! 0x140184940) works it out on every cast, see [`spell_mana_cost`].
 
 /// The stats page's sections the mod adds to (rows go at each one's end).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -75,10 +78,16 @@ impl Val {
     }
 }
 
-/// Reads the hero: `i32(offset)` and `u8(offset)`; `None` if unreadable.
+/// Reads the hero: `i32(offset)` and `u8(offset)` from the hero, `at_*`
+/// from any address (its items, its effect list); `None` if unreadable.
 pub trait Hero {
     fn i32(&self, off: usize) -> Option<i32>;
     fn u8(&self, off: usize) -> Option<u8>;
+    fn at_i32(&self, addr: usize) -> Option<i32>;
+    fn at_u8(&self, addr: usize) -> Option<u8>;
+    fn at_ptr(&self, addr: usize) -> Option<usize>;
+    /// The hero's own address (for its pointer fields).
+    fn base(&self) -> usize;
 }
 
 /// The value and whether the row shows when "Show stats that are 0" is off.
@@ -103,6 +112,9 @@ pub enum Source {
     Field(usize),
     /// A byte flag.
     Flag(usize),
+    /// What every spell's mana cost changes by ([`spell_mana_cost`]); only
+    /// for heroes who pay spells with mana.
+    SpellManaCost,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -161,6 +173,10 @@ impl Stat {
             Source::Flag(o) => {
                 let v = h.u8(o)? != 0;
                 (v as i32, v)
+            }
+            Source::SpellManaCost => {
+                let v = spell_mana_cost(h)??;
+                (v, v != 0)
             }
         };
         let val = match self.unit {
@@ -231,6 +247,94 @@ const IMMUNE_BLIND: usize = 0x203;
 const IMMUNE_PARALYZE: usize = 0x204;
 const IMMUNE_DISEASE: usize = 0x205;
 const IMMUNE_FALL: usize = 0x206;
+const RACE: usize = 0x90;
+const CLASS: usize = 0x94;
+const STR: usize = 0x10c;
+const DEX: usize = 0x110;
+const END: usize = 0x114;
+const WIS: usize = 0x118;
+/// 11 equipped item pointers (`EquipSlot` order; 5 is the shield, which
+/// holds the weapon too while it's two-handed).
+const EQUIP: usize = 0x210;
+const EQUIP_SLOTS: usize = 11;
+const SLOT_SHIELD: usize = 5;
+/// Active effects: count (i32), data pointer; entries of 0x2c8 bytes with
+/// the effect id (i32) first.
+const EFFECTS_COUNT: usize = 0x298;
+const EFFECTS: usize = 0x2a0;
+const EFFECT_SIZE: usize = 0x2c8;
+/// Arcane Appetite (mutation): every spell costs 1 mana more.
+const EFFECT_ARCANE_APPETITE: i32 = 0xa0;
+/// Item fields: item type, two-handed flag, requirements (the item params
+/// at +0x120: class +8, STR +0xc, DEX +0x10, WIS +0x14, END +0x18) and its
+/// three features `{type, ?, bonus}` 0xc apart.
+const ITEM_TYPE: usize = 0x100;
+const ITEM_PARAMS: usize = 0x120;
+const ITEM_TWO_HANDED: usize = 0x430;
+const ITEM_FEATURES: usize = 0x43c;
+const ITEM_TYPE_ARMOR: i32 = 5;
+/// Item feature `cloak_of_the_spells`: "Your spells cost N less mana".
+const FEATURE_SPELL_MANA: i32 = 9;
+
+/// `Hero::CanUseItem` (1.0.6 0x14017ba30, no side effects): race 3 can't
+/// wear armor; the item's class (0xffff any) and stat requirements must be
+/// met (stats below 0 count as 0).
+fn can_use(h: &dyn Hero, item: usize) -> Option<bool> {
+    if h.i32(RACE)? == 3 && h.at_i32(item + ITEM_TYPE)? == ITEM_TYPE_ARMOR {
+        return Some(false);
+    }
+    let p = item + ITEM_PARAMS;
+    let class = h.at_i32(p + 8)?;
+    if class != 0xffff && class != h.i32(CLASS)? {
+        return Some(false);
+    }
+    for (req, stat) in [(0xc, STR), (0x10, DEX), (0x14, WIS), (0x18, END)] {
+        if h.at_i32(p + req)? > h.i32(stat)?.max(0) {
+            return Some(false);
+        }
+    }
+    Some(true)
+}
+
+/// What every spell's mana cost changes by, as `Hero::PaySkillCost` (1.0.6
+/// 0x140184940) pays it for the classes that cast with mana (4 and 5,
+/// Voidcaller and Wizard): +1 with Arcane Appetite, minus the
+/// `cloak_of_the_spells` bonuses of the equipped items the hero can use
+/// (an item counts only when that is its first feature, as in the game;
+/// a two-handed weapon once). A spell still costs at least 1.
+/// `Some(None)` for the other classes (nothing to show).
+pub fn spell_mana_cost(h: &dyn Hero) -> Option<Option<i32>> {
+    if !matches!(h.i32(CLASS)?, 4 | 5) {
+        return Some(None);
+    }
+    let mut v = 0;
+    let n = h.i32(EFFECTS_COUNT)?;
+    if n > 0 {
+        let data = h.at_ptr(h.base() + EFFECTS)?;
+        for i in 0..n.min(256) as usize {
+            if h.at_i32(data + i * EFFECT_SIZE)? == EFFECT_ARCANE_APPETITE {
+                v += 1;
+                break;
+            }
+        }
+    }
+    for slot in 0..EQUIP_SLOTS {
+        let item = h.at_ptr(h.base() + EQUIP + slot * 8)?;
+        if item == 0 || h.at_i32(item + ITEM_FEATURES)? != FEATURE_SPELL_MANA {
+            continue;
+        }
+        if !can_use(h, item)? || (slot == SLOT_SHIELD && h.at_u8(item + ITEM_TWO_HANDED)? != 0) {
+            continue;
+        }
+        for f in 0..3 {
+            let at = item + ITEM_FEATURES + f * 0xc;
+            if h.at_i32(at)? == FEATURE_SPELL_MANA {
+                v -= h.at_i32(at + 8)?;
+            }
+        }
+    }
+    Some(Some(v))
+}
 
 /// Key of the melee hit chance row while the melee-accuracy mod is on (same
 /// label, a description that says so).
@@ -255,7 +359,7 @@ macro_rules! stat {
     };
 }
 
-use Source::{EvasionCap, Field, Flag, HundredPlus, Sum, SumIfExtra};
+use Source::{EvasionCap, Field, Flag, HundredPlus, SpellManaCost, Sum, SumIfExtra};
 
 /// Every stat the mod adds, in display order within each section.
 pub static STATS: &[Stat] = &[
@@ -598,6 +702,19 @@ evasion are taken off it when the attack is rolled."
         "Percent added to the damage of this hero's blood magic spells."
     ),
     stat!(
+        "spell_mana_cost",
+        Offense,
+        SpellManaCost,
+        Signed,
+        false,
+        "Spell Mana Cost",
+        "{color_mana}",
+        "Mana added to or taken off the cost of every spell this hero casts: the Archmage \
+Hat, Cloak of the Archmage, Archmage's Seal and Staff of the Archmage take some off, the \
+Arcane Appetite mutation adds 1. A spell \
+always costs at least 1 mana. Only for heroes who cast with mana."
+    ),
+    stat!(
         "burn_chance",
         Offense,
         Field(BURN_CHANCE),
@@ -790,14 +907,73 @@ mod tests {
     use super::*;
     use std::collections::HashMap;
 
+    /// A hero at address 0 and anything else it points at, as one sparse
+    /// memory of i32 values (pointers too).
     struct Fake(HashMap<usize, i32>);
     impl Hero for Fake {
         fn i32(&self, off: usize) -> Option<i32> {
-            Some(*self.0.get(&off).unwrap_or(&0))
+            self.at_i32(off)
         }
         fn u8(&self, off: usize) -> Option<u8> {
-            Some(*self.0.get(&off).unwrap_or(&0) as u8)
+            self.at_u8(off)
         }
+        fn at_i32(&self, addr: usize) -> Option<i32> {
+            Some(*self.0.get(&addr).unwrap_or(&0))
+        }
+        fn at_u8(&self, addr: usize) -> Option<u8> {
+            Some(*self.0.get(&addr).unwrap_or(&0) as u8)
+        }
+        fn at_ptr(&self, addr: usize) -> Option<usize> {
+            Some(*self.0.get(&addr).unwrap_or(&0) as usize)
+        }
+        fn base(&self) -> usize {
+            0
+        }
+    }
+
+    /// Puts an item at `at` in equipment slot `slot` with features
+    /// `(type, bonus)` and requirement WIS `wis`.
+    fn item(m: &mut HashMap<usize, i32>, slot: usize, at: usize, f: &[(i32, i32)], wis: i32) {
+        m.insert(EQUIP + slot * 8, at as i32);
+        m.insert(at + ITEM_PARAMS + 8, 0xffff);
+        m.insert(at + ITEM_PARAMS + 0x14, wis);
+        for (i, &(t, b)) in f.iter().enumerate() {
+            m.insert(at + ITEM_FEATURES + i * 0xc, t);
+            m.insert(at + ITEM_FEATURES + i * 0xc + 8, b);
+        }
+    }
+
+    #[test]
+    fn spell_mana_cost_as_the_game_pays_it() {
+        // Wizard, WIS 8: hat (2), cloak (1), two-handed staff (1) in the
+        // weapon slot and mirrored in the shield slot -> -4.
+        let mut m = HashMap::from([(CLASS, 5), (WIS, 8)]);
+        item(&mut m, 0, 0x1000, &[(9, 2)], 7);
+        item(&mut m, 9, 0x2000, &[(9, 1)], 7);
+        item(&mut m, 4, 0x3000, &[(9, 1)], 8);
+        item(&mut m, 5, 0x3000, &[(9, 1)], 8);
+        m.insert(0x3000 + ITEM_TWO_HANDED, 1);
+        let r = find("spell_mana_cost").read(&Fake(m.clone())).unwrap();
+        assert_eq!((r.val.text(), r.shown), ("-4".into(), true));
+        // Arcane Appetite (second effect) adds 1.
+        m.insert(EFFECTS_COUNT, 2);
+        m.insert(EFFECTS, 0x5000);
+        m.insert(0x5000 + EFFECT_SIZE, EFFECT_ARCANE_APPETITE);
+        assert_eq!(spell_mana_cost(&Fake(m.clone())), Some(Some(-3)));
+        // An item the hero can't use (WIS too low) doesn't count.
+        m.insert(WIS, 7);
+        assert_eq!(spell_mana_cost(&Fake(m.clone())), Some(Some(-2)));
+        // Only when the feature is the item's first, as in the game.
+        item(&mut m, 2, 0x4000, &[(3, 5), (9, 4)], 0);
+        assert_eq!(spell_mana_cost(&Fake(m.clone())), Some(Some(-2)));
+        // Not a mana caster: no row, even with "Show stats that are 0".
+        m.insert(CLASS, 0);
+        assert!(find("spell_mana_cost").read(&Fake(m)).is_none());
+        // Mana caster with nothing: 0, hidden unless show_zero.
+        let r = find("spell_mana_cost")
+            .read(&Fake(HashMap::from([(CLASS, 4)])))
+            .unwrap();
+        assert_eq!((r.val.text(), r.shown), ("0".into(), false));
     }
 
     fn find(key: &str) -> &'static Stat {

@@ -1,6 +1,6 @@
 id = "extra-skill-slots"
 name = "Extra skill slots"
-version = "1.0.16"
+version = "1.0.17"
 author = "underkeep-qol"
 description = "More active-skill slots per hero. Assign skills to them in this menu; each slot's key casts it for the selected hero, with the game's own checks, costs and cooldowns."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.
