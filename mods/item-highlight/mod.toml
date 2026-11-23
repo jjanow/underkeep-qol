@@ -2,7 +2,7 @@ id = "item-highlight"
 name = "Item highlight"
 version = "1.0.17"
 author = "underkeep-qol"
-description = "Makes items on the ground, containers with something in them, and switches glow in the dungeon view, so nothing pickable is missed."
+description = "Makes items on the ground, containers with something in them, switches, objects you can still use and things you can break glow in the dungeon view, so nothing is missed."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.
 game_builds = ["556f696519db3a948f1ef1f37e4fdc23293c330d00d93399380dd2c3606055ba"]
 enabled = true
@@ -64,6 +64,27 @@ type = "bool"
 default = true
 label = "Switches"
 description = "Wall buttons, levers and keyholes."
+
+[[settings]]
+key = "objects"
+type = "bool"
+default = true
+label = "Usable objects"
+description = "Scenery you can click and haven't used up yet: tree holes and hiding places, plants to pick, signs and paintings, wells, statues, rocks that start an event. The game lowers an object once it's used, and the glow goes with it."
+
+[[settings]]
+key = "breakables"
+type = "bool"
+default = true
+label = "Breakable objects"
+description = "Barrels, crates, urns, webs and furniture you can smash, until they're broken."
+
+[[settings]]
+key = "lights"
+type = "bool"
+default = false
+label = "Torches and braziers"
+description = "Torches and braziers you can light or put out. Off by default: there are many and they never run out, but some puzzles use braziers."
 
 [[settings]]
 key = "debug"

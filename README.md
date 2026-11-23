@@ -43,7 +43,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
-| `item-highlight` | Items on the ground, containers and switches glow in the dungeon view (bright green by default); **H** turns it off and on. |
+| `item-highlight` | Items on the ground, containers, switches, objects you can still use and things you can break glow in the dungeon view (bright green by default); **H** turns it off and on. |
 | `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
 | `learned-recipes` | Recipes you have already learned get a green check mark on their icon in the inventory and in shops, and every recipe's tooltip says **Learned** or **Not learned yet**. |
 | `shop-sort` | The merchant's list in every shop stays sorted: swords together, axes together, helmets together, boots together, and so on, cheapest first. |
@@ -521,17 +521,29 @@ keeps a normal desktop window, but players have to know to pick it.
 Things you can pick up or use are easy to miss in the dungeon art. This mod
 colors them, bright green by default, in the dungeon view.
 
-- Three groups, each with its own switch: **items** on the ground or in
+- Groups, each with its own switch: **items** on the ground or in
   alcoves; **containers** (chests until they're opened, alcoves and shelves
   while something is in them); **switches** (wall buttons, levers, secret
-  buttons and keyholes).
+  buttons and keyholes); **usable objects** (scenery you can click and
+  haven't used up yet: tree holes and hiding places, plants to pick, signs,
+  paintings, wells, statues, rocks that start an event); **breakable
+  objects** (barrels, crates, urns, webs and furniture, until broken);
+  **torches and braziers** (off by default: there are many and they never
+  run out, but some puzzles use braziers).
+- Usable objects follow the game's own bookkeeping: each object has an
+  interaction priority, which the game sets to 0 when there's nothing to do
+  and lowers after the first use. An object stops glowing once the game
+  considers it used. Objects with their own script (signs, event rocks)
+  stay usable, so they keep glowing. Scenery the game doesn't let you click
+  (most flowers and bushes) never glows. The whole sprite is colored, so a
+  tree with a hole in it glows as a whole tree.
 - Only what the game draws is marked: anything behind a wall stays hidden,
   and the game's fog and shade still apply. The item under the cursor (or
   picked with the gamepad) keeps the game's own highlight.
 - **H** turns the highlight off and on (a pad button can be bound; none by
   default). The choice is kept for the next game (setting `shown`).
 - Settings: the **color**, its **strength** (0 only tints things, 1 colors
-  them fully; default 0.85) and the three groups.
+  them fully; default 0.85) and the groups.
 - How: the game draws each thing in the dungeon view as a sprite and already
   passes a "highlight" amount per sprite for its hover effect. The mod finds
   the sprites of the marked things (by the entity's class, from the exe's

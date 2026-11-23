@@ -16,12 +16,26 @@
 //!   map (pattern `pick_lookup`), takes the entity from the record (+0x60)
 //!   and its class from the entity's vtable. The vtables of `Item`,
 //!   `Container`, `Chest`, `Button` (levers and buttons) and `Decoration`
-//!   (only the keyholes, `*wall_lock*` definitions) are found once at load
-//!   from their RTTI names ([`rtti`]), so no pattern per class is needed. For the classes
-//!   the player turned on, it multiplies the record's color by the
-//!   highlight color and sets the highlight amount to the "glow" setting.
-//!   Records the game already highlights (the hovered item) are left alone,
-//!   so they keep the game's own look.
+//!   are found once at load from their RTTI names ([`rtti`]), so no pattern
+//!   per class is needed. For the groups the player turned on, it
+//!   multiplies the record's color by the highlight color and sets the
+//!   highlight amount to the "glow" setting. Records the game already
+//!   highlights (the hovered item) are left alone, so they keep the game's
+//!   own look.
+//! - A `Decoration` is any other world object (trees, signs, barrels,
+//!   torches...). Its group comes from its live state, read the way the game
+//!   reads it, because loot and scripts are set per placed object in the
+//!   level, not per definition ([`decoration_group`]):
+//!   - keyholes (`*wall_lock*` definitions) are switches;
+//!   - an object the game's interaction picker accepts (not disabled,
+//!     interaction not disabled, a non-empty interact area) whose interact
+//!     priority is above 50 is usable. The game's scripts set the priority
+//!     to 0 on objects with nothing to do and lower it to 50 (or 0) after
+//!     the first use, so used-up things stop glowing. Torches and braziers
+//!     (`*torch*`, `*brazier*`) only switch a light on and off and have
+//!     their own group;
+//!   - an object with hit points left and still in its first sprite state
+//!     (barrels, crates, urns, webs, furniture) is breakable.
 //! - The shader's highlight adds white. To make it add the record's color
 //!   instead, the mod wraps `glShaderSource` (through the exe's import of
 //!   `SDL_GL_GetProcAddress`) and changes that one term of the `DungObject`
@@ -62,6 +76,16 @@ const REC_ENTITY: usize = 0x60; // the entity object
 const REC_DEF_NAME: usize = 0x80; // char* of the definition's name
 
 // Entities.
+// Interaction state, common to every entity class (the game's
+// can-interact check, Entity vtable slot 9, reads these).
+const ENT_DISABLED: usize = 0x18; // u8
+const ENT_INTERACT_DISABLED: usize = 0x1c; // u8
+const ENT_INTERACT_PRIORITY: usize = 0x48; // i32
+const ENT_INTERACT_AREA_W: usize = 0xb8; // f32 (area x, y, w, h at 0xb0)
+const ENT_INTERACT_AREA_H: usize = 0xbc; // f32
+// Decoration.
+const DECO_HP: usize = 0xd0; // i32: def `health`, 0 if none, < 0 once broken
+const DECO_SPRITE_STATE: usize = 0xd4; // i32, 0 = as placed
 const CONTAINER_ITEM_COUNT: usize = 0xd8; // i32
 const CHEST_SPRITE_STATE: usize = 0xd0; // i32, 0 = closed
 const CHEST_CLOSED: i32 = 0;
@@ -70,6 +94,13 @@ const CHEST_CLOSED: i32 = 0;
 const CAT_ITEMS: u8 = 1;
 const CAT_CONTAINERS: u8 = 2;
 const CAT_SWITCHES: u8 = 4;
+const CAT_OBJECTS: u8 = 8;
+const CAT_BREAKABLES: u8 = 16;
+const CAT_LIGHTS: u8 = 32;
+/// Interact priority the game's scripts give an object after its first use
+/// when it still has a "done" text; 0 when there's nothing (left) to do.
+/// Unused objects are at 99 and up.
+const PRIORITY_USED: i32 = 50;
 
 /// Classes the mod marks, by RTTI name.
 const CLASSES: [(&str, Class); 5] = [
@@ -86,7 +117,8 @@ enum Class {
     Container,
     Chest,
     Button,
-    /// Only the wall locks (keyholes) among them.
+    /// Keyholes, usable objects, lights and breakables
+    /// ([`decoration_group`]).
     Decoration,
 }
 
@@ -133,22 +165,79 @@ fn def_name_checked(rec: usize) -> String {
     String::from_utf8_lossy(&b[..end]).into_owned()
 }
 
-/// Whether a wall decoration is a lock (keyhole), from its definition's
-/// name (`engine_wall_lock` and the level defs derived from it).
+/// The definition name of pick record `rec` (empty if it has none).
 ///
 /// # Safety
 /// `rec` must be a live pick record.
-unsafe fn is_wall_lock(rec: usize) -> bool {
+unsafe fn def_name<'a>(rec: usize) -> &'a [u8] {
     // SAFETY: the record's name pointer is the definition's (static) name.
     let name = unsafe { *((rec + REC_DEF_NAME) as *const *const std::ffi::c_char) };
     if name.is_null() {
-        return false;
+        return &[];
     }
     // SAFETY: a NUL-terminated name kept for the life of the definitions.
-    let name = unsafe { std::ffi::CStr::from_ptr(name) }.to_bytes();
-    // `wall_lock_iron`, `mine_wall_lock`...; not `block`, `blocker`.
-    const LOCK: &[u8] = b"wall_lock";
-    name.windows(LOCK.len()).any(|w| w == LOCK)
+    unsafe { std::ffi::CStr::from_ptr(name) }.to_bytes()
+}
+
+fn contains(name: &[u8], part: &[u8]) -> bool {
+    name.windows(part.len()).any(|w| w == part)
+}
+
+/// What the mod reads from a `Decoration` to pick its group.
+#[derive(Debug, Clone, Copy, Default)]
+struct DecoState {
+    /// A keyhole (`wall_lock_iron`, `mine_wall_lock`...; not `block`).
+    lock: bool,
+    /// A torch or brazier: interacting only switches its light.
+    light: bool,
+    /// The game's can-interact check passes.
+    can_interact: bool,
+    priority: i32,
+    hp: i32,
+    sprite_state: i32,
+}
+
+impl DecoState {
+    /// Reads the decoration `ent` with pick record `rec`.
+    ///
+    /// # Safety
+    /// `ent` and `rec` must be a live `Decoration` and its pick record.
+    unsafe fn read(ent: usize, rec: usize) -> DecoState {
+        // SAFETY (closures): fields of the caller's live Decoration.
+        let b = |o: usize| unsafe { *((ent + o) as *const u8) };
+        let i = |o: usize| unsafe { *((ent + o) as *const i32) };
+        let f = |o: usize| unsafe { *((ent + o) as *const f32) };
+        // SAFETY: the caller's record.
+        let name = unsafe { def_name(rec) };
+        DecoState {
+            lock: contains(name, b"wall_lock"),
+            light: contains(name, b"torch") || contains(name, b"brazier"),
+            // The game's check (Entity vtable slot 9): not disabled, a
+            // non-empty interact area, interaction not disabled.
+            can_interact: b(ENT_DISABLED) == 0
+                && f(ENT_INTERACT_AREA_W) > 0.0
+                && f(ENT_INTERACT_AREA_H) > 0.0
+                && b(ENT_INTERACT_DISABLED) == 0,
+            priority: i(ENT_INTERACT_PRIORITY),
+            hp: i(DECO_HP),
+            sprite_state: i(DECO_SPRITE_STATE),
+        }
+    }
+}
+
+/// The group of a decoration in state `s`, if any. `cats` are the groups
+/// shown: a keyhole is never anything but a switch.
+fn decoration_group(s: &DecoState, cats: u8) -> Option<u8> {
+    let cat = if s.lock {
+        CAT_SWITCHES
+    } else if s.hp > 0 && s.sprite_state == 0 {
+        CAT_BREAKABLES
+    } else if s.can_interact && s.priority > PRIORITY_USED {
+        if s.light { CAT_LIGHTS } else { CAT_OBJECTS }
+    } else {
+        return None;
+    };
+    (cats & cat != 0).then_some(cat)
 }
 
 /// The category to mark a sprite of entity `ent` (pick record `rec`) as,
@@ -171,11 +260,15 @@ unsafe fn category(ent: usize, rec: usize) -> Option<u8> {
         Class::Chest => (unsafe { *((ent + CHEST_SPRITE_STATE) as *const i32) } == CHEST_CLOSED)
             .then_some(CAT_CONTAINERS),
         Class::Button => Some(CAT_SWITCHES),
-        // The name check costs a string scan per decoration sprite: only
-        // when switches are shown.
-        Class::Decoration => (CATEGORIES.load(Ordering::Relaxed) & CAT_SWITCHES != 0
-            && unsafe { is_wall_lock(rec) })
-        .then_some(CAT_SWITCHES),
+        Class::Decoration => {
+            let cats = CATEGORIES.load(Ordering::Relaxed);
+            const DECO_CATS: u8 = CAT_SWITCHES | CAT_OBJECTS | CAT_BREAKABLES | CAT_LIGHTS;
+            if cats & DECO_CATS == 0 {
+                return None;
+            }
+            // SAFETY: a live Decoration and its record.
+            decoration_group(&unsafe { DecoState::read(ent, rec) }, cats)
+        }
     }
 }
 
@@ -206,11 +299,17 @@ unsafe fn mark(flags: u16, pick: i32, d: *mut u8) {
     if DEBUG.load(Ordering::Relaxed) {
         // SAFETY: the entity starts with its vtable.
         let vt = unsafe { *(ent as *const usize) };
-        let class = VTABLES
-            .iter()
-            .position(|v| v.load(Ordering::Relaxed) == vt)
-            .map_or("other", |i| CLASSES[i].0);
-        let line = format!("{class} {} (flags {flags:#x})", def_name_checked(rec));
+        let i = VTABLES.iter().position(|v| v.load(Ordering::Relaxed) == vt);
+        let class = i.map_or("other", |i| CLASSES[i].0);
+        let mut line = format!("{class} {} (flags {flags:#x})", def_name_checked(rec));
+        if i.is_some_and(|i| CLASSES[i].1 == Class::Decoration) {
+            // SAFETY: a live Decoration and its record.
+            let s = unsafe { DecoState::read(ent, rec) };
+            line += &format!(
+                " interact {} priority {} hp {} sprite state {}",
+                s.can_interact, s.priority, s.hp, s.sprite_state
+            );
+        }
         let mut seen = LOGGED.lock().unwrap_or_else(|e| e.into_inner());
         if !seen.contains(&line) {
             log(&format!("drawn: {line}"));
@@ -394,16 +493,19 @@ pub struct ItemHighlight {
 
 impl ItemHighlight {
     fn apply(&mut self, settings: &toml::Table) {
-        let b = |k: &str| settings.get(k).and_then(|v| v.as_bool()).unwrap_or(true);
-        self.shown = b("shown");
+        let b = |k: &str, d: bool| settings.get(k).and_then(|v| v.as_bool()).unwrap_or(d);
+        self.shown = b("shown", true);
         ON.store(self.shown, Ordering::Relaxed);
         let mut cats = 0;
-        for (k, c) in [
-            ("items", CAT_ITEMS),
-            ("containers", CAT_CONTAINERS),
-            ("switches", CAT_SWITCHES),
+        for (k, c, d) in [
+            ("items", CAT_ITEMS, true),
+            ("containers", CAT_CONTAINERS, true),
+            ("switches", CAT_SWITCHES, true),
+            ("objects", CAT_OBJECTS, true),
+            ("breakables", CAT_BREAKABLES, true),
+            ("lights", CAT_LIGHTS, false),
         ] {
-            if b(k) {
+            if b(k, d) {
                 cats |= c;
             }
         }
@@ -562,6 +664,76 @@ mod tests {
         assert_eq!(manifest.id, m.id());
         let pats = PatternFile::parse(m.patterns()).unwrap();
         assert_eq!(pats.patterns.len(), 2);
+    }
+
+    #[test]
+    fn decoration_groups() {
+        let all = CAT_SWITCHES | CAT_OBJECTS | CAT_BREAKABLES | CAT_LIGHTS;
+        let usable = DecoState {
+            can_interact: true,
+            priority: 99,
+            ..Default::default()
+        };
+        assert_eq!(decoration_group(&usable, all), Some(CAT_OBJECTS));
+        // Custom scripts (the encounter boulder, signs) are at 500.
+        let custom = DecoState {
+            priority: 500,
+            ..usable
+        };
+        assert_eq!(decoration_group(&custom, all), Some(CAT_OBJECTS));
+        // Used up (50), nothing to do (0), or not clickable.
+        for s in [
+            DecoState {
+                priority: 50,
+                ..usable
+            },
+            DecoState {
+                priority: 0,
+                ..usable
+            },
+            DecoState {
+                can_interact: false,
+                ..usable
+            },
+        ] {
+            assert_eq!(decoration_group(&s, all), None, "{s:?}");
+        }
+        let light = DecoState {
+            light: true,
+            priority: 500,
+            ..usable
+        };
+        assert_eq!(decoration_group(&light, all), Some(CAT_LIGHTS));
+        assert_eq!(decoration_group(&light, all & !CAT_LIGHTS), None);
+        // Barrels: hit points left and not yet broken.
+        let barrel = DecoState {
+            hp: 10,
+            ..Default::default()
+        };
+        assert_eq!(decoration_group(&barrel, all), Some(CAT_BREAKABLES));
+        for s in [
+            DecoState {
+                hp: -1,
+                sprite_state: 1,
+                ..barrel
+            },
+            DecoState {
+                sprite_state: 1,
+                ..barrel
+            },
+            DecoState { hp: 0, ..barrel },
+        ] {
+            assert_eq!(decoration_group(&s, all), None, "{s:?}");
+        }
+        // A keyhole is only ever a switch.
+        let lock = DecoState {
+            lock: true,
+            priority: 500,
+            ..usable
+        };
+        assert_eq!(decoration_group(&lock, all), Some(CAT_SWITCHES));
+        assert_eq!(decoration_group(&lock, all & !CAT_SWITCHES), None);
+        assert_eq!(decoration_group(&usable, all & !CAT_OBJECTS), None);
     }
 
     #[test]
