@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.17](https://github.com/jjanow/underkeep-qol/releases/latest), for the
+[1.0.18](https://github.com/jjanow/underkeep-qol/releases/latest), for the
 current game version, 1.0.6. Older game versions aren't supported: Steam
 always updates the game to the latest version. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
@@ -27,6 +27,7 @@ and `shop-sort` (new in 1.0.11) and `party-numbers`, `enemy-health` and
 `hidden-stats` (new in 1.0.13, tested on game 1.0.6) and `item-cooldowns`
 (new in 1.0.16);
 hidden-stats' Spell Mana Cost row (new in 1.0.17) and
+item-highlight's usable, breakable and light groups (new in 1.0.18) and
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
 yet, and the manager keeping other launch options when it sets ours (new in
 1.0.14) is unit-tested only. Steam Deck and macOS bottles are

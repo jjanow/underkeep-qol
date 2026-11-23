@@ -1,6 +1,6 @@
 id = "item-highlight"
 name = "Item highlight"
-version = "1.0.17"
+version = "1.0.18"
 author = "underkeep-qol"
 description = "Makes items on the ground, containers with something in them, switches, objects you can still use and things you can break glow in the dungeon view, so nothing is missed."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.

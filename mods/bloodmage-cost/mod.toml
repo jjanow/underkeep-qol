@@ -1,6 +1,6 @@
 id = "bloodmage-cost"
 name = "Blood Mage cost"
-version = "1.0.17"
+version = "1.0.18"
 author = "underkeep-qol"
 description = "Choose per Blood Mage how spells are paid: bones first (the game's rule) or always with health, keeping the bones."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.

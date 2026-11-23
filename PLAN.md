@@ -683,8 +683,8 @@ In order of difficulty; each ships when done, with settings and tests.
       `Changing display mode to emulated borderless fullscreen...`. Without
       the mod the same settings log `...to borderless fullscreen...`.
     - Windows (user, 2026-11-14): works.
-- [x] `item-highlight`: items on the ground, containers and switches are
-      recolored in the dungeon view (default `#33FF33`, strength 0.85),
+- [x] `item-highlight`: items on the ground, containers, switches, usable
+      and breakable objects are recolored in the dungeon view (default `#33FF33`, strength 0.85),
       each group switchable; **H** toggles, the choice is kept (`shown`).
   - How: a detour of QueueWorldSprite (`sprite_submit`) finds the entity
     from the sprite's pick id (`pick_lookup`) and its class from RTTI
@@ -704,6 +704,21 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-15: released in 1.0.2 (tag `v1.0.2`). The shader anchor (one
     statement of the game's GLSL, kept verbatim in the mod as its search
     string) was approved by the user.
+  - 2026-11-23 (1.0.18, a player's request: also mark clickable and
+    breakable scenery for a completionist run): three Decoration groups
+    from live state, no new pattern. Entity +0x18 disabled, +0x1c
+    interact_disabled, +0x48 interact priority, interact area +0xb0 (w/h
+    +0xb8/+0xbc); the picker (1.0.6 0x14013be40) uses vtable slot 9
+    (0x1401cbfa0) for can-interact. The engine_decoration script sets the
+    priority to 0 with nothing to do, 500 with a custom on_interact, and 50
+    or 0 after the first use, so **usable** = can interact and priority
+    > 50. **Breakable** = Decoration +0xd0 hp > 0 (def `health`, < 0 once
+    killed) and +0xd4 sprite_state 0 (barrels, crates, urns, webs,
+    furniture). **Torches and braziers** (by def name) are their own group,
+    off by default (they never run out; some puzzles use braziers). Keyholes
+    stay switches only. Debug log adds priority/hp per decoration.
+    - [ ] In game: the forest event boulder, a tree hole, berry bushes,
+      village barrels (glow, then stop after use / breaking).
 - [x] `melee-accuracy` (asked 2026-11-16): melee hit chance gets
       `max(0, stat x per_point)` (default 2), the stat being the one the
       attack's damage scales on (DEX for `uses_dexterity` items, else STR,
@@ -1022,6 +1037,9 @@ In order of difficulty; each ships when done, with settings and tests.
     mod (a player's request).
   - 2026-11-21: version 1.0.17, tag `v1.0.17`: hidden-stats shows the
     spell mana cost change (a player's report). Unit-tested only.
+  - 2026-11-23: version 1.0.18, tag `v1.0.18`: item-highlight marks
+    usable objects, breakables and (opt-in) torches and braziers (a
+    player's request). Unit-tested only.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
