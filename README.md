@@ -15,7 +15,7 @@ Underkeep has no official mod support. This project adds it in a way that:
   changed. Anything a mod has to remember lives in a separate file next to the save.
 
 **Status:** released. The current version is
-[1.0.18](https://github.com/jjanow/underkeep-qol/releases/latest), for the
+[1.0.19](https://github.com/jjanow/underkeep-qol/releases/latest), for the
 current game version, 1.0.6. Older game versions aren't supported: Steam
 always updates the game to the latest version. The loader, overlay (F10 / L3+R3), manager and the first six mods are
 tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2;

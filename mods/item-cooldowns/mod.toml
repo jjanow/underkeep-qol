@@ -1,6 +1,6 @@
 id = "item-cooldowns"
 name = "Item cooldowns"
-version = "1.0.18"
+version = "1.0.19"
 author = "underkeep-qol"
 description = "Shows how much of an item's ability cooldown is left, in the item's tooltip, so you can check it without equipping the item. The game keeps counting the cooldown down while the item is in your inventory."
 # Build (exe SHA-256) the mod is made for: 1.0.6 (Steam), the current game.

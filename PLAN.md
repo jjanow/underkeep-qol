@@ -719,6 +719,27 @@ In order of difficulty; each ships when done, with settings and tests.
     stay switches only. Debug log adds priority/hp per decoration.
     - [ ] In game: the forest event boulder, a tree hole, berry bushes,
       village barrels (glow, then stop after use / breaking).
+  - 2026-11-25 (1.0.19, a player's report): one color per group (items
+    `color`, then `color_containers`, `_switches`, `_objects`,
+    `_breakables`, `_lights`). Apple trees (`tree2`) go by sprite state:
+    the game can leave a tree with apples at priority 0 after a load
+    (it still drops apples). Usable objects also need sprite state 0, so
+    dug graves (`shallow_grave_dirt` keeps priority 250) stop glowing.
+    Lights add `campfire`; `*non_switchable` braziers are left out.
+    Campfires and floor braziers have no sprite, only effects: the mod
+    swaps Decoration vtable slot 7 (0x1401d0100, effect draw) to note the
+    decoration and detours the particle quad builder 0x140153160 (pattern
+    `effect_quad`, optional); additive particles (record +0x28, sprite
+    +0x24) are only tinted, others recolored. "Show items behind objects"
+    (on by default, cvar 3) draws see-through item copies as GUI batch
+    commands in 0x14013ed40 (pattern `behind_overlay`, optional); the mod
+    recolors those after the pass. The shader recolor is now weighted by
+    texture alpha. Runtime: `iat::swap_pointer`.
+    - [x] Proton, 2026-11-25, game 1.0.6: group colors, an apple tree at
+      priority 0 (glowed after the fix, dropped an apple), bare trees not
+      marked, unlit and lit campfire, lit and unlit torches, see-through
+      copies recolored (debug log), chest, barrels, weapon rack.
+    - [ ] In game: a dug grave, a floor brazier, a non-switchable brazier.
 - [x] `melee-accuracy` (asked 2026-11-16): melee hit chance gets
       `max(0, stat x per_point)` (default 2), the stat being the one the
       attack's damage scales on (DEX for `uses_dexterity` items, else STR,
@@ -1040,6 +1061,9 @@ In order of difficulty; each ships when done, with settings and tests.
   - 2026-11-23: version 1.0.18, tag `v1.0.18`: item-highlight marks
     usable objects, breakables and (opt-in) torches and braziers (a
     player's request). Unit-tested only.
+  - 2026-11-25: version 1.0.19, tag `v1.0.19`: item-highlight colors per
+    group, apple trees with apples, dug graves, campfires and see-through
+    items (a player's report). Tested in game 1.0.6 with Proton.
 - [x] Test matrix: Windows, Linux Proton, Steam Deck; fresh install,
       update, uninstall, save loads without mods.
   - Linux Proton, 2026-11-14, with the released 1.0.0 Linux manager (CLI):
