@@ -18,3 +18,22 @@ pattern = "48 89 5C 24 08 48 89 6C 24 10 48 89 74 24 18 48 89 7C 24 20 41 56 48 
 [pick_lookup]
 pattern = "4C 8B 15 ?? ?? ?? ?? 44 8B C9 48 C7 44 24 10 00 00 00 00 41 8B 8A 28 04 00 00 85 C9"
 
+
+# The overlay pass of the dungeon view, 0x14013ed40 (1.0.6; optional). With
+# the option "Show items behind objects" on (cvar value 3), it draws every
+# item in view again on top of everything, as GUI sprite commands (kind 10)
+# with color (1, 1, 1, 0.5). Found from the cvar index the options menu
+# (string "menu_show_items_behind") stores.
+[behind_overlay]
+pattern = "48 89 5C 24 20 55 57 41 54 41 55 41 57 48 81 EC D0 00 00 00 F3 0F 10 05 ?? ?? ?? ?? 4C 8D 3D ?? ?? ?? ?? 45 33 E4"
+optional = true
+
+# Particle quad, 0x140153160 (1.0.6; optional): (render context, SpriteDraw*,
+# corners). Called per particle by the effect draw 0x140152bc0, which
+# Decoration vtable slot 7 (0x1401d0100) reaches for the effects mounted on
+# an object (campfire and brazier flames). The record has the world sprite
+# layout (color +0x18, highlight +0x3c) and is drawn with the DungObject
+# shader.
+[effect_quad]
+pattern = "4C 8B DC 55 56 41 55 41 56 41 57 49 8D 6B C8 48 81 EC 10 01 00 00 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 45 A0 48 8B 32 4D 8B F8 4C 8B F2"
+optional = true

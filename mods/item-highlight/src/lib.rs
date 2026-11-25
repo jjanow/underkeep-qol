@@ -35,7 +35,14 @@
 //!     (`*torch*`, `*brazier*`) only switch a light on and off and have
 //!     their own group;
 //!   - an object with hit points left and still in its first sprite state
-//!     (barrels, crates, urns, webs, furniture) is breakable.
+//!     (barrels, crates, urns, webs, furniture) is breakable;
+//!   - a usable object also needs its first sprite state: a dug grave keeps
+//!     its priority but shows the empty grave. Lights are exempt (campfires
+//!     sit in state 1, their sprite is only for the editor).
+//! - Each group has its own color. The effects mounted on a marked light
+//!   (flames, glows; floor braziers and campfires are only effects) take
+//!   its color too ([`effects`]), and so do the see-through item copies of
+//!   the game's "Show items behind objects" option ([`behind`]).
 //! - The shader's highlight adds white. To make it add the record's color
 //!   instead, the mod wraps `glShaderSource` (through the exe's import of
 //!   `SDL_GL_GetProcAddress`) and changes that one term of the `DungObject`
@@ -62,6 +69,9 @@ const KEYS: [&str; 2] = ["toggle_key", "toggle_pad"];
 const D_SPRITE: usize = 0x00; // the sprite definition
 const D_COLOR: usize = 0x18; // 4 x f32 RGBA
 const D_HIGHLIGHT: usize = 0x3c; // f32
+/// How additive the sprite is drawn (f32, 0 = normal blending), with the
+/// sprite definition's own amount ([`SPRITE_ADDITIVE`]).
+const D_ADDITIVE: usize = 0x28;
 /// Flags of an item's second sprite (drawn under it, never highlighted by
 /// the game either).
 const FLAGS_UNDERLAY: u16 = 0x2;
@@ -70,6 +80,9 @@ const FLAGS_UNDERLAY: u16 = 0x2;
 /// with the record's color for the vertex color (it tints shared grey
 /// sprites, for example a red robe).
 const SPRITE_COLOR: usize = 0x14;
+/// The sprite definition's additive amount (f32): the game blends a sprite
+/// by `1 - (1 - record's) * (1 - this)` additively (flames, light halos).
+const SPRITE_ADDITIVE: usize = 0x24;
 
 // Pick record (the entity's common block).
 const REC_ENTITY: usize = 0x60; // the entity object
@@ -97,10 +110,22 @@ const CAT_SWITCHES: u8 = 4;
 const CAT_OBJECTS: u8 = 8;
 const CAT_BREAKABLES: u8 = 16;
 const CAT_LIGHTS: u8 = 32;
+/// Number of groups (one bit each, in this order).
+const N_CATS: usize = 6;
 /// Interact priority the game's scripts give an object after its first use
 /// when it still has a "done" text; 0 when there's nothing (left) to do.
 /// Unused objects are at 99 and up.
 const PRIORITY_USED: i32 = 50;
+
+/// Each group's color setting and default, in bit order.
+const COLORS: [(&str, &str); N_CATS] = [
+    ("color", "#33FF33"),
+    ("color_containers", "#FFC020"),
+    ("color_switches", "#33CCFF"),
+    ("color_objects", "#C070FF"),
+    ("color_breakables", "#FF5050"),
+    ("color_lights", "#FFFF80"),
+];
 
 /// Classes the mod marks, by RTTI name.
 const CLASSES: [(&str, Class); 5] = [
@@ -129,8 +154,9 @@ static VTABLES: [AtomicUsize; 5] = [const { AtomicUsize::new(0) }; 5];
 /// Highlight shown (mod active and the `shown` setting on).
 static ON: AtomicBool = AtomicBool::new(false);
 static CATEGORIES: AtomicU8 = AtomicU8::new(0);
-/// The highlight color, as f32 bits of r, g, b.
-static TINT: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
+/// Each group's highlight color (index = bit number), as f32 bits of
+/// r, g, b (0..1, sRGB as in the setting).
+static TINTS: [[AtomicU32; 3]; N_CATS] = [const { [const { AtomicU32::new(0) }; 3] }; N_CATS];
 static STRENGTH: AtomicU32 = AtomicU32::new(0);
 /// `debug` setting: log each kind of thing the first time it's marked.
 static DEBUG: AtomicBool = AtomicBool::new(false);
@@ -188,8 +214,14 @@ fn contains(name: &[u8], part: &[u8]) -> bool {
 struct DecoState {
     /// A keyhole (`wall_lock_iron`, `mine_wall_lock`...; not `block`).
     lock: bool,
-    /// A torch or brazier: interacting only switches its light.
+    /// A torch, brazier or campfire: interacting only switches its light.
     light: bool,
+    /// A light that can't be switched (`brazier1_non_switchable`...): it
+    /// only says so when clicked.
+    fixed: bool,
+    /// An apple tree (`tree2`): it has apples left while its sprite
+    /// state is 0, whatever its priority (see [`decoration_group`]).
+    apple_tree: bool,
     /// The game's can-interact check passes.
     can_interact: bool,
     priority: i32,
@@ -211,7 +243,11 @@ impl DecoState {
         let name = unsafe { def_name(rec) };
         DecoState {
             lock: contains(name, b"wall_lock"),
-            light: contains(name, b"torch") || contains(name, b"brazier"),
+            light: [b"torch".as_slice(), b"brazier", b"campfire"]
+                .iter()
+                .any(|p| contains(name, p)),
+            fixed: contains(name, b"non_switchable") || contains(name, b"nonswitchable"),
+            apple_tree: name == b"tree2",
             // The game's check (Entity vtable slot 9): not disabled, a
             // non-empty interact area, interaction not disabled.
             can_interact: b(ENT_DISABLED) == 0
@@ -232,8 +268,27 @@ fn decoration_group(s: &DecoState, cats: u8) -> Option<u8> {
         CAT_SWITCHES
     } else if s.hp > 0 && s.sprite_state == 0 {
         CAT_BREAKABLES
-    } else if s.can_interact && s.priority > PRIORITY_USED {
-        if s.light { CAT_LIGHTS } else { CAT_OBJECTS }
+    } else if s.apple_tree {
+        // The tree rolls its apples again each time the level is set up,
+        // and a roll of none sets priority 0, which a save with apples
+        // left doesn't undo: such a tree still drops apples. Its sprite
+        // (apples or bare) is always right.
+        if s.can_interact && s.sprite_state == 0 {
+            CAT_OBJECTS
+        } else {
+            return None;
+        }
+    } else if s.can_interact && s.priority > PRIORITY_USED && s.light {
+        if s.fixed {
+            return None;
+        }
+        // Lights keep their sprite state (campfires draw only effects and
+        // sit in state 1 from the start).
+        CAT_LIGHTS
+    } else if s.can_interact && s.priority > PRIORITY_USED && s.sprite_state == 0 {
+        // A changed sprite means used: a dug grave keeps its priority but
+        // shows the empty grave.
+        CAT_OBJECTS
     } else {
         return None;
     };
@@ -322,7 +377,48 @@ unsafe fn mark(flags: u16, pick: i32, d: *mut u8) {
     if CATEGORIES.load(Ordering::Relaxed) & cat == 0 {
         return;
     }
+    // SAFETY: the caller's live record.
+    unsafe { recolor(d, cat) };
+}
+
+/// The color of group `cat` (one bit), r, g, b in 0..1.
+fn tint(cat: u8) -> [f32; 3] {
+    let t = &TINTS[(cat.trailing_zeros() as usize).min(N_CATS - 1)];
+    [f32_of(&t[0]), f32_of(&t[1]), f32_of(&t[2])]
+}
+
+/// Gives sprite record `d` (`SpriteDraw` layout) the look of group `cat`.
+///
+/// # Safety
+/// `d` must be a writable sprite record about to be drawn, with a valid
+/// (or null) sprite definition pointer.
+unsafe fn recolor(d: *mut u8, cat: u8) {
     let strength = f32_of(&STRENGTH);
+    // SAFETY: the record's sprite definition (set by the game's helper).
+    let sprite = unsafe { (d.add(D_SPRITE) as *const usize).read_unaligned() };
+    // SAFETY: the record's and the sprite definition's floats.
+    let additive = 1.0
+        - (1.0 - unsafe { (d.add(D_ADDITIVE) as *const f32).read_unaligned() })
+            * (1.0
+                - if sprite == 0 {
+                    0.0
+                } else {
+                    unsafe { ((sprite + SPRITE_ADDITIVE) as *const f32).read_unaligned() }
+                });
+    if additive > 0.01 {
+        // Additive light (flames, halos): recoloring to a bright color
+        // would glare, so only shift its hue toward the color.
+        for (i, t) in tint(cat).into_iter().enumerate() {
+            let o = D_COLOR + i * 4;
+            let c = 1.0 + (t - 1.0) * strength;
+            // SAFETY: the record's color floats.
+            unsafe {
+                let p = d.add(o) as *mut f32;
+                p.write_unaligned(p.read_unaligned() * c);
+            }
+        }
+        return;
+    }
     // With the changed shader, 2 + strength selects the recoloring (the
     // game only uses 0..1); without it, a plain tint and a white glow.
     let highlight = if shader::patched() {
@@ -330,18 +426,17 @@ unsafe fn mark(flags: u16, pick: i32, d: *mut u8) {
     } else {
         strength * 0.5
     };
-    // SAFETY: the record's sprite definition (set by the game's helper).
-    let sprite = unsafe { (d.add(D_SPRITE) as *const usize).read_unaligned() };
-    for (i, t) in TINT.iter().enumerate() {
+    for (i, t) in tint(cat).into_iter().enumerate() {
         let o = D_COLOR + i * 4;
         let color = if shader::patched() && sprite != 0 {
             // The recoloring wants exactly the highlight color: undo the
             // sprite's own color, which the game multiplies in.
             // SAFETY: the sprite definition's color floats.
             let own = unsafe { ((sprite + SPRITE_COLOR + i * 4) as *const f32).read_unaligned() };
-            f32_of(t) / own.max(0.05)
+            t / own.max(0.05)
         } else {
-            f(o) * f32_of(t)
+            // SAFETY: the record's color floats.
+            t * unsafe { (d.add(o) as *const f32).read_unaligned() }
         };
         // SAFETY: the record's color floats (alpha at +0x24 is kept).
         unsafe { (d.add(o) as *mut f32).write_unaligned(color) };
@@ -369,6 +464,211 @@ unsafe extern "system" fn submit(
     unsafe { orig(layer, flags, pos, rect, cell, pick, d) }
 }
 
+/// Effects of lights (campfire, brazier and torch flames, glows): the
+/// game draws a `Decoration`'s effects in its own pass (`Decoration` vtable
+/// slot 7), one sprite record per particle, built by the particle quad
+/// function (pattern `effect_quad`). The mod swaps the vtable slot for
+/// [`deco_effects`], which notes the decoration's group while the game
+/// draws its effects, and [`effect_quad`] recolors those particles.
+// The slot swap needs the exe's memory protection calls (Windows only).
+#[cfg_attr(not(windows), allow(dead_code))]
+mod effects {
+    use super::*;
+
+    /// `Decoration` vtable slot 7: draws the effects mounted on it.
+    pub const SLOT: usize = 7;
+    /// The real slot-7 function, while swapped.
+    pub static ORIG_SLOT: AtomicUsize = AtomicUsize::new(0);
+    pub static ORIG_QUAD: AtomicUsize = AtomicUsize::new(0);
+    /// Group of the decoration whose effects are being drawn (0 = none).
+    static CURRENT: AtomicU8 = AtomicU8::new(0);
+
+    // Entity: the common block (+8) holds the pick id at +0x10.
+    const ENT_COMMON: usize = 0x08;
+    const COMMON_PICK: usize = 0x10;
+
+    pub type SlotFn = unsafe extern "system" fn(usize, usize, usize, usize);
+    pub type QuadFn = unsafe extern "system" fn(usize, *mut *mut u8, usize) -> usize;
+
+    /// The group to draw decoration `ent`'s effects as, if any.
+    ///
+    /// # Safety
+    /// `ent` must be a live `Decoration`.
+    unsafe fn group(ent: usize) -> Option<u8> {
+        if !ON.load(Ordering::Relaxed) {
+            return None;
+        }
+        // SAFETY: a live entity's common block and its pick id.
+        let pick =
+            unsafe { *((*((ent + ENT_COMMON) as *const usize) + COMMON_PICK) as *const u32) };
+        if pick == 0 {
+            return None;
+        }
+        // SAFETY: resolved function of this build: (u32) -> record or null.
+        let lookup: LookupFn = unsafe { std::mem::transmute(LOOKUP.load(Ordering::Relaxed)) };
+        let rec = unsafe { lookup(pick) };
+        // SAFETY: a live pick record; only this entity's own record counts.
+        if rec == 0 || unsafe { *((rec + REC_ENTITY) as *const usize) } != ent {
+            return None;
+        }
+        // SAFETY: the live entity and its record.
+        let cat = unsafe { category(ent, rec) }?;
+        if DEBUG.load(Ordering::Relaxed) {
+            let line = format!("effects of {} ({cat:#x})", def_name_checked(rec));
+            let mut seen = LOGGED.lock().unwrap_or_else(|e| e.into_inner());
+            if !seen.contains(&line) {
+                log(&format!("drawn: {line}"));
+                seen.push(line);
+            }
+        }
+        // Only lights: their flames are the part to see (floor braziers
+        // and campfires have no sprite of their own). Other scenery's
+        // effects (fog, light rays, steam) stay as the game draws them.
+        (cat == CAT_LIGHTS && CATEGORIES.load(Ordering::Relaxed) & cat != 0).then_some(cat)
+    }
+
+    /// Replacement for `Decoration` vtable slot 7 (`this`, render context,
+    /// flags, placement).
+    pub unsafe extern "system" fn deco_effects(
+        this: usize,
+        ctx: usize,
+        flags: usize,
+        place: usize,
+    ) {
+        // SAFETY: set before the slot was swapped.
+        let orig: SlotFn = unsafe { std::mem::transmute(ORIG_SLOT.load(Ordering::Relaxed)) };
+        // SAFETY: the game calls this slot on a live Decoration.
+        let cat = guard::call(ID, || unsafe { group(this) })
+            .flatten()
+            .unwrap_or(0);
+        CURRENT.store(cat, Ordering::Relaxed);
+        // SAFETY: the original with the game's arguments.
+        unsafe { orig(this, ctx, flags, place) };
+        CURRENT.store(0, Ordering::Relaxed);
+    }
+
+    /// Detour of the particle quad function (render context, sprite record,
+    /// quad corners): recolors the record while a marked decoration's
+    /// effects are drawn.
+    pub unsafe extern "system" fn effect_quad(ctx: usize, d: *mut *mut u8, quad: usize) -> usize {
+        // SAFETY: set before the hook was enabled.
+        let orig: QuadFn = unsafe { std::mem::transmute(ORIG_QUAD.load(Ordering::Relaxed)) };
+        let cat = CURRENT.load(Ordering::Relaxed);
+        if cat != 0 && !d.is_null() {
+            // SAFETY: the game's record on its stack, `SpriteDraw` layout.
+            let _ = guard::call(ID, || unsafe { recolor(d as *mut u8, cat) });
+        }
+        // SAFETY: the original with the game's arguments.
+        unsafe { orig(ctx, d, quad) }
+    }
+}
+
+/// "Show items behind objects": with the game's option on, its overlay pass
+/// (pattern `behind_overlay`) draws every item in view again, on top of
+/// everything at half opacity, through the GUI sprite batch rather than the
+/// world sprites. Those copies are plain white-tinted, so the mod gives them
+/// the item color after the pass ([`overlay`]).
+mod behind {
+    use super::*;
+
+    pub static ORIG: AtomicUsize = AtomicUsize::new(0);
+    static LOGGED_COPY: AtomicBool = AtomicBool::new(false);
+    /// The item color for the copies, linear r, g, b (the GUI batch takes
+    /// linear colors), already mixed with white by the strength.
+    pub static COLOR: [AtomicU32; 3] = [const { AtomicU32::new(0) }; 3];
+
+    // GUI batch: +8 data, +0x14 bytes used; commands are [u32 kind]
+    // [u32 size (with this header)] then the fields.
+    const BATCH_DATA: usize = 0x08;
+    const BATCH_USED: usize = 0x14;
+    /// Sprite command: sprite +0x10, rect +0x18, color RGBA +0x30, glow +0x40.
+    const CMD_SPRITE: u32 = 10;
+    const CMD_SPRITE_SIZE: u32 = 0x48;
+    const CMD_COLOR: usize = 0x30;
+    const CMD_GLOW: usize = 0x40;
+
+    pub type OverlayFn = unsafe extern "system" fn(usize);
+
+    /// sRGB channel (0..1) to linear, as the game converts its colors.
+    pub fn linear(c: f32) -> f32 {
+        if c <= 0.04045 {
+            c / 12.92
+        } else {
+            ((c + 0.055) / 1.055).powf(2.4)
+        }
+    }
+
+    /// Whether a sprite command's color and glow are the item copies'
+    /// (white, half opacity, no glow); the pass's other commands (the
+    /// screen fade, the hovered item's) differ.
+    pub fn is_copy(rgba: [f32; 4], glow: f32) -> bool {
+        rgba == [1.0, 1.0, 1.0, 0.5] && glow == 0.0
+    }
+
+    /// Recolors the item copies the pass added to `batch` after byte
+    /// `from`.
+    ///
+    /// # Safety
+    /// `batch` must be the game's GUI batch the pass just wrote to.
+    unsafe fn recolor_copies(batch: usize, from: usize) {
+        // SAFETY: the batch header; the buffer may have moved in the pass.
+        let (data, used) = unsafe {
+            (
+                *((batch + BATCH_DATA) as *const usize),
+                *((batch + BATCH_USED) as *const i32),
+            )
+        };
+        if data == 0 || used <= 0 {
+            return;
+        }
+
+        let color = [0, 1, 2].map(|i| f32_of(&COLOR[i]));
+        let mut at = from;
+        while at + 8 <= used as usize {
+            // SAFETY (reads/writes below): inside the batch's used bytes.
+            let cmd = data + at;
+            let (kind, size) = unsafe { (*(cmd as *const u32), *((cmd + 4) as *const u32)) };
+            if size < 8 || at + size as usize > used as usize {
+                return;
+            }
+
+            if kind == CMD_SPRITE && size == CMD_SPRITE_SIZE {
+                let c = cmd + CMD_COLOR;
+                let rgba = [0, 1, 2, 3].map(|i| unsafe { *((c + i * 4) as *const f32) });
+                let glow = unsafe { *((cmd + CMD_GLOW) as *const f32) };
+                if is_copy(rgba, glow) {
+                    if DEBUG.load(Ordering::Relaxed) && !LOGGED_COPY.swap(true, Ordering::Relaxed) {
+                        log("drawn: see-through item copies (Show items behind objects)");
+                    }
+                    for (i, v) in color.iter().enumerate() {
+                        unsafe { *((c + i * 4) as *mut f32) = *v };
+                    }
+                }
+            }
+            at += size as usize;
+        }
+    }
+
+    /// Detour of the overlay pass (its one argument is the GUI batch).
+    pub unsafe extern "system" fn overlay(batch: usize) {
+        // SAFETY: set before the hook was enabled.
+        let orig: OverlayFn = unsafe { std::mem::transmute(ORIG.load(Ordering::Relaxed)) };
+        let on = ON.load(Ordering::Relaxed) && CATEGORIES.load(Ordering::Relaxed) & CAT_ITEMS != 0;
+        // SAFETY: the game's batch header.
+        let from = if on {
+            unsafe { *((batch + BATCH_USED) as *const i32) }
+        } else {
+            -1
+        };
+        // SAFETY: the original with the game's argument.
+        unsafe { orig(batch) };
+        if from >= 0 {
+            // SAFETY: the batch the pass wrote to.
+            let _ = guard::call(ID, || unsafe { recolor_copies(batch, from as usize) });
+        }
+    }
+}
+
 /// The `DungObject` shader's highlight term (see the module docs).
 // Installed through the exe's import table, which only exists on Windows.
 #[cfg_attr(not(windows), allow(dead_code))]
@@ -385,12 +685,15 @@ mod shader {
     pub const MARK: f32 = 2.0;
     /// For the mod's sprites: the game's result, recolored toward the
     /// vertex color (the highlight color, premultiplied like the game's) by
-    /// `strength`, with the texture's light and dark parts; alpha is kept.
+    /// `strength` times the texture's alpha, with the texture's light and
+    /// dark parts; alpha is kept. Weighting by alpha leaves additive glows
+    /// (light halos around flames, nearly transparent) as the game draws
+    /// them instead of turning them into solid colored balls.
     const RECOLOR: &str = "if ( highlight >= 2.0 ) { \
                            vec4 qol_t = texture( t_color, uv ) ; \
                            float qol_l = dot( qol_t.rgb, vec3( 0.299, 0.587, 0.114 ) ) ; \
                            result = vec4( mix( result.rgb, color.rgb * ( 0.6 * qol_t.a + 0.7 * qol_l ), \
-                           min( highlight - 2.0, 1.0 ) ), result.a ) ; \
+                           min( highlight - 2.0, 1.0 ) * qol_t.a ), result.a ) ; \
                            } else { ";
 
     pub static ORIG_GET_PROC: AtomicUsize = AtomicUsize::new(0);
@@ -487,6 +790,9 @@ mod shader {
 #[derive(Default)]
 pub struct ItemHighlight {
     shown: bool,
+    /// `Decoration` vtable slot 7, once swapped (see [`effects`]).
+    #[cfg_attr(not(windows), allow(dead_code))]
+    effects_slot: Option<usize>,
     #[cfg(windows)]
     get_proc: Option<uk_qol_runtime::iat::IatHook>,
 }
@@ -510,19 +816,29 @@ impl ItemHighlight {
             }
         }
         CATEGORIES.store(cats, Ordering::Relaxed);
-        let rgb = settings
-            .get("color")
-            .and_then(|v| v.as_str())
-            .and_then(uk_qol_runtime::host::parse_color)
-            .unwrap_or([0x33, 0xff, 0x33]);
-        for (a, c) in TINT.iter().zip(rgb) {
-            a.store((c as f32 / 255.0).to_bits(), Ordering::Relaxed);
+        for (tint, (key, default)) in TINTS.iter().zip(COLORS) {
+            let rgb = settings
+                .get(key)
+                .and_then(|v| v.as_str())
+                .and_then(uk_qol_runtime::host::parse_color)
+                .or_else(|| uk_qol_runtime::host::parse_color(default))
+                .unwrap_or([0xff; 3]);
+            for (a, c) in tint.iter().zip(rgb) {
+                a.store((c as f32 / 255.0).to_bits(), Ordering::Relaxed);
+            }
         }
-        let strength = settings
+        let strength = (settings
             .get("strength")
             .and_then(|v| v.as_float())
-            .unwrap_or(0.85) as f32;
-        STRENGTH.store(strength.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+            .unwrap_or(0.85) as f32)
+            .clamp(0.0, 1.0);
+        STRENGTH.store(strength.to_bits(), Ordering::Relaxed);
+        // The item copies of "Show items behind objects": white mixed
+        // toward the item color by the strength, in linear light.
+        for (a, t) in behind::COLOR.iter().zip(tint(CAT_ITEMS)) {
+            let c = 1.0 + (behind::linear(t) - 1.0) * strength;
+            a.store(c.to_bits(), Ordering::Relaxed);
+        }
         DEBUG.store(
             settings
                 .get("debug")
@@ -530,6 +846,60 @@ impl ItemHighlight {
                 .unwrap_or(false),
             Ordering::Relaxed,
         );
+    }
+}
+
+impl ItemHighlight {
+    /// Hooks effect drawing (see [`effects`]): the particle quad function
+    /// at `quad`, then `Decoration` vtable slot 7.
+    /// The detour goes in on every load (the host removes it on unload);
+    /// the slot is swapped once and stays (the replacement only passes the
+    /// call on while the mod is off).
+    fn hook_effects(&mut self, cx: &mut LoadCtx, quad: Option<usize>) {
+        let deco = CLASSES.iter().position(|c| c.1 == Class::Decoration);
+        let vt = deco.map_or(0, |i| VTABLES[i].load(Ordering::Relaxed));
+        let (Some(quad), true) = (quad, vt != 0) else {
+            log(
+                "object effects (campfires, braziers) not colored: pattern effect_quad or Decoration not found",
+            );
+            return;
+        };
+        // SAFETY: the start of the particle quad function (verified
+        // pattern); the detour has its signature and ABI.
+        let hooked = unsafe {
+            cx.hooks
+                .detour(quad, effects::effect_quad as effects::QuadFn as usize)
+        };
+        let Ok(t) = hooked.map_err(|err| log(&format!("object effects not colored: {err}"))) else {
+            return;
+        };
+        effects::ORIG_QUAD.store(t, Ordering::Relaxed);
+        #[cfg(windows)]
+        if self.effects_slot.is_none() {
+            let slot = vt + effects::SLOT * 8;
+            // SAFETY: a vtable entry in the exe's read-only data.
+            let orig = unsafe { *(slot as *const usize) };
+            if !(cx.base..cx.base + cx.image.bytes.len()).contains(&orig) {
+                log(&format!(
+                    "object effects not colored: Decoration slot {} is {orig:#x}",
+                    effects::SLOT
+                ));
+                return;
+            }
+            effects::ORIG_SLOT.store(orig, Ordering::Relaxed);
+            // SAFETY: the slot holds the game's function with the
+            // replacement's signature; ORIG_SLOT is set first.
+            match unsafe {
+                uk_qol_runtime::iat::swap_pointer(
+                    slot,
+                    orig,
+                    effects::deco_effects as effects::SlotFn as usize,
+                )
+            } {
+                Ok(()) => self.effects_slot = Some(slot),
+                Err(err) => log(&format!("object effects not colored: {err}")),
+            }
+        }
     }
 }
 
@@ -596,6 +966,21 @@ impl Mod for ItemHighlight {
                 Ordering::Relaxed,
             );
         }
+        // Optional parts: a miss leaves the rest of the highlight working.
+        let optional = |name: &str| cx.patterns.get(name).map(|&rva| cx.base + rva as usize);
+        match optional("behind_overlay") {
+            // SAFETY: the start of the overlay pass (verified pattern); the
+            // detour has its signature and ABI.
+            Some(at) => match unsafe {
+                cx.hooks
+                    .detour(at, behind::overlay as behind::OverlayFn as usize)
+            } {
+                Ok(t) => behind::ORIG.store(t, Ordering::Relaxed),
+                Err(err) => log(&format!("items behind objects not colored: {err}")),
+            },
+            None => log("items behind objects not colored (pattern behind_overlay not found)"),
+        }
+        self.hook_effects(cx, optional("effect_quad"));
         // The shader change: only possible before the game compiles its
         // shaders (startup). Later, `get_proc` is never asked for
         // glShaderSource again and the fallback look is used.
@@ -663,7 +1048,7 @@ mod tests {
         let manifest = Manifest::parse(m.manifest()).unwrap();
         assert_eq!(manifest.id, m.id());
         let pats = PatternFile::parse(m.patterns()).unwrap();
-        assert_eq!(pats.patterns.len(), 2);
+        assert_eq!(pats.patterns.len(), 4);
     }
 
     #[test]
@@ -734,6 +1119,57 @@ mod tests {
         assert_eq!(decoration_group(&lock, all), Some(CAT_SWITCHES));
         assert_eq!(decoration_group(&lock, all & !CAT_SWITCHES), None);
         assert_eq!(decoration_group(&usable, all & !CAT_OBJECTS), None);
+        // A dug grave keeps its priority; its sprite changes.
+        let dug = DecoState {
+            priority: 250,
+            sprite_state: 1,
+            ..usable
+        };
+        assert_eq!(decoration_group(&dug, all), None);
+        // Campfires sit in sprite state 1 from the start (effects only).
+        let campfire = DecoState {
+            sprite_state: 1,
+            ..light
+        };
+        assert_eq!(decoration_group(&campfire, all), Some(CAT_LIGHTS));
+        // Braziers that can't be switched only say so.
+        let fixed = DecoState {
+            fixed: true,
+            ..light
+        };
+        assert_eq!(decoration_group(&fixed, all), None);
+        // Apple trees: apples shown means usable, even at priority 0.
+        let apples = DecoState {
+            apple_tree: true,
+            priority: 0,
+            ..usable
+        };
+        assert_eq!(decoration_group(&apples, all), Some(CAT_OBJECTS));
+        let bare = DecoState {
+            sprite_state: 1,
+            ..apples
+        };
+        assert_eq!(decoration_group(&bare, all), None);
+    }
+
+    #[test]
+    fn behind_copies() {
+        assert!(behind::is_copy([1.0, 1.0, 1.0, 0.5], 0.0));
+        // The hovered item's two commands and the screen fade.
+        assert!(!behind::is_copy([0.5, 0.5, 0.5, 1.0], 0.0));
+        assert!(!behind::is_copy([1.0, 1.0, 1.0, 1.0], 1.0));
+        assert!(!behind::is_copy([0.0, 0.0, 0.0, 0.3], 0.0));
+        assert!((behind::linear(1.0) - 1.0).abs() < 1e-6);
+        assert!((behind::linear(0.2) - 0.0331).abs() < 1e-3);
+    }
+
+    #[test]
+    fn group_colors() {
+        let m = Manifest::parse(new().manifest()).unwrap();
+        for (key, default) in COLORS {
+            let s = m.settings.iter().find(|s| s.key == key).expect(key);
+            assert_eq!(s.default.as_str(), Some(default), "{key}");
+        }
     }
 
     #[test]

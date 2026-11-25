@@ -28,12 +28,6 @@ default = ""
 label = "Toggle button (gamepad)"
 description = "Turns the highlight on or off. Unbound by default: every pad button already has a game action."
 
-[[settings]]
-key = "color"
-type = "color"
-default = "#33FF33"
-label = "Color"
-description = "The highlight's color."
 
 [[settings]]
 key = "strength"
@@ -70,7 +64,7 @@ key = "objects"
 type = "bool"
 default = true
 label = "Usable objects"
-description = "Scenery you can click and haven't used up yet: tree holes and hiding places, plants to pick, signs and paintings, wells, statues, rocks that start an event. The game lowers an object once it's used, and the glow goes with it."
+description = "Scenery you can click and haven't used up yet: tree holes and hiding places, plants to pick, apple trees with apples left, signs and paintings, wells, statues, graves to dig, rocks that start an event. Once an object is used up (the game lowers it or changes its picture, like a dug grave), the glow goes."
 
 [[settings]]
 key = "breakables"
@@ -83,8 +77,45 @@ description = "Barrels, crates, urns, webs and furniture you can smash, until th
 key = "lights"
 type = "bool"
 default = false
-label = "Torches and braziers"
-description = "Torches and braziers you can light or put out. Off by default: there are many and they never run out, but some puzzles use braziers."
+label = "Torches, braziers and campfires"
+description = "Torches, braziers and campfires you can light or put out, flames included. Off by default: there are many and they never run out, but some puzzles use braziers."
+
+[[settings]]
+key = "color"
+type = "color"
+default = "#33FF33"
+label = "Item color"
+description = "Color of items on the ground or in alcoves. With the game's \"Show items behind objects\" option on, their see-through copies take it too."
+
+[[settings]]
+key = "color_containers"
+type = "color"
+default = "#FFC020"
+label = "Container color"
+
+[[settings]]
+key = "color_switches"
+type = "color"
+default = "#33CCFF"
+label = "Switch color"
+
+[[settings]]
+key = "color_objects"
+type = "color"
+default = "#C070FF"
+label = "Usable object color"
+
+[[settings]]
+key = "color_breakables"
+type = "color"
+default = "#FF5050"
+label = "Breakable object color"
+
+[[settings]]
+key = "color_lights"
+type = "color"
+default = "#FFFF80"
+label = "Torch, brazier and campfire color"
 
 [[settings]]
 key = "debug"

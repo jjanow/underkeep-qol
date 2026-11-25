@@ -151,7 +151,7 @@ pub fn find_slot(img: &[u8], dll: &str, func: &str) -> Result<u32, IatError> {
 }
 
 #[cfg(windows)]
-pub use win::IatHook;
+pub use win::{IatHook, swap_pointer};
 
 #[cfg(windows)]
 mod win {
@@ -205,6 +205,20 @@ mod win {
                 ))
             })
         }
+    }
+
+    /// Swaps the pointer at `slot` (an import slot or a vtable entry in a
+    /// read-only section) from `expect` to `new`, lifting the page
+    /// protection for the write only. Fails if the slot doesn't hold
+    /// `expect`.
+    ///
+    /// # Safety
+    /// `slot` must be an aligned, mapped pointer-sized word that callers
+    /// only read as a function pointer, and `new` a function with the same
+    /// signature and ABI as `expect`.
+    pub unsafe fn swap_pointer(slot: usize, expect: usize, new: usize) -> Result<(), IatError> {
+        // SAFETY: the caller's contract.
+        unsafe { write_slot(slot as *const AtomicUsize, expect, new) }
     }
 
     impl IatHook {

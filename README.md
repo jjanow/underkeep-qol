@@ -18,8 +18,9 @@ Underkeep has no official mod support. This project adds it in a way that:
 [1.0.18](https://github.com/jjanow/underkeep-qol/releases/latest), for the
 current game version, 1.0.6. Older game versions aren't supported: Steam
 always updates the game to the latest version. The loader, overlay (F10 / L3+R3), manager and the first six mods are
-tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2)
-only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
+tested on Windows and on Linux with Proton; `item-highlight` (new in 1.0.2;
+group colors, apple trees, campfires, torches and see-through items in
+1.0.19) only on Linux with Proton so far, as is `melee-accuracy` (new in 1.0.5; its
 formula choices, new in 1.0.6, haven't been tried in game yet) and
 `learned-recipes` (new in 1.0.7) and weapon-swap's game tooltip on slot II
 (new in 1.0.8) and extra-skill-slots' game tooltip (new in 1.0.10)
@@ -27,7 +28,7 @@ and `shop-sort` (new in 1.0.11) and `party-numbers`, `enemy-health` and
 `hidden-stats` (new in 1.0.13, tested on game 1.0.6) and `item-cooldowns`
 (new in 1.0.16);
 hidden-stats' Spell Mana Cost row (new in 1.0.17) and
-item-highlight's usable, breakable and light groups (new in 1.0.18) and
+item-highlight's dug graves and floor braziers (new in 1.0.19) and
 weapon-swap's `messages` setting (new in 1.0.9) hasn't been tried in game
 yet, and the manager keeping other launch options when it sets ours (new in
 1.0.14) is unit-tested only. Steam Deck and macOS bottles are
@@ -44,7 +45,7 @@ expected to work but haven't been tested; reports are welcome in the
 | `extra-skill-slots` | More active-skill slots per hero, so you stop swapping skills in and out. |
 | `skip-logos` | Go straight to the main menu: no studio and audio logos at startup. |
 | `borderless-compat` | Borderless fullscreen stays a real borderless window (fast Alt+Tab, HDR works) instead of taking over the screen. |
-| `item-highlight` | Items on the ground, containers, switches, objects you can still use and things you can break glow in the dungeon view (bright green by default); **H** turns it off and on. |
+| `item-highlight` | Items on the ground, containers, switches, objects you can still use and things you can break glow in the dungeon view, each group in its own color; **H** turns it off and on. |
 | `melee-accuracy` | Melee hit chance from the hero's stats, as ranged hit chance comes from Dexterity: a bonus from the weapon's stat, a ranged-style Strength + Dexterity formula, or your own formula. **Off by default**: it changes the game's balance. |
 | `learned-recipes` | Recipes you have already learned get a green check mark on their icon in the inventory and in shops, and every recipe's tooltip says **Learned** or **Not learned yet**. |
 | `shop-sort` | The merchant's list in every shop stays sorted: swords together, axes together, helmets together, boots together, and so on, cheapest first. |
@@ -520,31 +521,42 @@ keeps a normal desktop window, but players have to know to pick it.
 ### `item-highlight`
 
 Things you can pick up or use are easy to miss in the dungeon art. This mod
-colors them, bright green by default, in the dungeon view.
+colors them in the dungeon view, each group in its own color.
 
 - Groups, each with its own switch: **items** on the ground or in
   alcoves; **containers** (chests until they're opened, alcoves and shelves
   while something is in them); **switches** (wall buttons, levers, secret
   buttons and keyholes); **usable objects** (scenery you can click and
   haven't used up yet: tree holes and hiding places, plants to pick, signs,
-  paintings, wells, statues, rocks that start an event); **breakable
-  objects** (barrels, crates, urns, webs and furniture, until broken);
-  **torches and braziers** (off by default: there are many and they never
-  run out, but some puzzles use braziers).
+  paintings, wells, statues, graves to dig, rocks that start an event);
+  **breakable objects** (barrels, crates, urns, webs and furniture, until
+  broken); **torches, braziers and campfires** (off by default: there are
+  many and they never run out, but some puzzles use braziers). Floor
+  braziers and campfires are drawn only as effects, so the mod colors those
+  effects: logs, stones and bowls take the color, while flames and light
+  glows are only tinted toward it so they don't glare.
+- Default colors: items green, containers gold, switches cyan, usable
+  objects violet, breakables red, lights pale yellow. Each can be changed.
 - Usable objects follow the game's own bookkeeping: each object has an
   interaction priority, which the game sets to 0 when there's nothing to do
   and lowers after the first use. An object stops glowing once the game
-  considers it used. Objects with their own script (signs, event rocks)
+  considers it used, or once its picture changes (a dug grave keeps its
+  priority but shows the empty grave). Apple trees go by their picture:
+  a tree showing apples glows until its last apple drops (the game can
+  leave such a tree at priority 0 after loading a save, though it still
+  drops apples). Objects with their own script (signs, event rocks)
   stay usable, so they keep glowing. Scenery the game doesn't let you click
   (most flowers and bushes) never glows. The whole sprite is colored, so a
   tree with a hole in it glows as a whole tree.
 - Only what the game draws is marked: anything behind a wall stays hidden,
   and the game's fog and shade still apply. The item under the cursor (or
-  picked with the gamepad) keeps the game's own highlight.
+  picked with the gamepad) keeps the game's own highlight. With the game's
+  option **Show items behind objects** on, the see-through copies it draws
+  of items take the item color too.
 - **H** turns the highlight off and on (a pad button can be bound; none by
   default). The choice is kept for the next game (setting `shown`).
-- Settings: the **color**, its **strength** (0 only tints things, 1 colors
-  them fully; default 0.85) and the groups.
+- Settings: a **color** per group, the **strength** (0 only tints things,
+  1 colors them fully; default 0.85) and the groups.
 - How: the game draws each thing in the dungeon view as a sprite and already
   passes a "highlight" amount per sprite for its hover effect. The mod finds
   the sprites of the marked things (by the entity's class, from the exe's
@@ -552,8 +564,10 @@ colors them, bright green by default, in the dungeon view.
   and a highlight amount the game never uses itself. At startup it also adds
   one branch to the game's sprite shader, compiled in memory, that recolors
   only sprites with that amount; every other sprite, including the game's own
-  hover highlight, draws exactly as before. Nothing in the game's files or
-  saves changes.
+  hover highlight, draws exactly as before. The see-through item copies
+  are drawn by the game's interface pass instead, so the mod recolors those
+  after that pass; the effects of marked lights are colored the same way,
+  with additive ones (flames, glows) only tinted. Nothing in the game's files or saves changes.
 - If the mod is turned on after the game has started, the shader is already
   compiled: things are then tinted with the game's plain white glow until
   the next start.
